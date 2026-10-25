@@ -58,3 +58,17 @@ func TestWithContextDbDoesNotHandQueriesThePooledContext(t *testing.T) {
 		}
 	}
 }
+
+func TestWithContextDbRejectsUnknownTenant(t *testing.T) {
+	r := gin.New()
+	r.Use(WithContextDb)
+	reached := false
+	r.GET("/", func(c *gin.Context) { reached = true; c.Status(200) })
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "not-configured.test"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if reached || w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unknown tenant reached handler=%v status=%d", reached, w.Code)
+	}
+}

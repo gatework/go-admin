@@ -14,6 +14,8 @@ import (
 
 func freshRuntime(t *testing.T) {
 	t.Helper()
+	previousProbe := SetCacheProbe(nil)
+	t.Cleanup(func() { SetCacheProbe(previousProbe) })
 	previous := sdk.Runtime
 	t.Cleanup(func() { sdk.Runtime = previous })
 	sdk.Runtime = runtime.NewConfig()
@@ -214,7 +216,10 @@ func TestDrainingIsObservableOnceItBegins(t *testing.T) {
 func TestConcurrentProbesDoNotOverwriteEachOther(t *testing.T) {
 	freshRuntime(t)
 	const probes = 16
-	sdk.Runtime.SetCacheAdapter(&fakeCache{setBarrier: newBarrier(probes)})
+	adapter := &fakeCache{setBarrier: newBarrier(probes)}
+	sdk.Runtime.SetCacheAdapter(adapter)
+	previous := SetCacheProbe(func(ctx context.Context) error { return probeLegacyCache(ctx, adapter) })
+	t.Cleanup(func() { SetCacheProbe(previous) })
 
 	var wg sync.WaitGroup
 	failures := make(chan string, probes)

@@ -38,6 +38,7 @@ func (e SysConfig) GetPage(c *gin.Context) {
 		Errors
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, err.Error())
 		return
 	}
 
@@ -64,7 +65,7 @@ func (e SysConfig) Get(c *gin.Context) {
 	s := service.SysConfig{}
 	err := e.MakeContext(c).
 		MakeOrm().
-		Bind(&req, binding.JSON, nil).
+		Bind(&req, nil).
 		MakeService(&s.Service).
 		Errors
 	if err != nil {
@@ -195,6 +196,7 @@ func (e SysConfig) Get2SysApp(c *gin.Context) {
 		Errors
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, err.Error())
 		return
 	}
 	// 控制只读前台的数据

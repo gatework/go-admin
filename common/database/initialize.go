@@ -1,6 +1,9 @@
 package database
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"sync"
 	"time"
 
 	mycasbin "github.com/go-admin-team/go-admin-core/v2/casbin"
@@ -17,14 +20,52 @@ import (
 	"go-admin/common/global"
 )
 
-// Setup 配置数据库
+// Database resources are process-lifetime resources: the scheduler and Casbin
+// adapter retain them. Replacing only the registry would split their identity.
+var setupMu sync.Mutex
+var installedDatabases = map[string][32]byte{}
+
+func databaseFingerprint(c *toolsConfig.Database) [32]byte {
+	data, _ := json.Marshal(c)
+	return sha256.Sum256(data)
+}
+
+// Setup accepts the first database configuration. Later connection changes
+// require a restart, including tenant additions/removals and pool settings.
 func Setup() {
-	for k := range toolsConfig.DatabasesConfig {
-		setupSimpleDatabase(k, toolsConfig.DatabasesConfig[k])
+	setupMu.Lock()
+	defer setupMu.Unlock()
+	if len(installedDatabases) != 0 {
+		if len(installedDatabases) != len(toolsConfig.DatabasesConfig) {
+			log.Error("database configuration changed; restart required")
+			return
+		}
+		for host, c := range toolsConfig.DatabasesConfig {
+			if previous, ok := installedDatabases[host]; !ok || previous != databaseFingerprint(c) {
+				log.Error("database configuration changed; restart required")
+				return
+			}
+		}
+		return
+	}
+	for host, c := range toolsConfig.DatabasesConfig {
+		setupDatabaseLocked(host, c)
 	}
 }
 
 func setupSimpleDatabase(host string, c *toolsConfig.Database) {
+	setupMu.Lock()
+	defer setupMu.Unlock()
+	if previous, ok := installedDatabases[host]; ok {
+		if previous != databaseFingerprint(c) {
+			log.Error("database configuration changed; restart required")
+		}
+		return
+	}
+	setupDatabaseLocked(host, c)
+}
+
+func setupDatabaseLocked(host string, c *toolsConfig.Database) {
 	if global.Driver == "" {
 		global.Driver = c.Driver
 	}
@@ -72,4 +113,5 @@ func setupSimpleDatabase(host string, c *toolsConfig.Database) {
 
 	sdk.Runtime.SetDbByTenant(host, db)
 	sdk.Runtime.SetCasbinByTenant(host, e)
+	installedDatabases[host] = databaseFingerprint(c)
 }

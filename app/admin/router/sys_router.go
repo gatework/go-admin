@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/ws"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	swaggerfiles "github.com/swaggo/files"
@@ -34,10 +33,6 @@ func InitSysRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *gin.Rou
 
 func sysBaseRouter(r *gin.RouterGroup) {
 
-	go ws.WebsocketManager.Start()
-	go ws.WebsocketManager.SendService()
-	go ws.WebsocketManager.SendAllService()
-
 	if config.ApplicationConfig.Mode != "prod" {
 		r.GET("/", apis.GoAdmin)
 	}
@@ -62,8 +57,9 @@ func sysSwaggerRouter(r *gin.RouterGroup) {
 func sysCheckRoleRouterInit(r *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	wss := r.Group("").Use(authMiddleware.MiddlewareFunc())
 	{
-		wss.GET("/ws/:id/:channel", ws.WebsocketManager.WsClient)
-		wss.GET("/wslogout/:id/:channel", ws.WebsocketManager.UnWsClient)
+		connect, disconnect := handler.WebsocketHandlers(authMiddleware)
+		wss.GET("/ws/:id/:channel", connect)
+		wss.GET("/wslogout/:id/:channel", disconnect)
 	}
 
 	v1 := r.Group("/api/v1")

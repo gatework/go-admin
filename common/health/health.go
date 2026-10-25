@@ -46,6 +46,7 @@ import (
 	"time"
 
 	"github.com/go-admin-team/go-admin-core/v2/sdk"
+	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
 )
 
 // draining is set when the process starts shutting down.
@@ -127,7 +128,7 @@ func registered() []namedCheck {
 func Ready(ctx context.Context) []Check {
 	checks := []Check{
 		safely("database", func() error { return pingDB(ctx) }),
-		safely("cache", probeCache),
+		safely("cache", func() error { return probeCache(ctx) }),
 	}
 	for _, c := range registered() {
 		checks = append(checks, safely(c.name, func() error { return c.fn(ctx) }))
@@ -172,15 +173,23 @@ func Healthy(checks []Check) bool {
 }
 
 func pingDB(ctx context.Context) error {
-	db := sdk.Runtime.GetDb()
-	if db == nil {
+	databases := sdk.Runtime.GetAllDb()
+	if len(databases) == 0 {
 		return errors.New("no database configured")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
+	for tenant, db := range databases {
+		if db == nil {
+			return fmt.Errorf("database unavailable for tenant %q", tenant)
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return fmt.Errorf("database for tenant %q: %w", tenant, err)
+		}
+		if err := sqlDB.PingContext(ctx); err != nil {
+			return fmt.Errorf("database for tenant %q: %w", tenant, err)
+		}
 	}
-	return sqlDB.PingContext(ctx)
+	return nil
 }
 
 // cacheProbePrefix names the probe's keys. The key itself is per probe, not
@@ -195,37 +204,120 @@ const cacheProbePrefix = "go-admin:health:"
 // again by anyone else; it only has to outlive the read that follows.
 const cacheProbeTTL = 30
 
-func probeCache() error {
+// SetCacheProbe installs an optional context-aware cache check. Hosts owning
+// their cache use this to preserve cancellation through legacy runtime wrappers.
+// Passing nil restores the bounded legacy-adapter fallback. The returned prior
+// hook lets an embedding host restore its previous configuration.
+func SetCacheProbe(fn func(context.Context) error) func(context.Context) error {
+	cacheProbeMu.Lock()
+	defer cacheProbeMu.Unlock()
+	previous := cacheProbeOverride
+	cacheProbeOverride = fn
+	return previous
+}
+
+var (
+	cacheProbeMu       sync.RWMutex
+	cacheProbeOverride func(context.Context) error
+	legacyProbeGate    = make(chan struct{}, 1)
+)
+
+func probeCache(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cacheProbeMu.RLock()
+	probe := cacheProbeOverride
+	cacheProbeMu.RUnlock()
+	if probe != nil {
+		return probe(ctx)
+	}
+	// AdapterCache cannot cancel an in-flight operation. Keep at most one such
+	// probe running; timed-out callers do not create more blocked goroutines.
+	select {
+	case legacyProbeGate <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	adapter := sdk.Runtime.GetCacheAdapter()
+	result := make(chan Check, 1)
+	go func() {
+		defer func() { <-legacyProbeGate }()
+		result <- safely("cache", func() error { return probeLegacyCache(ctx, adapter) })
+	}()
+	select {
+	case check := <-result:
+		if !check.OK {
+			return errors.New(check.Err)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func probeLegacyCache(ctx context.Context, adapter corestorage.AdapterCache) error {
 	if adapter == nil {
 		return errors.New("no cache configured")
 	}
+	return ProbeCache(ctx, legacyCacheProbe{adapter})
+}
 
+type legacyCacheProbe struct{ corestorage.AdapterCache }
+
+func (c legacyCacheProbe) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.AdapterCache.Set(key, value, int(ttl/time.Second))
+}
+func (c legacyCacheProbe) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return c.AdapterCache.Get(key)
+}
+func (c legacyCacheProbe) Del(ctx context.Context, keys ...string) error {
+	for _, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := c.AdapterCache.Del(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ContextCache is the narrow read/write contract needed by the readiness check.
+type ContextCache interface {
+	Get(context.Context, string) (string, error)
+	Set(context.Context, string, string, time.Duration) error
+	Del(context.Context, ...string) error
+}
+
+// ProbeCache verifies a round trip using one key and the caller's deadline.
+// Cleanup uses that same deadline; TTL reclaims the key after cancellation.
+func ProbeCache(ctx context.Context, adapter ContextCache) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	suffix := make([]byte, 8)
 	if _, err := rand.Read(suffix); err != nil {
 		return fmt.Errorf("could not build a probe key: %w", err)
 	}
 	key := cacheProbePrefix + hex.EncodeToString(suffix)
-
-	// Written and read back rather than only read: a cache that answers "miss"
-	// for every key - a client pointed at the wrong server - is
-	// indistinguishable from a healthy one on a read alone.
 	want := time.Now().Format(time.RFC3339Nano)
-	if err := adapter.Set(key, want, cacheProbeTTL); err != nil {
+	if err := adapter.Set(ctx, key, want, cacheProbeTTL*time.Second); err != nil {
 		return err
 	}
-	// Best effort, and its error is deliberately dropped: the verdict is
-	// already decided by the read below, and a cache that cannot delete a key
-	// it just wrote is not a reason to refuse traffic. The TTL is the real
-	// cleanup.
-	defer func() { _ = adapter.Del(key) }()
-
-	got, err := adapter.Get(key)
+	defer func() { _ = adapter.Del(ctx, key) }()
+	got, err := adapter.Get(ctx, key)
 	if err != nil {
 		return err
 	}
 	if got != want {
 		return errors.New("the cache returned a different value than was written")
 	}
-	return nil
+	return ctx.Err()
 }

@@ -2,10 +2,10 @@ name: build
 
 on:
   push:
-    branches: [ master, dev ]
+    branches: [ master, dev, gatework, "fix/**", "feat/**", "sync/**" ]
     tags: [ 'v*', '[0-9]*' ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, gatework ]
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -110,7 +110,7 @@ jobs:
     - name: Set up Go 1.27
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
-        go-version: 1.27.1
+        go-version: 1.27.3
       id: go
 
     - name: Check out code into the Go module directory
@@ -130,6 +130,11 @@ jobs:
     # Before the tests rather than beside checksilent at the end: a formatting
     # miss is a one-command fix, and finding out about it after five minutes of
     # tests and an end-to-end install is five minutes nobody gets back.
+    - name: Vulnerability check
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+        govulncheck ./...
+
     - name: Formatting
       run: make fmt-check
 

@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
@@ -55,9 +56,13 @@ func (e *SysDictType) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) e
 
 // Insert 创建对象
 func (e *SysDictType) Insert(c *dto.SysDictTypeInsertReq) error {
+	if strings.TrimSpace(c.DictType) == "" {
+		return errors.New("字典类型不能为空")
+	}
 	var err error
 	var data models.SysDictType
 	c.Generate(&data)
+	data.CreateBy = c.CreateBy
 	var count int64
 	// The error was dropped, so a query that failed left count at zero and the
 	// insert went ahead as though the name were free.
@@ -73,42 +78,68 @@ func (e *SysDictType) Insert(c *dto.SysDictTypeInsertReq) error {
 		e.Log.Errorf("db error: %s", err)
 		return err
 	}
+	c.Id = data.ID
 	return nil
 }
 
 // Update 修改对象
 func (e *SysDictType) Update(c *dto.SysDictTypeUpdateReq) error {
-	var err error
-	var model = models.SysDictType{}
-	e.Orm.First(&model, c.GetId())
-	c.Generate(&model)
-	db := e.Orm.Save(&model)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
-		return err
+	if c.Id <= 0 {
+		return gorm.ErrRecordNotFound
 	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-
+	if strings.TrimSpace(c.DictType) == "" {
+		return errors.New("字典类型不能为空")
 	}
-	return nil
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		var model models.SysDictType
+		if err := lockAdminRows(tx, model.TableName()).First(&model, c.GetId()).Error; err != nil {
+			return err
+		}
+		oldKey := model.DictType
+		var count int64
+		if err := tx.Model(&models.SysDictType{}).Where("dict_type = ? AND dict_id <> ?", c.DictType, model.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("当前字典类型[%s]已经存在！", c.DictType)
+		}
+		c.Generate(&model)
+		model.UpdateBy = c.UpdateBy
+		db := tx.Omit("create_by", "created_at").Select("*").Updates(&model)
+		if db.Error != nil {
+			return db.Error
+		}
+		if db.RowsAffected == 0 {
+			return errors.New("无权更新该数据")
+		}
+		if oldKey == model.DictType {
+			return nil
+		}
+		return tx.Model(&models.SysDictData{}).Where("dict_type = ?", oldKey).Update("dict_type", model.DictType).Error
+	})
 }
 
 // Remove 删除
 func (e *SysDictType) Remove(d *dto.SysDictTypeDeleteReq) error {
-	var err error
-	var data models.SysDictType
-
-	db := e.Orm.Delete(&data, d.GetId())
-	if err = db.Error; err != nil {
-		e.Log.Errorf("Delete error: %s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		err = errors.New("无权删除该数据")
-		return err
-	}
-	return nil
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		var types []models.SysDictType
+		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.Ids).Order("dict_id").Find(&types).Error; err != nil {
+			return err
+		}
+		if len(types) == 0 {
+			return errors.New("无权删除该数据")
+		}
+		for _, dict := range types {
+			var count int64
+			if err := tx.Model(&models.SysDictData{}).Where("dict_type = ?", dict.DictType).Count(&count).Error; err != nil {
+				return err
+			}
+			if count != 0 {
+				return fmt.Errorf("字典类型[%s]仍有字典数据，不能删除", dict.DictType)
+			}
+		}
+		return tx.Delete(&types).Error
+	})
 }
 
 // GetAll 获取所有

@@ -68,3 +68,65 @@ func TestSysApiUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 		t.Fatalf("the owner could not update their own row: %v", err)
 	}
 }
+
+func TestSysApiUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
+	for _, scenario := range []string{"delete", "ownership changes"} {
+		t.Run(scenario, func(t *testing.T) {
+			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			pool, _ := db.DB()
+			t.Cleanup(func() { pool.Close() })
+			if err := db.AutoMigrate(&models.SysApi{}); err != nil {
+				t.Fatal(err)
+			}
+			oldDP := config.ApplicationConfig.EnableDP
+			config.ApplicationConfig.EnableDP = true
+			t.Cleanup(func() { config.ApplicationConfig.EnableDP = oldDP })
+			row := models.SysApi{Title: "before", Path: "/probe", Action: "GET"}
+			row.CreateBy = 1
+			if err := db.Create(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			changed := false
+			if err := db.Callback().Query().After("gorm:after_query").Register("change_after_read", func(tx *gorm.DB) {
+				if changed || tx.Statement.Table != "sys_api" || tx.RowsAffected == 0 {
+					return
+				}
+				changed = true
+				next := tx.Session(&gorm.Session{NewDB: true})
+				if scenario == "delete" {
+					err = next.Unscoped().Delete(&models.SysApi{}, row.Id).Error
+				} else {
+					err = next.Model(&models.SysApi{}).Where("id = ?", row.Id).Update("create_by", 2).Error
+				}
+				if err != nil {
+					t.Error(err)
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			s := SysApi{Service: service.Service{Orm: db, Log: logger.NewHelper(logger.DefaultLogger)}}
+			err = s.Update(&dto.SysApiUpdateReq{Id: row.Id, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserId: 1})
+			if err == nil {
+				t.Fatal("write accepted after row disappeared or left permission scope")
+			}
+			if scenario == "delete" {
+				var count int64
+				db.Unscoped().Model(&models.SysApi{}).Count(&count)
+				if count != 0 {
+					t.Fatal("deleted row resurrected")
+				}
+			} else {
+				var after models.SysApi
+				if err := db.First(&after, row.Id).Error; err != nil {
+					t.Fatal(err)
+				}
+				if after.CreateBy != 2 || after.Title != "before" {
+					t.Fatalf("row changed after ownership transfer: %+v", after)
+				}
+			}
+		})
+	}
+}

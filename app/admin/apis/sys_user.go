@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin/binding"
 	"go-admin/app/admin/models"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -181,6 +180,7 @@ func (e SysUser) Update(c *gin.Context) {
 	err = s.Update(&req, p, callerId)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "操作失败")
 		return
 	}
 	e.OK(req.GetId(), "更新成功")
@@ -217,6 +217,7 @@ func (e SysUser) Delete(c *gin.Context) {
 	err = s.Remove(&req, p)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "操作失败")
 		return
 	}
 	e.OK(req.GetId(), "删除成功")
@@ -243,10 +244,21 @@ func (e SysUser) InsetAvatar(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	// 数据权限检查
-	p := actions.GetPermissionFromContext(c)
-	form, _ := c.MultipartForm()
+	req.UserId = user.GetUserId(c)
+	if req.UserId <= 0 {
+		e.Error(http.StatusUnauthorized, errors.New("invalid user identity"), "登录失效")
+		return
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		e.Error(http.StatusUnprocessableEntity, err, "头像上传参数错误")
+		return
+	}
 	files := form.File["upload[]"]
+	if len(files) != 1 {
+		e.Error(http.StatusUnprocessableEntity, errors.New("exactly one avatar file is required"), "请选择一张头像")
+		return
+	}
 	guid := uuid.New().String()
 	filPath := "static/uploadfile/" + guid + ".jpg"
 	for _, file := range files {
@@ -259,12 +271,12 @@ func (e SysUser) InsetAvatar(c *gin.Context) {
 			return
 		}
 	}
-	req.UserId = p.UserId
 	req.Avatar = "/" + filPath
 
-	err = s.UpdateAvatar(&req, p)
+	err = s.UpdateAvatar(&req, nil)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "操作失败")
 		return
 	}
 	e.OK(filPath, "修改成功")
@@ -302,6 +314,7 @@ func (e SysUser) UpdateStatus(c *gin.Context) {
 	err = s.UpdateStatus(&req, p)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "操作失败")
 		return
 	}
 	e.OK(req.GetId(), "更新成功")
@@ -339,6 +352,7 @@ func (e SysUser) ResetPwd(c *gin.Context) {
 	err = s.ResetPwd(&req, p)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "操作失败")
 		return
 	}
 	e.OK(req.GetId(), "更新成功")
@@ -368,14 +382,7 @@ func (e SysUser) UpdatePwd(c *gin.Context) {
 		return
 	}
 
-	// 数据权限检查
-	p := actions.GetPermissionFromContext(c)
-	var hash []byte
-	if hash, err = bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost); err != nil {
-		req.NewPassword = string(hash)
-	}
-
-	err = s.UpdatePwd(user.GetUserId(c), req.OldPassword, req.NewPassword, p)
+	err = s.UpdatePwd(user.GetUserId(c), req.OldPassword, req.NewPassword, nil)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(http.StatusForbidden, err, "密码修改失败")

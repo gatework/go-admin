@@ -31,9 +31,9 @@ func CustomError(c *gin.Context) {
 						time.Now().Format("2006-01-02 15:04:05"),
 						"[ERROR]",
 						c.Request.Method,
-						c.Request.URL,
+						redactLogURL(c.Request.URL),
 						statusCode,
-						c.Request.RequestURI,
+						redactLogURL(c.Request.URL),
 						c.ClientIP(),
 						p[2],
 					)

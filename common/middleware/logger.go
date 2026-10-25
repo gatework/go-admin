@@ -7,6 +7,7 @@ import (
 	"go-admin/common"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -38,7 +39,7 @@ func LoggerToFile() gin.HandlerFunc {
 		}
 
 		c.Next()
-		url := c.Request.RequestURI
+		url := c.Request.URL.Path
 		if strings.Index(url, "logout") > -1 ||
 			strings.Index(url, "login") > -1 {
 			return
@@ -69,7 +70,7 @@ func LoggerToFile() gin.HandlerFunc {
 		// 请求方式
 		reqMethod := c.Request.Method
 		// 请求路由
-		reqUri := c.Request.RequestURI
+		reqUri := redactLogURL(c.Request.URL)
 		// 状态码
 		statusCode := c.Writer.Status()
 		// 请求IP
@@ -129,7 +130,26 @@ func readOperParam(c *gin.Context, log *logger.Helper) string {
 		Reader: io.MultiReader(bytes.NewReader(head), rest),
 		Closer: rest,
 	}
-	return string(head)
+	if n == operParamLimit {
+		return "[body omitted: size limit]"
+	}
+	switch strings.ToLower(strings.Split(c.GetHeader("Content-Type"), ";")[0]) {
+	case "application/x-www-form-urlencoded":
+		values, err := url.ParseQuery(string(head))
+		if err != nil {
+			return "[body omitted]"
+		}
+		for key := range values {
+			if sensitiveLogKey(key) {
+				values.Set(key, "[redacted]")
+			}
+		}
+		return values.Encode()
+	case "application/json", "":
+		return redactLogJSON(string(head))
+	default:
+		return "[body omitted]"
+	}
 }
 
 type readCloser struct {
@@ -152,7 +172,7 @@ func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqUri stri
 	l["requestMethod"] = reqMethod
 	l["operParam"] = body
 	l["operTime"] = time.Now()
-	l["jsonResult"] = result
+	l["jsonResult"] = redactLogJSON(result)
 	l["latencyTime"] = latencyTime.String()
 	l["statusCode"] = statusCode
 	l["userAgent"] = c.Request.UserAgent()
@@ -182,4 +202,71 @@ func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqUri string
 			log.Errorf("Append message error, %s", err.Error())
 		}
 	}
+}
+
+// Invalid/truncated JSON and arbitrary upload bodies are never retained: they
+// cannot be reliably scrubbed by field name.
+func redactLogJSON(input string) string {
+	if input == "" {
+		return ""
+	}
+	var value interface{}
+	decoder := json.NewDecoder(strings.NewReader(input))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil {
+		return "[body omitted]"
+	}
+	var extra interface{}
+	if decoder.Decode(&extra) != io.EOF {
+		return "[body omitted]"
+	}
+	redactLogValue(value)
+	result, err := json.Marshal(value)
+	if err != nil {
+		return "[body omitted]"
+	}
+	return string(result)
+}
+
+func sensitiveLogKey(key string) bool {
+	key = strings.ToLower(strings.NewReplacer("_", "", "-", "").Replace(key))
+	for _, fragment := range []string{"password", "passwd", "pwd", "token", "secret", "authorization", "cookie", "privatekey", "apikey"} {
+		if strings.Contains(key, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func redactLogValue(value interface{}) {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		for key, child := range v {
+			if sensitiveLogKey(key) {
+				v[key] = "[redacted]"
+			} else {
+				redactLogValue(child)
+			}
+		}
+	case []interface{}:
+		for _, child := range v {
+			redactLogValue(child)
+		}
+	}
+}
+
+func redactLogURL(input *url.URL) string {
+	safe := *input
+	query, err := url.ParseQuery(input.RawQuery)
+	if err != nil {
+		safe.RawQuery = ""
+		return safe.RequestURI()
+	}
+	for key := range query {
+		if sensitiveLogKey(key) {
+			query.Set(key, "[redacted]")
+		}
+	}
+	safe.RawQuery = query.Encode()
+	return safe.RequestURI()
 }

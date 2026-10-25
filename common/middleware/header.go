@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +38,17 @@ func Options(c *gin.Context) {
 // and resource access headers.
 func Secure(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin", "*")
+	// Uploaded content must not execute in the administration origin, including
+	// previously uploaded files. Raster images remain usable as avatars.
+	// Filesystems may resolve path components without regard to case.
+	if strings.HasPrefix(strings.ToLower(path.Clean(c.Request.URL.Path)), "/static/uploadfile/") {
+		c.Header("Content-Security-Policy", "sandbox; default-src 'none'")
+		switch strings.ToLower(path.Ext(c.Request.URL.Path)) {
+		case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico":
+		default:
+			c.Header("Content-Disposition", "attachment")
+		}
+	}
 	//c.Header("X-Frame-Options", "DENY")
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("X-XSS-Protection", "1; mode=block")

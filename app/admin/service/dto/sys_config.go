@@ -38,7 +38,7 @@ func (m *SysConfigGetToSysAppReq) GetNeedSearch() interface{} {
 
 // SysConfigControl 增、改使用的结构体
 type SysConfigControl struct {
-	Id          int    `uri:"Id" comment:"编码"` // 编码
+	Id          int    `uri:"id" json:"-" comment:"编码"` // 编码
 	ConfigName  string `json:"configName" comment:""`
 	ConfigKey   string `uri:"configKey" json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
@@ -50,7 +50,7 @@ type SysConfigControl struct {
 
 // Generate 结构体数据转化 从 SysConfigControl 至 system.SysConfig 对应的模型
 func (s *SysConfigControl) Generate(model *models.SysConfig) {
-	if s.Id == 0 {
+	if s.Id != 0 {
 		model.Model = common.Model{Id: s.Id}
 	}
 	model.ConfigName = s.ConfigName

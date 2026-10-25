@@ -7,12 +7,12 @@ import (
 	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-admin/app/admin/models"
 	"go-admin/app/admin/service/dto"
 	"go-admin/common/actions"
 	cDto "go-admin/common/dto"
-	"go-admin/common/global"
 )
 
 type SysApi struct {
@@ -35,11 +35,7 @@ func (e *SysApi) GetPage(c *dto.SysApiGetPageReq, p *actions.DataPermission, lis
 		if qType == "暂无" {
 			qType = ""
 		}
-		if global.Driver == "postgres" {
-			orm = orm.Where("type = ?", qType)
-		} else {
-			orm = orm.Where("`type` = ?", qType)
-		}
+		orm = orm.Where(clause.Eq{Column: clause.Column{Name: "type"}, Value: qType})
 
 	}
 	err = orm.Find(list).Limit(-1).Offset(-1).
@@ -90,12 +86,17 @@ func (e *SysApi) Update(c *dto.SysApiUpdateReq, p *actions.DataPermission) error
 		return err
 	}
 	c.Generate(&model)
-	db = e.Orm.Save(&model)
+	model.UpdateBy = c.UpdateBy
+	db = e.Orm.Scopes(actions.Permission(model.TableName(), p)).
+		Omit("create_by", "created_at").Select("*").Updates(&model)
 	if err := db.Error; err != nil {
 		e.Log.Errorf("Service UpdateSysApi error:%s", err)
 		return err
 	}
 
+	if db.RowsAffected == 0 {
+		return errors.New("无权更新该数据")
+	}
 	return nil
 }
 

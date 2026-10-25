@@ -1,20 +1,27 @@
 package apis
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/utils"
 	"github.com/google/uuid"
-
 	"go-admin/common/file_store"
 	"go-admin/config"
+	_ "golang.org/x/image/webp"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type FileResponse struct {
@@ -31,6 +38,10 @@ type File struct {
 	api.Api
 }
 
+const maxUploadRequestBytes int64 = 32 << 20
+
+var errInvalidUpload = errors.New("invalid upload")
+
 // UploadFile 上传图片
 // @Summary 上传图片
 // @Description 获取JSON
@@ -42,139 +53,187 @@ type File struct {
 // @Success 200 {string} string	"{"code": -1, "message": "添加失败"}"
 // @Router /api/v1/public/uploadFile [post]
 // @Security Bearer
+// Upload requests share one response boundary: helpers never write HTTP output.
+// Local files created by a failed request are removed before returning.
 func (e File) UploadFile(c *gin.Context) {
 	e.MakeContext(c)
-	tag, _ := c.GetPostForm("type")
-	urlPrefix := fmt.Sprintf("%s://%s/", "http", c.Request.Host)
-
-	switch tag {
-	case "1": // 单图
-		e.handleSingleFile(c, urlPrefix)
-	case "2": // 多图
-		e.handleMultipleFiles(c, urlPrefix)
-	case "3": // base64
-		e.handleBase64File(c, urlPrefix)
-	default:
-		e.handleSingleFile(c, urlPrefix)
-	}
-}
-
-func (e File) handleSingleFile(c *gin.Context, urlPrefix string) {
-	fileResponse, done := e.singleFile(c, FileResponse{}, urlPrefix)
-	if done {
+	if c.Request.ContentLength > maxUploadRequestBytes {
+		e.Error(http.StatusRequestEntityTooLarge, errInvalidUpload, "上传内容超过32 MiB限制")
 		return
 	}
-	e.OK(fileResponse, "上传成功")
-}
-
-func (e File) handleMultipleFiles(c *gin.Context, urlPrefix string) {
-	multipartFile := e.multipleFile(c, urlPrefix)
-	e.OK(multipartFile, "上传成功")
-}
-
-func (e File) handleBase64File(c *gin.Context, urlPrefix string) {
-	fileResponse := e.baseImg(c, FileResponse{}, urlPrefix)
-	e.OK(fileResponse, "上传成功")
-}
-
-func (e File) baseImg(c *gin.Context, fileResponse FileResponse, urlPrefix string) FileResponse {
-	files, _ := c.GetPostForm("file")
-	file2list := strings.Split(files, ",")
-	decodedData, _ := base64.StdEncoding.DecodeString(file2list[1])
-	fileName := uuid.New().String() + ".jpg"
-
-	if err := utils.IsNotExistMkDir(path); err != nil {
-		e.Error(500, errors.New(""), "初始化文件路径失败")
-		return fileResponse
-	}
-
-	base64File := path + fileName
-	_ = ioutil.WriteFile(base64File, decodedData, 0666)
-	typeStr := strings.Replace(strings.Replace(file2list[0], "data:", "", -1), ";base64", "", -1)
-
-	fileResponse = e.buildFileResponse(base64File, urlPrefix, "", typeStr)
-	source, _ := c.GetPostForm("source")
-
-	if err := thirdUpload(source, fileName, base64File); err != nil {
-		e.Error(200, err, "上传第三方失败")
-		return fileResponse
-	}
-
-	if source != "1" {
-		fileResponse.Path = "/static/uploadfile/" + fileName
-		fileResponse.FullPath = "/static/uploadfile/" + fileName
-	}
-	return fileResponse
-}
-
-func (e File) multipleFile(c *gin.Context, urlPrefix string) []FileResponse {
-	files := c.Request.MultipartForm.File["file"]
-	source, _ := c.GetPostForm("source")
-	var multipartFile []FileResponse
-
-	for _, f := range files {
-		fileName := uuid.New().String() + utils.GetExt(f.Filename)
-
-		if err := utils.IsNotExistMkDir(path); err != nil {
-			e.Error(500, errors.New(""), "初始化文件路径失败")
-			continue
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadRequestBytes)
+	var err error
+	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		err = c.Request.ParseMultipartForm(8 << 20)
+		if c.Request.MultipartForm != nil {
+			defer c.Request.MultipartForm.RemoveAll()
 		}
-
-		multipartFileName := path + fileName
-		if err := c.SaveUploadedFile(f, multipartFileName); err != nil {
-			continue
-		}
-
-		fileType, _ := utils.GetType(multipartFileName)
-		if err := thirdUpload(source, fileName, multipartFileName); err != nil {
-			e.Error(500, err, "上传第三方失败")
-			continue
-		}
-
-		fileResponse := e.buildFileResponse(multipartFileName, urlPrefix, f.Filename, fileType)
-		if source != "1" {
-			fileResponse.Path = "/static/uploadfile/" + fileName
-			fileResponse.FullPath = "/static/uploadfile/" + fileName
-		}
-		multipartFile = append(multipartFile, fileResponse)
+	} else {
+		err = c.Request.ParseForm()
 	}
-	return multipartFile
-}
-
-func (e File) singleFile(c *gin.Context, fileResponse FileResponse, urlPrefix string) (FileResponse, bool) {
-	files, err := c.FormFile("file")
 	if err != nil {
-		e.Error(200, errors.New(""), "图片不能为空")
-		return FileResponse{}, true
+		code := http.StatusUnprocessableEntity
+		var limit *http.MaxBytesError
+		if errors.As(err, &limit) {
+			code = http.StatusRequestEntityTooLarge
+		}
+		e.Error(code, err, "上传参数错误")
+		return
 	}
-
-	fileName := uuid.New().String() + utils.GetExt(files.Filename)
-	if err := utils.IsNotExistMkDir(path); err != nil {
-		e.Error(500, errors.New(""), "初始化文件路径失败")
-		return FileResponse{}, true
+	source := c.PostForm("source")
+	tag := c.PostForm("type")
+	if err = validateUploadSource(source); err != nil {
+		e.Error(500, err, "上传存储未配置")
+		return
 	}
-
-	singleFile := path + fileName
-	if err := c.SaveUploadedFile(files, singleFile); err != nil {
-		e.Error(500, errors.New(""), "文件保存失败")
-		return FileResponse{}, true
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
 	}
-
-	fileType, _ := utils.GetType(singleFile)
-	fileResponse = e.buildFileResponse(singleFile, urlPrefix, files.Filename, fileType)
-	fileResponse.Path = "/static/uploadfile/" + fileName
-	fileResponse.FullPath = "/static/uploadfile/" + fileName
-	return fileResponse, false
+	urlPrefix := scheme + "://" + c.Request.Host
+	var saved []string
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			for _, name := range saved {
+				if removeErr := os.Remove(name); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+					e.Logger.Warnf("cleanup upload: %v", removeErr)
+				}
+			}
+		}
+	}()
+	persist := func(name, extension string, save func(string) error) (FileResponse, error) {
+		filename := path + uuid.New().String() + extension
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return FileResponse{}, err
+		}
+		saved = append(saved, filename)
+		if err := save(filename); err != nil {
+			return FileResponse{}, err
+		}
+		stat, err := os.Stat(filename)
+		if err != nil {
+			return FileResponse{}, err
+		}
+		contentType, err := uploadContentType(filename)
+		if err != nil {
+			return FileResponse{}, err
+		}
+		// Preserve the bundled UI's URL contract: single uploads and non-local
+		// multi/base64 responses are relative; source=1 multi/base64 are absolute.
+		responsePath, fullPath := "/"+filename, "/"+filename
+		if (tag == "2" || tag == "3") && source == "1" {
+			responsePath, fullPath = filename, urlPrefix+"/"+filename
+		}
+		return FileResponse{Size: stat.Size(), Path: responsePath, FullPath: fullPath, Name: name, Type: contentType}, nil
+	}
+	var result interface{}
+	if tag == "3" {
+		var data []byte
+		var extension string
+		data, extension, err = decodeUploadImage(c.PostForm("file"))
+		if err == nil {
+			result, err = persist("", extension, func(filename string) error { return os.WriteFile(filename, data, 0644) })
+		}
+	} else {
+		var files []*multipart.FileHeader
+		if c.Request.MultipartForm != nil {
+			files = c.Request.MultipartForm.File["file"]
+		}
+		if len(files) == 0 || (tag != "2" && len(files) != 1) {
+			err = fmt.Errorf("%w: choose the expected number of files", errInvalidUpload)
+		} else {
+			results := make([]FileResponse, 0, len(files))
+			for _, file := range files {
+				var item FileResponse
+				item, err = persist(file.Filename, filepath.Ext(file.Filename), func(filename string) error { return c.SaveUploadedFile(file, filename) })
+				if err != nil {
+					break
+				}
+				results = append(results, item)
+			}
+			if err == nil {
+				if tag == "2" {
+					result = results
+				} else {
+					result = results[0]
+				}
+			}
+		}
+	}
+	if err == nil {
+		for _, filename := range saved {
+			if err = thirdUpload(source, filepath.Base(filename), filename); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		code := 500
+		if errors.Is(err, errInvalidUpload) {
+			code = http.StatusUnprocessableEntity
+		}
+		e.Error(code, err, "上传失败")
+		return
+	}
+	succeeded = true
+	e.OK(result, "上传成功")
 }
 
-func (e File) buildFileResponse(filePath, urlPrefix, fileName, fileType string) FileResponse {
-	return FileResponse{
-		Size:     pkg.GetFileSize(filePath),
-		Path:     filePath,
-		FullPath: urlPrefix + filePath,
-		Name:     fileName,
-		Type:     fileType,
+func validateUploadSource(source string) error {
+	switch source {
+	case "2":
+		if !config.ExtConfig.FileStore.AliYun.Configured() {
+			return errors.New("AliYunOSS file store is not configured")
+		}
+	case "3":
+		if !config.ExtConfig.FileStore.QiNiu.Configured() {
+			return errors.New("QiNiuKodo file store is not configured")
+		}
 	}
+	return nil
+}
+
+func decodeUploadImage(input string) ([]byte, string, error) {
+	metadata, payload, ok := strings.Cut(input, ",")
+	if !ok || !strings.HasPrefix(metadata, "data:") || !strings.HasSuffix(metadata, ";base64") {
+		return nil, "", fmt.Errorf("%w: expected an image data URL", errInvalidUpload)
+	}
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSuffix(strings.TrimPrefix(metadata, "data:"), ";base64"))
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: invalid media type", errInvalidUpload)
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: invalid base64", errInvalidUpload)
+	}
+	_, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: invalid image", errInvalidUpload)
+	}
+	formats := map[string]string{"png": "image/png", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
+	expected, ok := formats[format]
+	if !ok || mediaType != expected {
+		return nil, "", fmt.Errorf("%w: image media type does not match content", errInvalidUpload)
+	}
+	if format == "jpeg" {
+		format = "jpg"
+	}
+	return data, "." + format, nil
+}
+
+func uploadContentType(filename string) (string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	var head [512]byte
+	n, err := file.Read(head[:])
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return http.DetectContentType(head[:n]), nil
 }
 
 // thirdUpload copies the file that was already stored locally to the object

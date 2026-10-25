@@ -71,10 +71,12 @@ func (e *SysPost) Insert(c *dto.SysPostInsertReq) error {
 func (e *SysPost) Update(c *dto.SysPostUpdateReq) error {
 	var err error
 	var model = models.SysPost{}
-	e.Orm.First(&model, c.GetId())
+	if err := e.Orm.First(&model, c.GetId()).Error; err != nil {
+		return err
+	}
 	c.Generate(&model)
 
-	db := e.Orm.Save(&model)
+	db := e.Orm.Omit("create_by").Select("*").Updates(&model)
 	if err = db.Error; err != nil {
 		e.Log.Errorf("db error:%s", err)
 		return err

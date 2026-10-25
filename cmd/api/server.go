@@ -130,11 +130,11 @@ var attachedQueue atomic.Uint64
 // same one gets none. Registering twice on the same queue would give every
 // message two consumers and write every log row twice.
 //
-// Generation 0 means the configuration has no queue section, so nothing was
-// installed and GetQueuePrefix hands back the runtime's own memory queue.
-// That case still gets consumers - it is what the previous unconditional
-// registration did, and dropping it would silently stop logging for anyone who
-// commented the section out - it just never gets them twice.
+// Generation 0 means storage.Setup has not installed an adapter yet. Once
+// setup runs, even empty queue configuration installs an owned memory queue,
+// whose consumers are drained on shutdown and replaced on configuration reload.
+// The zero-generation case still supports callers that explicitly attach the
+// runtime fallback before storage setup; each generation is registered once.
 func attachQueueConsumers() {
 	attachConsumersOnce(storage.QueueGeneration(), sdk.Runtime.GetQueuePrefix(""))
 }
@@ -614,7 +614,7 @@ func initRouter() {
 		Use(common.RequestId(pkg.TrafficKey)).
 		Use(api.SetRequestLogger)
 
-	common.InitMiddleware(r)
+	common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDb))
 
 }
 

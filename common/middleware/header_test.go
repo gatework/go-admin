@@ -117,3 +117,32 @@ func TestSecure(t *testing.T) {
 		}
 	})
 }
+
+func TestUploadHeadersDoNotDisableBundledApplications(t *testing.T) {
+	for _, tc := range []struct {
+		path                string
+		sandbox, attachment bool
+	}{
+		{"/static/uploadfile/example.html", true, true},
+		{"/static/UPLOADFILE/example.html", true, true},
+		{"/static/UploadFile/example.svg", true, true},
+		{"/static/UPLOADFILE/EXAMPLE.PNG", true, false},
+		{"/static/uploadfile/example.svg", true, true},
+		{"/static/uploadfile/example.png", true, false},
+		{"/static/form-generator/index.html", false, false},
+		{"/static/form-generator/js/index.js", false, false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", tc.path, nil)
+			Secure(c)
+			if (w.Header().Get("Content-Security-Policy") != "") != tc.sandbox {
+				t.Errorf("sandbox header for %s: %v", tc.path, w.Header())
+			}
+			if (w.Header().Get("Content-Disposition") != "") != tc.attachment {
+				t.Errorf("attachment header for %s: %v", tc.path, w.Header())
+			}
+		})
+	}
+}

@@ -1,11 +1,9 @@
 package jobs
 
 import (
-	"context"
 	"fmt"
 	log "github.com/go-admin-team/go-admin-core/v2/logger"
 	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	models2 "go-admin/app/jobs/models"
 	"gorm.io/gorm"
 	"time"
 
@@ -34,13 +32,18 @@ type JobCore struct {
 // HttpJob 任务类型 http
 type HttpJob struct {
 	JobCore
+	allowed func() bool
 }
 
 type ExecJob struct {
 	JobCore
+	allowed func() bool
 }
 
 func (e *ExecJob) Run() {
+	if e.allowed != nil && !e.allowed() {
+		return
+	}
 	startTime := time.Now()
 	var obj = jobList[e.InvokeTarget]
 	if obj == nil {
@@ -66,6 +69,9 @@ func (e *ExecJob) Run() {
 
 // Run http 任务接口
 func (h *HttpJob) Run() {
+	if h.allowed != nil && !h.allowed() {
+		return
+	}
 
 	startTime := time.Now()
 	var count = 0
@@ -111,89 +117,6 @@ func Setup(dbs map[string]*gorm.DB) {
 	for k, db := range dbs {
 		sdk.Runtime.SetCrontabByTenant(k, cronjob.NewWithSeconds())
 		newSupervisor(k, db, owner).start()
-	}
-}
-
-func setup(key string, db *gorm.DB) {
-	crontab := sdk.Runtime.GetCrontabByTenant(key)
-	sysJob := models2.SysJob{}
-	jobList := make([]models2.SysJob, 0)
-	err := sysJob.GetList(db, &jobList)
-	if err != nil {
-		fmt.Println(time.Now().Format(timeFormat), " [ERROR] JobCore init error", err)
-	}
-	if len(jobList) == 0 {
-		fmt.Println(time.Now().Format(timeFormat), " [INFO] JobCore total:0")
-	}
-
-	_, err = sysJob.RemoveAllEntryID(db)
-	if err != nil {
-		fmt.Println(time.Now().Format(timeFormat), " [ERROR] JobCore remove entry_id error", err)
-	}
-
-	for i := 0; i < len(jobList); i++ {
-		if jobList[i].JobType == 1 {
-			j := &HttpJob{}
-			j.InvokeTarget = jobList[i].InvokeTarget
-			j.CronExpression = jobList[i].CronExpression
-			j.JobId = jobList[i].JobId
-			j.Name = jobList[i].JobName
-
-			sysJob.EntryId, err = AddJob(crontab, j)
-		} else if jobList[i].JobType == 2 {
-			j := &ExecJob{}
-			j.InvokeTarget = jobList[i].InvokeTarget
-			j.CronExpression = jobList[i].CronExpression
-			j.JobId = jobList[i].JobId
-			j.Name = jobList[i].JobName
-			j.Args = jobList[i].Args
-			sysJob.EntryId, err = AddJob(crontab, j)
-		}
-		err = sysJob.Update(db, jobList[i].JobId)
-	}
-
-	// 其中任务
-	startCrontab(crontab)
-}
-
-// startCrontab starts c.
-//
-// The stop used to be `defer crontab.Stop()` followed by `select {}`. The
-// select never returned, so the defer never ran and the scheduler was never
-// stopped; and because setup never returned, the loop in Setup never reached
-// the second tenant - only whichever database came first out of the map ever
-// got a scheduler at all. cron.Start is itself `go c.run()`, so the select was
-// blocking for nothing.
-//
-// Stopping is no longer arranged here. A scheduler now stops for two
-// different reasons - the process is going down, or this instance lost the
-// lease (#915) - and only the supervisor knows which. Registering a shutdown
-// callback per start, when a start happens every time the lease is taken,
-// would also add one callback per leadership change for the life of the
-// process: SetShutdown appends.
-func startCrontab(c *cron.Cron) {
-	c.Start()
-	fmt.Println(time.Now().Format(timeFormat), " [INFO] JobCore start success.")
-}
-
-// stopCrontab stops one tenant's scheduler and waits for the jobs already
-// running to finish, bounded by ctx.
-//
-// cron.Stop returns a context that closes once those jobs have finished.
-// That is the wait the shutdown budget exists to bound: giving up on it
-// leaves them running until the process exits, which is better than holding
-// the whole shutdown open for one job that will not end.
-func stopCrontab(ctx context.Context, key string) {
-	c := sdk.Runtime.GetCrontabByTenant(key)
-	if c == nil {
-		return
-	}
-	stopped := c.Stop()
-	select {
-	case <-stopped.Done():
-		fmt.Println(time.Now().Format(timeFormat), " [INFO] JobCore stopped.")
-	case <-ctx.Done():
-		fmt.Println(time.Now().Format(timeFormat), " [WARN] JobCore stop gave up waiting for running jobs")
 	}
 }
 

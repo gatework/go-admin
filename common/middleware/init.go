@@ -19,9 +19,15 @@ const (
 )
 
 func InitMiddleware(r *gin.Engine) {
+	InitMiddlewareWithDatabase(r, WithContextDb)
+}
+
+// InitMiddlewareWithDatabase lets the host exempt process-level probes from
+// tenant database selection without coupling common to application routes.
+func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
 	r.Use(DemoEvn())
 	// 数据库链接
-	r.Use(WithContextDb)
+	r.Use(database)
 	// 日志处理
 	r.Use(LoggerToFile())
 	// 自定义错误处理

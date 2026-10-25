@@ -24,7 +24,7 @@ func (u *Login) GetUser(tx *gorm.DB) (user SysUser, role SysRole, err error) {
 		log.Errorf("user login error, %s", err.Error())
 		return
 	}
-	err = tx.Table("sys_role").Where("role_id = ? ", user.RoleId).First(&role).Error
+	err = tx.Table("sys_role").Where("role_id = ? AND status = ?", user.RoleId, "2").First(&role).Error
 	if err != nil {
 		log.Errorf("get role error, %s", err.Error())
 		return

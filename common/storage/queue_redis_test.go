@@ -36,7 +36,7 @@ func redisAddr(t *testing.T) string {
 }
 
 // newRedisQueue builds the queue the same way setupQueue does - through
-// config.QueueConfig.Setup - so that what is under test is the adapter this
+// openQueue - so that what is under test is the adapter this
 // repository actually gets, LegacyQueueAdapter and all, rather than a redis
 // client wired up by the test.
 func newRedisQueue(t *testing.T, prefix string) corestorage.AdapterQueue {
@@ -51,7 +51,7 @@ func newRedisQueue(t *testing.T, prefix string) corestorage.AdapterQueue {
 			KeyPrefix:    prefix,
 		},
 	}
-	q, err := config.QueueConfig.Setup()
+	q, err := openQueue(config.QueueConfig)
 	if err != nil {
 		t.Fatalf("queue setup: %v", err)
 	}

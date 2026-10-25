@@ -1,6 +1,9 @@
 package jobs
 
 import (
+	"context"
+	"gorm.io/gorm"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -90,5 +93,65 @@ func TestABrieflyUnreachableDatabaseDoesNotStopTheScheduler(t *testing.T) {
 
 	if !s.holdsLease() {
 		t.Error("one failed renewal stopped the scheduler; the lease had not expired yet and nobody else could have taken it")
+	}
+}
+
+func TestBlockedRenewalExpiresIndependently(t *testing.T) {
+	db := leaseDB(t)
+	const tenant = "blocked-renewal-regression"
+	c := cronjob.NewWithSeconds()
+	sdk.Runtime.SetCrontabByTenant(tenant, c)
+	s := newSupervisor(tenant, db, "first")
+	s.lease.ttl = 120 * time.Millisecond
+	s.tick()
+	t.Cleanup(func() { s.stopScheduling() })
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once atomic.Bool
+	if err := db.Callback().Row().Before("gorm:row").Register("block-renewal", func(tx *gorm.DB) {
+		if once.CompareAndSwap(false, true) {
+			close(entered)
+			<-release
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	go func() { defer close(done); s.tick() }()
+	<-entered
+	time.Sleep(200 * time.Millisecond)
+	if s.holdsLease() {
+		t.Error("blocked renewal kept scheduler active past lease deadline")
+	}
+	close(release)
+	<-done
+	if s.holdsLease() {
+		t.Error("late renewal restarted scheduler with stale proof")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	s.control.waitStopped(ctx)
+}
+
+// A successful UPDATE delivered late is no newer proof than its start time.
+func TestSlowSuccessfulAcquisitionCannotExtendLeaseFromReceipt(t *testing.T) {
+	db := leaseDB(t).Session(&gorm.Session{SkipDefaultTransaction: true})
+	const key = "slow-successful-acquisition"
+	sdk.Runtime.SetCrontabByTenant(key, cronjob.NewWithSeconds())
+	s := newSupervisor(key, db, "slow-owner")
+	s.lease.ttl = 80 * time.Millisecond
+	var delayed atomic.Bool
+	if err := db.Callback().Update().After("gorm:update").Register("delay-successful-reply", func(tx *gorm.DB) {
+		if tx.Error == nil && tx.RowsAffected > 0 && delayed.CompareAndSwap(false, true) {
+			time.Sleep(120 * time.Millisecond)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.tick()
+	t.Cleanup(s.stopScheduling)
+	if !delayed.Load() {
+		t.Fatal("fixture did not delay successful acquisition")
+	}
+	if s.holdsLease() {
+		t.Fatal("reply latency extended the local lease")
 	}
 }

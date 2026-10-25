@@ -56,33 +56,47 @@ func (e *SysDictData) Get(d *dto.SysDictDataGetReq, model *models.SysDictData) e
 
 // Insert 创建对象
 func (e *SysDictData) Insert(c *dto.SysDictDataInsertReq) error {
-	var err error
-	var data = new(models.SysDictData)
-	c.Generate(data)
-	err = e.Orm.Create(data).Error
-	if err != nil {
-		e.Log.Errorf("db error: %s", err)
-		return err
+	var data models.SysDictData
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		var parent models.SysDictType
+		if err := lockAdminRows(tx, parent.TableName()).Where("dict_type = ?", c.DictType).First(&parent).Error; err != nil {
+			return err
+		}
+		c.Generate(&data)
+		data.CreateBy = c.CreateBy
+		return tx.Create(&data).Error
+	})
+	if err == nil {
+		c.Id = data.DictCode
 	}
-	return nil
+	return err
 }
 
-// Update 修改对象
+// Update 修改对象，锁定目标字典类型以免并发重命名或删除产生孤立数据。
 func (e *SysDictData) Update(c *dto.SysDictDataUpdateReq) error {
-	var err error
-	var model = models.SysDictData{}
-	e.Orm.First(&model, c.GetId())
-	c.Generate(&model)
-	db := e.Orm.Save(model)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
-		return err
+	if c.Id <= 0 {
+		return gorm.ErrRecordNotFound
 	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-
-	}
-	return nil
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		var parent models.SysDictType
+		if err := lockAdminRows(tx, parent.TableName()).Where("dict_type = ?", c.DictType).First(&parent).Error; err != nil {
+			return err
+		}
+		var model models.SysDictData
+		if err := tx.First(&model, c.GetId()).Error; err != nil {
+			return err
+		}
+		c.Generate(&model)
+		model.UpdateBy = c.UpdateBy
+		db := tx.Omit("create_by", "created_at").Select("*").Updates(&model)
+		if db.Error != nil {
+			return db.Error
+		}
+		if db.RowsAffected == 0 {
+			return errors.New("无权更新该数据")
+		}
+		return nil
+	})
 }
 
 // Remove 删除
@@ -107,7 +121,11 @@ func (e *SysDictData) GetAll(c *dto.SysDictDataGetPageReq, list *[]models.SysDic
 	var err error
 	var data models.SysDictData
 
-	err = e.Orm.Model(&data).
+	query := e.Orm.Model(&data)
+	if c.DictType != "" {
+		query = query.Where("dict_type = ?", c.DictType)
+	}
+	err = query.
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).
