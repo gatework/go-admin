@@ -2,6 +2,7 @@ package tools
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -254,21 +255,11 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (tool
 	}
 
 	dbColumn.TableName = data.TBName
-	tablenamelist := strings.Split(dbColumn.TableName, "_")
-	for i := 0; i < len(tablenamelist); i++ {
-		strStart := string([]byte(tablenamelist[i])[:1])
-		strend := string([]byte(tablenamelist[i])[1:])
-		// 大驼峰表名 结构体使用
-		data.ClassName += strings.ToUpper(strStart) + strend
-		// 小驼峰表名 js函数名和权限标识使用
-		if i == 0 {
-			data.BusinessName += strings.ToLower(strStart) + strend
-		} else {
-			data.BusinessName += strings.ToUpper(strStart) + strend
-		}
-		//data.PackageName += strings.ToLower(strStart) + strings.ToLower(strend)
-		//data.ModuleName += strings.ToLower(strStart) + strings.ToLower(strend)
+	data.ClassName, data.BusinessName, err = generatorNames(dbColumn.TableName)
+	if err != nil {
+		return data, err
 	}
+
 	//data.ModuleFrontName = strings.ReplaceAll(data.ModuleName, "_", "-")
 	data.PackageName = "admin"
 	data.TplCategory = "crud"
@@ -276,6 +267,29 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (tool
 	// 中横线表名称，接口路径、前端文件夹名称和js名称使用
 	data.ModuleName = strings.Replace(data.TBName, "_", "-", -1)
 	dbcolumn, err := dbColumn.GetList(tx)
+	if err != nil {
+		return data, err
+	}
+	if tx.Dialector.Name() == "postgres" {
+		if err := validatePostgresGeneratorIdentifier(data.TBName); err != nil {
+			return data, err
+		}
+		var reserved bool
+		if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM pg_get_keywords() WHERE word = ? AND catcode = 'R')", data.TBName).Scan(&reserved).Error; err != nil {
+			return data, fmt.Errorf("validate PostgreSQL generator table name: %w", err)
+		}
+		if reserved {
+			return data, fmt.Errorf("PostgreSQL table name %q is a reserved keyword and unsupported by generated search queries; rename the table using a non-reserved lowercase identifier", data.TBName)
+		}
+		for _, source := range dbcolumn {
+			if err := validatePostgresGeneratorIdentifier(source.ColumnName); err != nil {
+				return data, err
+			}
+		}
+		if err := validatePostgresAuditColumns(dbcolumn); err != nil {
+			return data, err
+		}
+	}
 	data.CreateBy = 0
 	data.TableComment = dbtable.TableComment
 	if dbtable.TableComment == "" {
@@ -303,17 +317,11 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (tool
 		column.QueryType = "EQ"
 		column.IsPk = "0"
 
-		namelist := strings.Split(dbcolumn[i].ColumnName, "_")
-		for i := 0; i < len(namelist); i++ {
-			strStart := string([]byte(namelist[i])[:1])
-			strend := string([]byte(namelist[i])[1:])
-			column.GoField += strings.ToUpper(strStart) + strend
-			if i == 0 {
-				column.JsonField = strings.ToLower(strStart) + strend
-			} else {
-				column.JsonField += strings.ToUpper(strStart) + strend
-			}
+		column.GoField, column.JsonField, err = generatorNames(dbcolumn[i].ColumnName)
+		if err != nil {
+			return data, err
 		}
+
 		if strings.Contains(dbcolumn[i].ColumnKey, "PR") {
 			column.IsPk = "1"
 			column.Pk = true
@@ -329,27 +337,13 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (tool
 			column.Required = true
 		}
 
-		if strings.Contains(dbcolumn[i].ColumnType, "int") {
-			if strings.Contains(dbcolumn[i].ColumnKey, "PR") {
-				column.GoType = "int"
-			} else {
-				column.GoType = "string"
-			}
-			column.HtmlType = "input"
-		} else if strings.Contains(dbcolumn[i].ColumnType, "timestamp") {
-			column.GoType = "time.Time"
-			column.HtmlType = "datetime"
-		} else if strings.Contains(dbcolumn[i].ColumnType, "datetime") {
-			column.GoType = "time.Time"
-			column.HtmlType = "datetime"
-		} else {
-			column.GoType = "string"
-			column.HtmlType = "input"
+		if err := mapGeneratorColumn(&column, dbcolumn[i], tx.Dialector.Name()); err != nil {
+			return data, err
 		}
 
 		data.Columns = append(data.Columns, column)
 	}
-	return data, err
+	return data, validateAndSanitizeColumns(data.Columns)
 }
 
 // Update

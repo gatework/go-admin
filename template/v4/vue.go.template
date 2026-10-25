@@ -58,6 +58,7 @@
 {{- $hasQuery := false -}}
 {{- $hasForm := false -}}
 {{- $pkType := "number" -}}
+{{- $assignedPk := false -}}
 {{- range .Columns -}}
   {{- $dictUsed := and (ne .DictType "") (or (and (eq .IsQuery "1") (eq .FkTableName "")) (and (eq .IsList "1") (eq .FkTableName "")) (and (eq .IsInsert "1") (eq .HtmlType "select") (eq .FkTableName "")) (and (eq .IsInsert "1") (eq .HtmlType "radio"))) -}}
   {{- $fkUsed := and (ne .FkTableName "") (or (eq .IsQuery "1") (eq .IsList "1") (and (eq .IsInsert "1") (eq .HtmlType "select"))) -}}
@@ -67,7 +68,8 @@
   {{- if and (eq .IsList "1") (eq .FkTableName "") (eq .DictType "") (eq .HtmlType "datetime") }}{{$hasDatetime = true}}{{end -}}
   {{- if eq .IsQuery "1" }}{{$hasQuery = true}}{{end -}}
   {{- if and (eq .IsInsert "1") (eq .IsRequired "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy") }}{{$hasRules = true}}{{end -}}
-  {{- if and .Pk (eq .GoType "string") }}{{$pkType = "string"}}{{$hasRules = true}}{{$hasForm = true}}{{end -}}
+  {{- if and .Pk (or (eq .GoType "string") (eq .GoType "int64")) }}{{$pkType = "string"}}{{end -}}
+  {{- if and .Pk (or (eq .IsIncrement "0") (and (eq .IsIncrement "") (eq .GoType "string"))) }}{{$assignedPk = true}}{{$hasRules = true}}{{$hasForm = true}}{{end -}}
   {{- if and (eq .IsInsert "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy") }}{{$hasForm = true}}{{end -}}
 {{- end -}}
 {{- /*
@@ -102,6 +104,13 @@
               :label="dict.label"
               :value="dict.value"
             />
+          </el-select>
+          {{- else if eq .HtmlType "number"}}
+          <el-input-number v-model="table.query.{{.JsonField}}" />
+          {{- else if or (eq .GoType "bool") (eq .GoType "*bool")}}
+          <el-select v-model="table.query.{{.JsonField}}" clearable>
+            <el-option label="true" :value="true" />
+            <el-option label="false" :value="false" />
           </el-select>
           {{- else if eq .HtmlType "datetime"}}
           <el-date-picker
@@ -201,17 +210,23 @@
           opened, which needs go-admin-ui's useForm to record the mode rather
           than infer it from the key.
         */}}
-        {{- if eq $pkType "string"}}
+        {{- if $assignedPk}}
         {{- $key := printf "gen.%s.%s.%s" $package $business .PkJsonField}}
         <el-form-item :label="$t('{{$key}}')" prop="{{.PkJsonField}}">
+          {{- if eq $pkType "number"}}
+          <el-input-number v-model="form.model.{{.PkJsonField}}" :disabled="form.isEdit" />
+          {{- else}}
           <el-input v-model="form.model.{{.PkJsonField}}" :disabled="form.isEdit" />
+          {{- end}}
         </el-form-item>
         {{- end}}
         {{- range .Columns}}
         {{- if and (eq .IsInsert "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy")}}
         {{- $key := printf "gen.%s.%s.%s" $package $business .JsonField}}
         <el-form-item :label="$t('{{$key}}')" prop="{{.JsonField}}">
-          {{- if eq .HtmlType "select"}}
+          {{- if eq .HtmlType "number"}}
+          <el-input-number v-model="form.model.{{.JsonField}}" />
+          {{- else if eq .HtmlType "select"}}
             {{- if ne .FkTableName ""}}
           <el-select v-model="form.model.{{.JsonField}}" :placeholder="$t('common.selectPlaceholder')">
             <el-option
@@ -243,8 +258,13 @@
             {{- else}}
           <el-input v-model="form.model.{{.JsonField}}" />
             {{- end}}
+          {{- else if and (eq .HtmlType "checkbox") (eq .GoType "*bool")}}
+          <el-select v-model="form.model.{{.JsonField}}" clearable :value-on-clear="null">
+            <el-option label="true" :value="true" />
+            <el-option label="false" :value="false" />
+          </el-select>
           {{- else if eq .HtmlType "checkbox"}}
-          <el-checkbox v-model="form.model.{{.JsonField}}" true-value="1" false-value="0" />
+          <el-checkbox v-model="form.model.{{.JsonField}}"{{if and (ne .GoType "bool") (ne .GoType "*bool")}} true-value="1" false-value="0"{{end}} />
           {{- else if eq .HtmlType "datetime"}}
           <el-date-picker
             v-model="form.model.{{.JsonField}}"
@@ -385,7 +405,7 @@ const { t } = useI18n()
 */}}
 
 const rules = computed<FormRules>(() => ({ {{$rFirst := true}}
-  {{- if eq $pkType "string"}}{{$rFirst = false}}{{.PkJsonField}}: [{ required: true, message: t('{{printf "gen.%s.%s.%s" $package $business .PkJsonField}}'), trigger: 'blur' }]
+  {{- if $assignedPk}}{{$rFirst = false}}{{.PkJsonField}}: [{ required: true, message: t('{{printf "gen.%s.%s.%s" $package $business .PkJsonField}}'), trigger: 'blur' }]
   {{- end}}
   {{- range .Columns}}
   {{- if and (eq .IsInsert "1") (eq .IsRequired "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy")}}
@@ -399,7 +419,7 @@ const rules = computed<FormRules>(() => ({ {{$rFirst := true}}
 {{- if $hasForm}}
 
 const form = useForm<{{.ClassName}}, {{$pkType}}>({
-  defaultModel: () => ({{"{"}} {{.PkJsonField}}: undefined{{range .Columns}}{{if and (eq .IsInsert "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy")}}, {{.JsonField}}: {{if eq .DefaultValue ""}}undefined{{else if eq .GoType "int"}}{{.DefaultValue}}{{else}}'{{js .DefaultValue}}'{{end}}{{end}}{{end}} {{"}"}}),
+  defaultModel: () => ({{"{"}} {{.PkJsonField}}: undefined{{range .Columns}}{{if and (eq .IsInsert "1") (not .Pk) (ne .GoField "CreatedAt") (ne .GoField "UpdatedAt") (ne .GoField "DeletedAt") (ne .GoField "UpdateBy") (ne .GoField "CreateBy")}}, {{.JsonField}}: {{if eq .DefaultValue ""}}undefined{{else if or (eq .GoType "int") (eq .GoType "*int") (eq .GoType "float32") (eq .GoType "*float32") (eq .GoType "float64") (eq .GoType "*float64") (eq .GoType "bool") (eq .GoType "*bool")}}{{.DefaultValue}}{{else}}'{{js .DefaultValue}}'{{end}}{{end}}{{end}} {{"}"}}),
   idKey: '{{.PkJsonField}}',
   {{- if $hasRules}}
   rules,

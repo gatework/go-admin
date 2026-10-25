@@ -20,6 +20,8 @@ func newCandidateDB(t *testing.T, tables ...string) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	db.Dialector = mysqlMetadataFixture{db.Dialector}
+
 	if err := db.Exec(`ATTACH DATABASE ':memory:' AS information_schema`).Error; err != nil {
 		t.Fatalf("attach information_schema: %v", err)
 	}
@@ -114,3 +116,8 @@ func TestGetPageOffersTablesWhoseEntryWasDeleted(t *testing.T) {
 		t.Errorf("the generator entry is deleted, sys_user should be a candidate again: %v", names)
 	}
 }
+
+// Only the metadata selector is simulated; SQLite still executes the fixture SQL.
+type mysqlMetadataFixture struct{ gorm.Dialector }
+
+func (mysqlMetadataFixture) Name() string { return "mysql" }

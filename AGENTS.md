@@ -89,6 +89,8 @@ err = e.Orm.Model(&data).Scopes(
 
 错误一律 `return err` 向上传递，日志用 `e.Log.Errorf`，不使用 `panic`。
 
+更新既有对象时先检查读取错误，再用明确的 `Updates` 字段集合，并检查 `RowsAffected`；写入时仍需保留适用的数据权限范围。不要用 `Save` 代替更新，它会在目标行被并发删除后尝试插入，导致已删除的数据复活。事务使用 `Transaction` 回调或显式检查提交错误，不能在 defer 中丢弃 Commit 的结果。
+
 ## DTO
 
 搜索条件由 tag 声明，`MakeCondition` 据此拼 SQL：
@@ -233,6 +235,7 @@ CI 会跑，命中 ERROR 即失败。这里不写条数——写死的数字会�
 
 | 检查 | 级别 | 静默后果 |
 |---|---|---|
+| `gorm-discarded-result` | ERROR | core Service 的 `Orm` 查询/写入结果被直接丢弃，读失败后仍继续写入。该检查只覆盖能从语法确定的 Service 接收者，不代替完整错误审查 |
 | `modeltime-mix` | ERROR | 两个 `ModelTime` 混用，整张表查不到数据 |
 | `menu-sort-overflow` | ERROR | 菜单 `sort` 超 127，MySQL tinyint 拒绝写入，迁移中断 |
 | `config-value-truncation` | ERROR | `sys_config.config_value` 超 255 字符被静默截断 |
@@ -257,6 +260,10 @@ make checksilent UI_DIR=../go-admin-ui/src
 
 升级门槛：连续 2 个发版周期零误报后转为 ERROR。
 
+## 代码生成
+
+代码生成器读取请求连接的真实数据库类型；PostgreSQL 元数据限定在 `current_schema()`，不能改回全局 driver 或 MySQL 的 `gen.dbname` 判断。变更类型映射时同步校验 Go DTO、JSON、TypeScript、表单与真实生成接口；尤其 bigint 业务字段/主键须以十进制字符串跨越 JSON 边界，审计字段遵守框架内嵌模型契约。支持范围及验证命令见 `docs/postgresql-codegen.md`。
+
 ## 提交规范
 
 格式 `type+emoji: 描述`：
@@ -271,3 +278,5 @@ make checksilent UI_DIR=../go-admin-ui/src
 - 不在 Service 中引用 `gin.Context`
 - 生产部署前确认 `mode: prod` 且已修改 `jwt.secret`（dev 模式下 token 几乎不过期）
 - 不提交 `config/settings.yml` 中的真实凭据
+- `sys_user.auth_version` 是会话撤销计数，只能通过受控的原子递增修改；资料更新不能回写旧计数。新增或升级数据库必须先执行正式迁移，再启用依赖新列的认证代码
+- 资源重载只关闭本生命周期创建的缓存、队列与调度器；等待关闭必须尊重服务退出预算，不能每次超时都创建新的阻塞 goroutine

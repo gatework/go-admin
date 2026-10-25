@@ -73,6 +73,9 @@ func validateAndSanitizeColumns(columns []tools.SysColumns) error {
 			return fmt.Errorf("jsonField 在同一张表内重复：%q", col.JsonField)
 		}
 		seen[col.JsonField] = true
+		if err := validateTypedColumnDefault(*col); err != nil {
+			return err
+		}
 
 		if col.ColWidth != 0 && (col.ColWidth < colWidthMin || col.ColWidth > colWidthMax) {
 			col.ColWidth = 0

@@ -2,11 +2,8 @@ package tools
 
 import (
 	"errors"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-
 	"gorm.io/gorm"
-
-	config2 "github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"gorm.io/gorm/clause"
 )
 
 type DBTables struct {
@@ -20,7 +17,10 @@ type DBTables struct {
 }
 
 func (e *DBTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBTables, int, error) {
-	pkg.Assert(config2.DatabaseConfig.Driver == "mysql", "目前只支持mysql数据库", 500)
+	table, err := metadataTables(tx)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	var doc []DBTables
 	var count int64
@@ -34,35 +34,45 @@ func (e *DBTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBTables
 		return nil, 0, err
 	}
 
-	table := tx.Table("information_schema.tables")
-	table = table.Where("table_schema= ? ", config2.GenConfig.DBName)
 	if len(generated) > 0 {
 		// NOT IN (NULL) is unknown for every row, so an empty list has to skip
 		// the clause instead of rendering it.
-		table = table.Where("TABLE_NAME not in (?)", generated)
+		table = table.Where(clause.Not(clause.IN{Column: clause.Column{Name: "TABLE_NAME"}, Values: tableNamesAsValues(generated)}))
 	}
 
 	if e.TableName != "" {
-		table = table.Where("TABLE_NAME = ?", e.TableName)
+		table = table.Where(clause.Eq{Column: clause.Column{Name: "TABLE_NAME"}, Value: e.TableName})
 	}
-	if err := table.Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Offset(-1).Limit(-1).Count(&count).Error; err != nil {
+	if err := table.Count(&count).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := table.Order(clause.OrderByColumn{Column: clause.Column{Name: "TABLE_NAME"}}).Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Error; err != nil {
 		return nil, 0, err
 	}
 	return doc, int(count), nil
 }
 
 func (e *DBTables) Get(tx *gorm.DB) (DBTables, error) {
-	pkg.Assert(config2.DatabaseConfig.Driver == "mysql", "目前只支持mysql数据库", 500)
 
 	var doc DBTables
 	if e.TableName == "" {
 		return doc, errors.New("table name cannot be empty！")
 	}
-	table := tx.Table("information_schema.tables")
-	table = table.Where("table_schema= ? ", config2.GenConfig.DBName)
-	table = table.Where("TABLE_NAME = ?", e.TableName)
-	if err := table.First(&doc).Error; err != nil {
+	table, err := metadataTables(tx)
+	if err != nil {
+		return doc, err
+	}
+	table = table.Where(clause.Eq{Column: clause.Column{Name: "TABLE_NAME"}, Value: e.TableName})
+	if err := table.Take(&doc).Error; err != nil {
 		return doc, err
 	}
 	return doc, nil
+}
+
+func tableNamesAsValues(names []string) []interface{} {
+	values := make([]interface{}, len(names))
+	for i, name := range names {
+		values[i] = name
+	}
+	return values
 }

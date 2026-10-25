@@ -7,12 +7,14 @@ import (
     */ -}}
     {{- $embed := false -}}
     {{- $pkType := "int" -}}
-    {{- range .Columns -}}{{- if .Pk -}}{{- $pkType = .GoType -}}{{- if and (eq .GoField "Id") (eq .GoType "int") -}}{{- $embed = true -}}{{- end -}}{{- end -}}{{- end -}}
+    {{- range .Columns -}}{{- if .Pk -}}{{- $pkType = .GoType -}}{{- if and (eq .ColumnName "id") (eq .GoField "Id") (eq .GoType "int") (ne .IsIncrement "0") -}}{{- $embed = true -}}{{- end -}}{{- end -}}{{- end -}}
+    {{if eq $pkType "int64"}}"encoding/json"
+    "strconv"{{end}}
     {{- $bb := false -}}
     {{- range .Columns -}}
     {{- /* "1" exactly: the config page saves an unticked box as "0", which a bare if reads as true. */ -}}
     {{- if eq .IsQuery "1" -}}
-    {{- if eq .GoType "time.Time" -}}{{- $bb = true -}}{{- end -}}
+    {{- if or (eq .GoType "time.Time") (eq .GoType "*time.Time") -}}{{- $bb = true -}}{{- end -}}
     {{- end -}}
     {{- end -}}
     {{- range .Columns -}}
@@ -20,7 +22,7 @@ import (
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
     {{- else -}}
-    {{- if eq .GoType "time.Time" -}}{{- $bb = true -}}{{- end -}}
+    {{- if and (or (ne .IsInsert "0") (ne .IsEdit "0")) (or (eq .GoType "time.Time") (eq .GoType "*time.Time")) -}}{{- $bb = true -}}{{- end -}}
     {{- end -}}
     {{- end -}}
     {{- if eq $bb true }}
@@ -37,7 +39,7 @@ type {{.ClassName}}GetPageReq struct {
     {{- $tablename := .TBName -}}
     {{- range .Columns -}}
     {{- if eq .IsQuery "1" }}
-    {{.GoField}} {{.GoType}} `form:"{{.JsonField}}"  search:"type:{{if eq .QueryType "EQ"}}exact{{ else if eq .QueryType "NE"}}iexact{{ else if eq .QueryType "LIKE"}}contains{{ else if eq .QueryType "GT"}}gt{{ else if eq .QueryType "GTE"}}gte{{ else if eq .QueryType "LT"}}lt{{ else if eq .QueryType "LTE"}}lte{{- end }};column:{{.ColumnName}};table:{{$tablename}}" comment:"{{.ColumnComment}}"`
+    {{.GoField}} {{if or (eq .GoType "int") (eq .GoType "int64") (eq .GoType "float32") (eq .GoType "float64") (eq .GoType "bool")}}*{{.GoType}}{{else if eq .GoType "*string"}}string{{else}}{{.GoType}}{{end}} `form:"{{.JsonField}}"  search:"type:{{if eq .QueryType "EQ"}}exact{{ else if eq .QueryType "NE"}}iexact{{ else if eq .QueryType "LIKE"}}contains{{ else if eq .QueryType "GT"}}gt{{ else if eq .QueryType "GTE"}}gte{{ else if eq .QueryType "LT"}}lt{{ else if eq .QueryType "LTE"}}lte{{- end }};column:{{.ColumnName}};table:{{$tablename}}" comment:"{{.ColumnComment}}"`
     {{- end }}
     {{- end }}
     {{.ClassName}}Order
@@ -58,14 +60,15 @@ type {{.ClassName}}InsertReq struct {
     {{- range .Columns -}}
     {{$x := .Pk}}
     {{- if ($x) }}
-    {{.GoField}} {{.GoType}} `json:"{{if eq .GoType "int"}}-{{else}}{{.JsonField}}{{end}}" comment:"{{.ColumnComment}}"` // {{.ColumnComment}}
+    {{.GoField}} {{.GoType}} `json:"{{if or (eq .IsIncrement "1") (and (eq .IsIncrement "") (eq .GoType "int"))}}-{{else}}{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}{{end}}" comment:"{{.ColumnComment}}"` // {{.ColumnComment}}
+    {{- else if eq .IsInsert "0" -}}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
     {{- else if eq .GoField "CreateBy" -}}
     {{- else if eq .GoField "UpdateBy" -}}
     {{- else }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}" comment:"{{.ColumnComment}}"`
+    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" comment:"{{.ColumnComment}}"`
     {{- end -}}
     {{- end }}
     common.ControlBy
@@ -82,6 +85,7 @@ func (s *{{.ClassName}}InsertReq) Generate(model *models.{{.ClassName}})  {
     {{- else }}
     model.{{.GoField}} = s.{{.GoField}}
     {{- end }}
+    {{- else if eq .IsInsert "0" -}}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
@@ -102,14 +106,15 @@ type {{.ClassName}}UpdateReq struct {
     {{- range .Columns -}}
     {{$x := .Pk}}
     {{- if ($x) }}
-    {{.GoField}} {{.GoType}} `uri:"id" comment:"{{.ColumnComment}}"` // {{.ColumnComment}}
+    {{.GoField}} {{.GoType}} `uri:"id" json:"{{.JsonField}}{{if eq .GoType "int64"}},string{{end}}" comment:"{{.ColumnComment}}"` // {{.ColumnComment}}
+    {{- else if eq .IsEdit "0" -}}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
     {{- else if eq .GoField "CreateBy" -}}
     {{- else if eq .GoField "UpdateBy" -}}
     {{- else }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}" comment:"{{.ColumnComment}}"`
+    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" comment:"{{.ColumnComment}}"`
     {{- end -}}
     {{- end }}
     common.ControlBy
@@ -124,6 +129,7 @@ func (s *{{.ClassName}}UpdateReq) Generate(model *models.{{.ClassName}})  {
         model.Model = common.Model{ {{.GoField}}: s.{{.GoField}} }
     }
     {{- end }}
+    {{- else if eq .IsEdit "0" -}}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
@@ -161,3 +167,20 @@ type {{.ClassName}}DeleteReq struct {
 func (s *{{.ClassName}}DeleteReq) GetId() interface{} {
 	return s.Ids
 }
+
+{{if eq $pkType "int64"}}
+// UnmarshalJSON parses each decimal identifier explicitly: json's string option
+// does not apply to the elements of an integer slice.
+func (s *{{.ClassName}}DeleteReq) UnmarshalJSON(data []byte) error {
+    var input struct { Ids []string `json:"ids"` }
+    if err := json.Unmarshal(data, &input); err != nil { return err }
+    ids := make([]int64, len(input.Ids))
+    for i, value := range input.Ids {
+        id, err := strconv.ParseInt(value, 10, 64)
+        if err != nil { return err }
+        ids[i] = id
+    }
+    s.Ids = ids
+    return nil
+}
+{{end}}

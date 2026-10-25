@@ -10,7 +10,7 @@
 {{- $pkType := "number" -}}
 {{- $hasQuery := false -}}
 {{- range .Columns -}}
-  {{- if and .Pk (eq .GoType "string") }}{{$pkType = "string"}}{{end -}}
+  {{- if and .Pk (or (eq .GoType "string") (eq .GoType "int64")) }}{{$pkType = "string"}}{{end -}}
   {{- if eq .IsQuery "1" }}{{$hasQuery = true}}{{end -}}
 {{- end -}}
 import request from '@/utils/request'
@@ -18,17 +18,19 @@ import type { ApiResponse, PageQuery, PageResult, Id } from '@/types/api'
 
 export interface {{.ClassName}} {
 {{- range .Columns}}
-  {{.JsonField}}?: {{if eq .GoType "int" -}}
+  {{.JsonField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
     number
-  {{- else if eq .GoType "int64" -}}
+  {{- else if or (eq .GoType "int64") (eq .GoType "*int64") -}}
+    string
+  {{- else if or (eq .GoType "float32") (eq .GoType "*float32") -}}
     number
-  {{- else if eq .GoType "float32" -}}
+  {{- else if or (eq .GoType "float64") (eq .GoType "*float64") -}}
     number
-  {{- else if eq .GoType "float64" -}}
-    number
+  {{- else if or (eq .GoType "bool") (eq .GoType "*bool") -}}
+    boolean
   {{- else -}}
     string
-  {{- end}}
+  {{- end}}{{if or (eq .GoType "*int") (eq .GoType "*int64") (eq .GoType "*float32") (eq .GoType "*float64") (eq .GoType "*bool") (eq .GoType "*string") (eq .GoType "*time.Time") (eq .GoType "[]byte")}} | null{{end}}
 {{- end}}
 }
 
@@ -36,17 +38,19 @@ export interface {{.ClassName}} {
 export interface {{.ClassName}}Query {
 {{- range .Columns}}
 {{- if eq .IsQuery "1"}}
-  {{.JsonField}}?: {{if eq .GoType "int" -}}
+  {{.JsonField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
     number
-  {{- else if eq .GoType "int64" -}}
+  {{- else if or (eq .GoType "int64") (eq .GoType "*int64") -}}
+    string
+  {{- else if or (eq .GoType "float32") (eq .GoType "*float32") -}}
     number
-  {{- else if eq .GoType "float32" -}}
+  {{- else if or (eq .GoType "float64") (eq .GoType "*float64") -}}
     number
-  {{- else if eq .GoType "float64" -}}
-    number
+  {{- else if or (eq .GoType "bool") (eq .GoType "*bool") -}}
+    boolean
   {{- else -}}
     string
-  {{- end}}
+  {{- end}}{{if or (eq .GoType "*int") (eq .GoType "*int64") (eq .GoType "*float32") (eq .GoType "*float64") (eq .GoType "*bool") (eq .GoType "*string") (eq .GoType "*time.Time") (eq .GoType "[]byte")}} | null{{end}}
 {{- end}}
 {{- end}}
 }
@@ -120,6 +124,6 @@ export function del{{.ClassName}}(ids: Id[]) {
   return request<ApiResponse<null>>({
     url: '/api/v1/{{.ModuleName}}',
     method: 'delete',
-    data: { ids: ids.map(Number) }
+    data: { ids: {{if eq $pkType "string"}}ids.map(String){{else}}ids.map(Number){{end}} }
   })
 }
