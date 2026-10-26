@@ -1,0 +1,45 @@
+settings:
+  application:
+    mode: dev
+    host: 0.0.0.0
+    name: go-admin
+    port: 8000
+    readtimeout: 30
+    writertimeout: 30
+    enabledp: false
+  logger:
+    path: temp/logs
+    stdout: default
+    level: debug
+    enableddb: true
+  jwt:
+    secret: go-admin-docker-development-only
+    timeout: 3600
+  database:
+    driver: postgres
+    source: host=postgres port=5432 user=goadmin password=goadmin dbname=goadmin_development sslmode=disable TimeZone=Asia/Shanghai
+    maxIdleConns: 10
+    maxOpenConns: 30
+    connMaxLifeTime: 3600
+  gen:
+    dbname: goadmin_development
+    frontpath: ../go-admin-ui/src
+  extend:
+    rateLimit:
+      inboundQPS: 200
+    shutdown:
+      drain: 0
+      server: 5
+      cleanup: 3
+      grace: 30
+  cache:
+    redis:
+      addr: redis:6379
+      db: 0
+  queue:
+    redis:
+      addr: redis:6379
+      db: 1
+      group: go-admin
+      key_prefix: go-admin
+      max_attempts: 5

@@ -1,0 +1,11 @@
+FROM golang:1.27.2-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/go-admin
+ENV GOTOOLCHAIN=local
+EXPOSE 8000
+
+# Keep the server itself as PID 1 so Docker's stop signal reaches it.
+CMD ["sh", "-ec", "go build -o /tmp/go-admin . && exec /tmp/go-admin server -c config/settings.docker.yml"]

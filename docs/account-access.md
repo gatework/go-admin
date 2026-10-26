@@ -37,7 +37,7 @@
 docker compose -f docker-compose.dev.yml -f docker-compose.account.yml up -d mailpit backend
 ```
 
-`.local/account.env` 权限为 0600，目录为 0700。Mailpit 控制台仅绑定本机，打开 `http://localhost:8025` 查看测试邮件。当前本地注册策略保持关闭。此配置不向真实收件人发送邮件；生产 SMTP 需要另行配置验证。
+`.local/account.env` 权限为 0600，目录为 0700。Mailpit 控制台仅绑定本机，默认打开 `http://localhost:8026` 查看测试邮件（可用 `MAILPIT_PORT` 覆盖）。当前本地注册策略保持关闭。此配置不向真实收件人发送邮件；生产 SMTP 需要另行配置验证。
 
 ## API
 
