@@ -33,7 +33,7 @@ func LoggerToFile() gin.HandlerFunc {
 		// off in the shipped configuration, where reading the body was a copy
 		// of every request made and discarded.
 		var body string
-		if config.LoggerConfig.EnabledDB {
+		if config.LoggerConfig.EnabledDB && !sensitiveAccountPath(c.Request.URL.Path) {
 			body = readOperParam(c, log)
 		}
 
@@ -51,7 +51,7 @@ func LoggerToFile() gin.HandlerFunc {
 
 		rt, bl := c.Get("result")
 		var result = ""
-		if bl {
+		if bl && !sensitiveAccountPath(c.Request.URL.Path) {
 			rb, err := json.Marshal(rt)
 			if err != nil {
 				log.Warnf("json Marshal result error, %s", err.Error())
@@ -182,4 +182,9 @@ func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqUri string
 			log.Errorf("Append message error, %s", err.Error())
 		}
 	}
+}
+
+// Account credentials and recovery material must never reach operation-log storage.
+func sensitiveAccountPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/account/") || path == "/api/v1/login" || strings.HasPrefix(path, "/api/v1/user/pwd/")
 }

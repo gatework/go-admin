@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"crypto/hmac"
+	"fmt"
 	"go-admin/common"
+	"go-admin/common/account"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-admin-team/go-admin-core/v2/captcha"
@@ -31,7 +35,8 @@ func PayloadFunc(data interface{}) jwt.MapClaims {
 			// deptid completes what the data-permission scope is decided by,
 			// so it can be read from the token instead of joined for on every
 			// request. core's user.GetDeptId has always read this claim.
-			"deptid": u.DeptId,
+			"deptid":     u.DeptId,
+			"auth_stamp": v["auth_stamp"],
 		}
 	}
 	return jwt.MapClaims{}
@@ -87,26 +92,68 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 
 		return nil, jwt.ErrMissingLoginValues
 	}
-	if config.ApplicationConfig.Mode != "dev" {
-		if !captcha.Verify(loginVals.UUID, loginVals.Code, true) {
-			username = loginVals.Username
-			msg = "验证码错误"
+	security := account.New(db.WithContext(c.Request.Context()))
+	if err = security.TakeLimit("login:"+account.PeerIP(c.Request.RemoteAddr), 20, 5*time.Minute); err != nil {
+		status = "1"
+		msg = "登录频率超限"
+		return nil, jwt.ErrFailedAuthentication
+	}
+	var sysUser SysUser
+	var role SysRole
+	var authVersion int64
+	if loginVals.ChallengeToken != "" {
+		verified, e := security.CompleteLogin(loginVals.ChallengeToken, loginVals.TOTPCode, loginVals.RecoveryCode)
+		if e != nil {
 			status = "1"
-
+			msg = "MFA 验证失败"
+			return nil, jwt.ErrFailedAuthentication
+		}
+		sysUser = SysUser{UserId: verified.UserId, Username: verified.Username, Password: verified.Password, RoleId: verified.RoleId, DeptId: verified.DeptId}
+		authVersion = verified.SessionVersion
+		if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", sysUser.RoleId).First(&role).Error; err != nil {
+			return nil, jwt.ErrFailedAuthentication
+		}
+	} else {
+		if loginVals.Username == "" || loginVals.Password == "" || loginVals.Code == "" || loginVals.UUID == "" {
+			status = "1"
+			return nil, jwt.ErrMissingLoginValues
+		}
+		if config.ApplicationConfig.Mode != "dev" && !captcha.Verify(loginVals.UUID, loginVals.Code, true) {
+			status = "1"
+			msg = "验证码错误"
 			return nil, jwt.ErrInvalidVerificationode
 		}
+		// Account quotas are consumed only after required fields and CAPTCHA pass.
+		if err = security.TakeLimit("login-user:"+loginVals.Username, 20, 5*time.Minute); err != nil {
+			status = "1"
+			msg = "登录频率超限"
+			return nil, jwt.ErrFailedAuthentication
+		}
+		var e error
+		sysUser, role, e = loginVals.GetUser(db)
+		if e != nil || role.Status != "2" {
+			status = "1"
+			msg = "登录失败"
+			return nil, jwt.ErrFailedAuthentication
+		}
+		state, e := security.State(sysUser.UserId)
+		if e != nil {
+			return nil, jwt.ErrFailedAuthentication
+		}
+		authVersion = state.Version
+		if state.Enabled {
+			u := account.User{UserId: sysUser.UserId, Username: sysUser.Username, Password: sysUser.Password}
+			token, e := security.LoginChallenge(u, state)
+			if e != nil {
+				return nil, jwt.ErrFailedAuthentication
+			}
+			c.Set("account_mfa_challenge", token)
+			msg = "等待 MFA 验证"
+			return nil, jwt.ErrFailedAuthentication
+		}
 	}
-	sysUser, role, e := loginVals.GetUser(db)
-	if e == nil {
-		username = loginVals.Username
-
-		return map[string]interface{}{"user": sysUser, "role": role}, nil
-	} else {
-		msg = "登录失败"
-		status = "1"
-		log.Warnf("%s login failed!", loginVals.Username)
-	}
-	return nil, jwt.ErrFailedAuthentication
+	username = sysUser.Username
+	return map[string]interface{}{"user": sysUser, "role": role, "auth_stamp": account.Stamp(config.JwtConfig.Secret, sysUser.Password, authVersion)}, nil
 }
 
 // LoginLogToDB Write log to database
@@ -185,11 +232,45 @@ func LogOut(c *gin.Context) {
 // before taking this change: a codebase that does read those keys off the
 // context needs Authorizator to keep setting them.
 func Authorizator(data interface{}, c *gin.Context) bool {
-	_, ok := data.(map[string]interface{})
-	return ok
+	if _, ok := data.(map[string]interface{}); !ok {
+		return false
+	}
+	db, err := pkg.GetOrm(c)
+	if err != nil {
+		return false
+	}
+	security := account.New(db.WithContext(c.Request.Context()))
+	u, err := security.User(user.GetUserId(c))
+	if err != nil {
+		return false
+	}
+	state, err := security.State(u.UserId)
+	if err != nil {
+		return false
+	}
+	claims := jwt.ExtractClaims(c)
+	stamp, ok := claims["auth_stamp"].(string)
+	if !ok {
+		return false
+	}
+	if fmt.Sprint(claims[jwt.RoleIdKey]) != fmt.Sprint(u.RoleId) {
+		return false
+	}
+	var role SysRole
+	if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", u.RoleId).First(&role).Error; err != nil {
+		return false
+	}
+	if fmt.Sprint(claims[jwt.RoleKey]) != role.RoleKey {
+		return false
+	}
+	return hmac.Equal([]byte(stamp), []byte(account.Stamp(config.JwtConfig.Secret, u.Password, state.Version)))
 }
 
 func Unauthorized(c *gin.Context, code int, message string) {
+	if token, ok := c.Get("account_mfa_challenge"); ok {
+		c.JSON(http.StatusOK, gin.H{"code": 200, "mfaRequired": true, "challengeToken": token, "expiresIn": 300})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"code": code,
 		"msg":  message,

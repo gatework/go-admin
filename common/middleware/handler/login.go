@@ -7,14 +7,17 @@ import (
 )
 
 type Login struct {
-	Username string `form:"UserName" json:"username" binding:"required"`
-	Password string `form:"Password" json:"password" binding:"required"`
-	Code     string `form:"Code" json:"code" binding:"required"`
-	UUID     string `form:"UUID" json:"uuid" binding:"required"`
+	ChallengeToken string `json:"challengeToken"`
+	TOTPCode       string `json:"totpCode"`
+	RecoveryCode   string `json:"recoveryCode"`
+	Username       string `form:"UserName" json:"username"`
+	Password       string `form:"Password" json:"password"`
+	Code           string `form:"Code" json:"code"`
+	UUID           string `form:"UUID" json:"uuid"`
 }
 
 func (u *Login) GetUser(tx *gorm.DB) (user SysUser, role SysRole, err error) {
-	err = tx.Table("sys_user").Where("username = ?  and status = '2'", u.Username).First(&user).Error
+	err = tx.Table("sys_user").Where("username = ? AND status = '2' AND deleted_at = 0", u.Username).First(&user).Error
 	if err != nil {
 		log.Errorf("get user error, %s", err.Error())
 		return
@@ -24,7 +27,7 @@ func (u *Login) GetUser(tx *gorm.DB) (user SysUser, role SysRole, err error) {
 		log.Errorf("user login error, %s", err.Error())
 		return
 	}
-	err = tx.Table("sys_role").Where("role_id = ? ", user.RoleId).First(&role).Error
+	err = tx.Table("sys_role").Where("role_id = ? AND status = '2' AND deleted_at = 0", user.RoleId).First(&role).Error
 	if err != nil {
 		log.Errorf("get role error, %s", err.Error())
 		return

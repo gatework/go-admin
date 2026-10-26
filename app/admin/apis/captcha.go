@@ -2,8 +2,9 @@ package apis
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/captcha"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
+
+	"go-admin/common/logincaptcha"
 )
 
 type System struct {
@@ -25,9 +26,9 @@ func (e System) GenerateCaptchaHandler(c *gin.Context) {
 	// written at info level, which put a currently valid captcha answer in the
 	// application log - anyone able to read the log could bypass the check the
 	// captcha exists to enforce.
-	id, b64s, _, err := captcha.DriverDigitFunc()
+	id, b64s, err := logincaptcha.Generate()
 	if err != nil {
-		e.Logger.Errorf("DriverDigitFunc error, %s", err.Error())
+		e.Logger.Errorf("Generate captcha error, %s", err.Error())
 		e.Error(500, err, "验证码获取失败")
 		return
 	}
