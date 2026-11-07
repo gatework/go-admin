@@ -26,15 +26,17 @@ func AuthInit() (*jwt.GinJWTMiddleware, error) {
 			timeout = time.Duration(config.JwtConfig.Timeout) * time.Second
 		}
 	}
+	secret := config.JwtConfig.Secret
+	payload, authorize := handler.AuthCallbacks(secret)
 	return jwt.New(&jwt.GinJWTMiddleware{
 		Realm:           "test zone",
-		Key:             []byte(config.JwtConfig.Secret),
+		Key:             []byte(secret),
 		Timeout:         timeout,
 		MaxRefresh:      time.Hour,
-		PayloadFunc:     handler.PayloadFunc,
+		PayloadFunc:     payload,
 		IdentityHandler: handler.IdentityHandler,
 		Authenticator:   handler.Authenticator,
-		Authorizator:    handler.Authorizator,
+		Authorizator:    authorize,
 		Unauthorized:    handler.Unauthorized,
 		TokenLookup:     "header: Authorization, query: token, cookie: jwt",
 		TokenHeadName:   "Bearer",

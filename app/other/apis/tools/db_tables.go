@@ -1,10 +1,8 @@
 package tools
 
 import (
-	"errors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-admin-team/go-admin-core/v2/response"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 
 	"go-admin/app/other/models/tools"
@@ -27,12 +25,6 @@ func (e Gen) GetDBTableList(c *gin.Context) {
 	var pageIndex = 1
 	e.Context = c
 	log := e.GetLogger()
-	if config.DatabaseConfig.Driver == "sqlite3" || config.DatabaseConfig.Driver == "postgres" {
-		err = errors.New("对不起，sqlite3 或 postgres 不支持代码生成！")
-		log.Warn(err)
-		e.Error(403, err, "")
-		return
-	}
 
 	if size := c.Request.FormValue("pageSize"); size != "" {
 		pageSize, err = pkg.StringToInt(size)

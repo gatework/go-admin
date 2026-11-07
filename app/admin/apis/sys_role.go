@@ -2,7 +2,6 @@ package apis
 
 import (
 	"fmt"
-	"go-admin/common/global"
 	"net/http"
 
 	"github.com/gin-gonic/gin/binding"
@@ -129,12 +128,7 @@ func (e SysRole) Insert(c *gin.Context) {
 		e.Error(500, err, "创建失败,"+err.Error())
 		return
 	}
-	_, err = global.LoadPolicy(c)
-	if err != nil {
-		e.Logger.Error(err)
-		e.Error(500, err, "创建失败,"+err.Error())
-		return
-	}
+
 	e.OK(req.GetId(), "创建成功")
 }
 
@@ -166,12 +160,6 @@ func (e SysRole) Update(c *gin.Context) {
 	req.SetUpdateBy(user.GetUserId(c))
 
 	err = s.Update(&req, cb)
-	if err != nil {
-		e.Logger.Error(err)
-		return
-	}
-
-	_, err = global.LoadPolicy(c)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "更新失败,"+err.Error())

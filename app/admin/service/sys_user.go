@@ -4,6 +4,7 @@ import (
 	"errors"
 	"go-admin/app/admin/models"
 	"go-admin/app/admin/service/dto"
+	"strings"
 
 	log "github.com/go-admin-team/go-admin-core/v2/logger"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
@@ -120,9 +121,14 @@ func (e *SysUser) Insert(c *dto.SysUserInsertReq) error {
 func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerId int) error {
 	var err error
 	var model models.SysUser
-	db := e.Orm.Scopes(
-		actions.Permission(model.TableName(), p),
-	).First(&model, c.GetId())
+	if callerId <= 0 || c.UserId <= 0 {
+		return errors.New("invalid user identity")
+	}
+	query := e.Orm
+	if c.UserId != callerId {
+		query = query.Scopes(actions.Permission(model.TableName(), p))
+	}
+	db := query.First(&model, c.GetId())
 	if err = db.Error; err != nil {
 		e.Log.Errorf("Service UpdateSysUser error: %s", err)
 		return err
@@ -137,61 +143,103 @@ func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, cal
 		c.Status = model.Status
 	}
 	c.Generate(&model)
-	update := e.Orm.Model(&model).Where("user_id = ?", &model.UserId).Omit("password", "salt").Updates(&model)
-	if err = update.Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
-		return err
-	}
-	if update.RowsAffected == 0 {
-		err = errors.New("update userinfo error")
-		log.Warnf("db update error")
-		return err
-	}
-	return nil
+	model.UpdateBy = callerId
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		omit := []string{"password", "salt", "auth_version", "create_by", "created_at", "deleted_at", "user_id"}
+		self := model.UserId == callerId
+		if self {
+			// A concurrent administrator edit must not be undone by a self-profile save.
+			omit = append(omit, "role_id", "dept_id", "status")
+		} else if model.Status != "" && model.Status != "1" && model.Status != "2" {
+			return errors.New("invalid user status")
+		}
+		scope := func(db *gorm.DB) *gorm.DB {
+			if self {
+				return db
+			}
+			return db.Scopes(actions.Permission(model.TableName(), p))
+		}
+		// Compare effective struct updates against the current row, not the earlier
+		// read. A value restored later must never restore an old credential stamp.
+		var changed []string
+		var values []any
+		add := func(column string, value any) {
+			changed = append(changed, "("+column+" <> ? OR "+column+" IS NULL)")
+			values = append(values, value)
+		}
+		if model.Username != "" {
+			add("username", model.Username)
+		}
+		if !self {
+			if model.RoleId != 0 {
+				add("role_id", model.RoleId)
+			}
+			if model.DeptId != 0 {
+				add("dept_id", model.DeptId)
+			}
+			if model.Status != "" {
+				add("status", model.Status)
+			}
+		}
+		if len(changed) != 0 {
+			if err := scope(tx.Table(model.TableName())).Where("user_id = ? AND deleted_at = 0", model.UserId).
+				Where(strings.Join(changed, " OR "), values...).UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error; err != nil {
+				return err
+			}
+		}
+		update := scope(tx.Model(&model)).Where("user_id = ?", model.UserId).Omit(omit...).Updates(&model)
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected == 0 {
+			return errors.New("update userinfo error")
+		}
+		return nil
+	})
 }
 
-// UpdateAvatar 更新用户头像
-func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, p *actions.DataPermission) error {
-	var err error
-	var model models.SysUser
-	db := e.Orm.Scopes(
-		actions.Permission(model.TableName(), p),
-	).First(&model, c.GetId())
-	if err = db.Error; err != nil {
-		e.Log.Errorf("Service UpdateSysUser error: %s", err)
-		return err
+// UpdateAvatar updates the authenticated caller's avatar. The API supplies the
+// token identity; account ownership does not depend on who created that user.
+// The permission argument is retained for source compatibility.
+func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermission) error {
+	if c.UserId <= 0 {
+		return errors.New("invalid user identity")
 	}
-	if db.RowsAffected == 0 {
+	result := e.Orm.Model(&models.SysUser{}).Where("user_id = ?", c.UserId).
+		Updates(map[string]any{"avatar": c.Avatar, "update_by": c.UserId})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
 		return errors.New("无权更新该数据")
-
-	}
-	err = e.Orm.Table(model.TableName()).Where("user_id =? ", c.UserId).Updates(c).Error
-	if err != nil {
-		e.Log.Errorf("Service UpdateSysUser error: %s", err)
-		return err
 	}
 	return nil
 }
 
 // UpdateStatus 更新用户状态
 func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermission) error {
-	var err error
+	if c.UserId <= 0 || (c.Status != "1" && c.Status != "2") {
+		return errors.New("invalid user status")
+	}
 	var model models.SysUser
-	db := e.Orm.Scopes(
-		actions.Permission(model.TableName(), p),
-	).First(&model, c.GetId())
-	if err = db.Error; err != nil {
-		e.Log.Errorf("Service UpdateSysUser error: %s", err)
-		return err
+	result := e.Orm.Table(model.TableName()).Scopes(actions.Permission(model.TableName(), p)).
+		Where("user_id = ? AND deleted_at = 0", c.UserId).
+		Updates(map[string]interface{}{
+			"auth_version": gorm.Expr("CASE WHEN status <> ? THEN auth_version + 1 ELSE auth_version END", c.Status),
+			"status":       c.Status, "update_by": c.UpdateBy,
+		})
+	if result.Error != nil {
+		return result.Error
 	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-
-	}
-	err = e.Orm.Table(model.TableName()).Where("user_id =? ", c.UserId).Updates(c).Error
-	if err != nil {
-		e.Log.Errorf("Service UpdateSysUser error: %s", err)
-		return err
+	if result.RowsAffected == 0 {
+		// MySQL may report zero changed rows for an idempotent status request.
+		var count int64
+		if err := e.Orm.Model(&models.SysUser{}).Scopes(actions.Permission(model.TableName(), p)).Where("user_id = ?", c.UserId).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return errors.New("无权更新该数据")
+		}
 	}
 	return nil
 }
@@ -211,11 +259,16 @@ func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission)
 		return errors.New("无权更新该数据")
 	}
 	c.Generate(&model)
-	err = e.Orm.Omit("username", "nick_name", "phone", "role_id", "avatar", "sex").Save(&model).Error
-	if err != nil {
-		e.Log.Errorf("At Service ResetSysUserPwd error: %s", err)
-		return err
+	model.UpdateBy = c.UpdateBy
+	result := e.Orm.Model(&model).Scopes(actions.Permission(model.TableName(), p)).
+		Where("user_id = ?", model.UserId).Select("Password", "Salt", "UpdateBy").Updates(&model)
+	if result.Error != nil {
+		return result.Error
 	}
+	if result.RowsAffected != 1 {
+		return errors.New("无权更新该数据")
+	}
+
 	return nil
 }
 
@@ -239,18 +292,18 @@ func (e *SysUser) Remove(c *dto.SysUserById, p *actions.DataPermission) error {
 }
 
 // UpdatePwd 修改SysUser对象密码
-func (e *SysUser) UpdatePwd(id int, oldPassword, newPassword string, p *actions.DataPermission) error {
+// id must be the authenticated caller's identity, not a request-body user ID.
+// The permission argument is retained for source compatibility.
+func (e *SysUser) UpdatePwd(id int, oldPassword, newPassword string, _ *actions.DataPermission) error {
 	var err error
 
-	if newPassword == "" {
-		return nil
+	if id <= 0 || oldPassword == "" || newPassword == "" {
+		return errors.New("user identity and passwords are required")
 	}
 	c := &models.SysUser{}
 
 	err = e.Orm.Model(c).
-		Scopes(
-			actions.Permission(c.TableName(), p),
-		).Select("UserId", "Password", "Salt").
+		Select("UserId", "Password", "Salt").
 		First(c, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

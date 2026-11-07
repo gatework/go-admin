@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -116,13 +117,18 @@ type lease struct {
 // reported as one, instead of being papered over by an insert that two
 // instances would race to win.
 func (l *lease) acquire() (bool, error) {
-	nowMs, err := dbNowMs(l.db)
+	return l.acquireContext(context.Background())
+}
+
+func (l *lease) acquireContext(ctx context.Context) (bool, error) {
+	db := l.db.WithContext(ctx)
+	nowMs, err := dbNowMs(db)
 	if err != nil {
 		return false, err
 	}
 	expiresMs := nowMs + l.ttl.Milliseconds()
 
-	renewed := l.db.Model(&models2.SysJobLease{}).
+	renewed := db.Model(&models2.SysJobLease{}).
 		Where("name = ? AND owner = ?", models2.SchedulerLeaseName, l.owner).
 		Update("expires_at_ms", expiresMs)
 	if renewed.Error != nil {
@@ -132,7 +138,7 @@ func (l *lease) acquire() (bool, error) {
 		return true, nil
 	}
 
-	taken := l.db.Model(&models2.SysJobLease{}).
+	taken := db.Model(&models2.SysJobLease{}).
 		Where("name = ? AND expires_at_ms <= ?", models2.SchedulerLeaseName, nowMs).
 		Updates(map[string]any{
 			"owner":          l.owner,
@@ -151,7 +157,7 @@ func (l *lease) acquire() (bool, error) {
 	// the migration seeds is gone, which is, and which would otherwise
 	// present as jobs silently never running anywhere.
 	var rows int64
-	if err := l.db.Model(&models2.SysJobLease{}).
+	if err := db.Model(&models2.SysJobLease{}).
 		Where("name = ?", models2.SchedulerLeaseName).
 		Count(&rows).Error; err != nil {
 		return false, fmt.Errorf("checking for the scheduler lease row: %w", err)
@@ -167,7 +173,11 @@ func (l *lease) acquire() (bool, error) {
 // waiting out the TTL. It is scoped to this owner: an instance that already
 // lost the lease must not clear the row its successor is holding.
 func (l *lease) release() error {
-	res := l.db.Model(&models2.SysJobLease{}).
+	return l.releaseContext(context.Background())
+}
+
+func (l *lease) releaseContext(ctx context.Context) error {
+	res := l.db.WithContext(ctx).Model(&models2.SysJobLease{}).
 		Where("name = ? AND owner = ?", models2.SchedulerLeaseName, l.owner).
 		Updates(map[string]any{"owner": "", "expires_at_ms": 0})
 	if res.Error != nil {

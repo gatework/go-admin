@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"go-admin/common/health"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -61,6 +62,15 @@ func (q *countingQueue) waitStarted(t *testing.T) {
 func isolate(t *testing.T) {
 	t.Helper()
 
+	prevProbe := health.SetCacheProbe(nil)
+	cacheMu.Lock()
+	previousCache := installedCache
+	installedCache = nil
+	cacheMu.Unlock()
+	lifecycleMu.Lock()
+	previousStopping := storageStopping
+	storageStopping = false
+	lifecycleMu.Unlock()
 	prevQ, prevC := config.QueueConfig, config.CacheConfig
 	prevRuntime := sdk.Runtime
 	queueMu.Lock()
@@ -68,6 +78,14 @@ func isolate(t *testing.T) {
 	queueMu.Unlock()
 
 	t.Cleanup(func() {
+		_ = shutdownCache(context.Background())
+		cacheMu.Lock()
+		installedCache = previousCache
+		cacheMu.Unlock()
+		health.SetCacheProbe(prevProbe)
+		lifecycleMu.Lock()
+		storageStopping = previousStopping
+		lifecycleMu.Unlock()
 		config.QueueConfig, config.CacheConfig = prevQ, prevC
 		sdk.Runtime = prevRuntime
 		queueMu.Lock()
@@ -182,21 +200,21 @@ func TestTheDrainRunsAgainstTheAdapterInstalledLast(t *testing.T) {
 	}
 }
 
-// Nothing installed is the shipped default: settings.yml has no queue section,
-// so setupQueue returns early and the runtime's own fallback queue is what
-// callers get. Shutting that down would close a queue this package neither
-// built nor started.
-func TestTheDrainDoesNothingWhenThisPackageInstalledNothing(t *testing.T) {
+// Empty configuration installs a host-owned memory queue, so consumers on the
+// default backend participate in shutdown just like configured backends.
+func TestDefaultConfigurationInstallsAnOwnedQueue(t *testing.T) {
 	isolate(t)
 	config.CacheConfig = &config.Cache{Memory: struct{}{}}
 	config.QueueConfig = &config.Queue{}
 	Setup()
-
-	if currentInstalled() != nil {
-		t.Fatal("an empty queue configuration installed an adapter, so this test asserts nothing")
+	if currentInstalled() == nil {
+		t.Fatal("default queue has no lifecycle owner")
 	}
 	if err := sdk.Runtime.RunShutdown(context.Background()); err != nil {
-		t.Fatalf("RunShutdown: %v", err)
+		t.Fatal(err)
+	}
+	if currentInstalled() != nil {
+		t.Fatal("shutdown retained ownership")
 	}
 }
 

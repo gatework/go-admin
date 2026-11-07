@@ -3,10 +3,17 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"github.com/go-admin-team/go-admin-core/v2/sdk"
+	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"github.com/go-admin-team/go-admin-core/v2/storage/cache"
+	"gorm.io/gorm"
 
 	otherrouter "go-admin/app/other/router"
 	"go-admin/common/health"
@@ -135,5 +142,51 @@ func TestHealthStaysUpWhileDraining(t *testing.T) {
 	}
 	if got := ask(otherrouter.APIPrefix + otherrouter.ReadyPath); got != http.StatusServiceUnavailable {
 		t.Errorf("/ready answered %d while draining, want 503", got)
+	}
+}
+
+func TestNamedTenantProbesBypassRequestDatabaseSelection(t *testing.T) {
+	// Draining is intentionally irreversible. Exercise readiness in a fresh
+	// process so this test does not depend on the order of shutdown tests.
+	if os.Getenv("GO_ADMIN_PROBE_CHILD") != "1" {
+		child := exec.Command(os.Args[0], "-test.run=^TestNamedTenantProbesBypassRequestDatabaseSelection$")
+		child.Env = append(os.Environ(), "GO_ADMIN_PROBE_CHILD=1")
+		if output, err := child.CombinedOutput(); err != nil {
+			t.Fatalf("probe child: %v\n%s", err, output)
+		}
+		return
+	}
+	freshRuntime(t)
+	savedSecret := config.JwtConfig.Secret
+	config.JwtConfig.Secret = "probe-test-secret"
+	t.Cleanup(func() { config.JwtConfig.Secret = savedSecret })
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	t.Cleanup(func() { pool.Close() })
+	sdk.Runtime.SetDbByTenant("tenant.example", db)
+	cache := cache.NewMemoryWithCleanupInterval(0)
+	t.Cleanup(func() { cache.Close() })
+	sdk.Runtime.SetCacheAdapter(cache)
+	initRouter()
+	r := sdk.Runtime.GetEngine().(*gin.Engine)
+	otherrouter.RegisterMonitorRouter(r.Group(otherrouter.APIPrefix))
+	for _, path := range []string{"/api/v1/health", "/api/v1/ready"} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Host = "127.0.0.1:8000"
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("probe %s failed for pod Host: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+	pool.Close()
+	req := httptest.NewRequest("GET", "/api/v1/ready", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != 503 {
+		t.Fatalf("unhealthy tenant database accepted: %d", w.Code)
 	}
 }

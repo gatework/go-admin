@@ -9,6 +9,7 @@ package storage
 
 import (
 	"context"
+	"go-admin/common/health"
 	"log"
 	"sync"
 
@@ -20,6 +21,12 @@ import (
 
 // Setup 配置storage组件
 func Setup() {
+	lifecycleMu.Lock()
+	closed := storageStopping
+	lifecycleMu.Unlock()
+	if closed {
+		return
+	}
 	setupCache()
 	setupCaptcha()
 	setupQueue()
@@ -27,11 +34,36 @@ func Setup() {
 }
 
 func setupCache() {
-	cacheAdapter, err := config.CacheConfig.Setup()
+	cacheSetupMu.Lock()
+	defer cacheSetupMu.Unlock()
+	cacheAdapter, err := openCache(config.CacheConfig)
 	if err != nil {
 		log.Fatalf("cache setup error, %s\n", err.Error())
 	}
+	lifecycleMu.Lock()
+	if storageStopping {
+		lifecycleMu.Unlock()
+		_ = cacheAdapter.Close()
+		return
+	}
+	cacheMu.Lock()
+	previous := installedCache
+	retiringCache = previous
+	installedCache = cacheAdapter
+	cacheMu.Unlock()
 	sdk.Runtime.SetCacheAdapter(cacheAdapter)
+	health.SetCacheProbe(cacheAdapter.probe)
+	lifecycleMu.Unlock()
+	if previous != nil {
+		if err := previous.Close(); err != nil {
+			corelog.Errorf("cache retirement: %v", err)
+		}
+		cacheMu.Lock()
+		if retiringCache == previous {
+			retiringCache = nil
+		}
+		cacheMu.Unlock()
+	}
 }
 
 func setupCaptcha() {
@@ -39,7 +71,11 @@ func setupCaptcha() {
 }
 
 var (
-	queueMu sync.Mutex
+	lifecycleMu       sync.Mutex
+	storageStopping   bool
+	retiringQueueDone chan struct{}
+	queueMu           sync.Mutex
+	queueSetupMu      sync.Mutex
 	// installed is the adapter setupQueue built, kept so the next reload can
 	// shut it down, and counted so a consumer can tell one from the next.
 	installed    interface{ Shutdown() }
@@ -76,7 +112,15 @@ func registerQueueDrain() {
 	queueMu.Unlock()
 
 	if first {
-		setShutdown(shutdownQueue)
+		setShutdown(func(ctx context.Context) {
+			lifecycleMu.Lock()
+			storageStopping = true
+			lifecycleMu.Unlock()
+			shutdownQueue(ctx)
+			if err := shutdownCache(ctx); err != nil {
+				corelog.Errorf("cache shutdown: %v", err)
+			}
+		})
 	}
 }
 
@@ -135,21 +179,27 @@ func finishedBeforeDeadline(ctx context.Context, done <-chan struct{}) bool {
 // fallback queue - so going through that accessor would shut down a queue this
 // package neither built nor started.
 //
-// The adapter is taken, not read: after this the package owns nothing, so a
-// reload arriving mid-shutdown builds a new one instead of being handed a
-// closed one to shut down again. Both implementations tolerate a second
-// Shutdown, so this is about who owns it rather than about a crash.
+// The adapter is taken, not read, so repeated drain calls cannot start more
+// waiters for it. The registered shutdown callback also prevents reloads from
+// publishing new resources while the current and retiring queues drain.
 func shutdownQueue(ctx context.Context) {
 	queueMu.Lock()
 	q := installed
+	retiring := retiringQueueDone
 	installed = nil
 	queueMu.Unlock()
 
-	if q == nil {
+	if q == nil && retiring == nil {
 		return
 	}
-
-	if drainedInTime(ctx, q) {
+	complete := true
+	if q != nil {
+		complete = drainedInTime(ctx, q)
+	}
+	if retiring != nil {
+		complete = finishedBeforeDeadline(ctx, retiring) && complete
+	}
+	if complete {
 		corelog.Info("queue: drained")
 		return
 	}
@@ -163,9 +213,8 @@ func shutdownQueue(ctx context.Context) {
 
 // QueueGeneration reports how many times this package has installed a queue
 // adapter. It changes every time setupQueue builds a new one, which is on
-// every configuration reload, and stays 0 for as long as the configuration has
-// no queue section at all - in which case nothing is installed and callers are
-// working with the runtime's own fallback queue.
+// every configuration reload, and is 0 before the first setup call. Empty configuration installs an owned memory queue too,
+// so its consumers participate in shutdown and backend transitions.
 //
 // It exists because there is no way to ask for the adapter's identity from the
 // outside. sdk.Runtime.GetQueueAdapter and GetQueuePrefix build a fresh
@@ -182,22 +231,31 @@ func QueueGeneration() uint64 {
 }
 
 func setupQueue() {
-	if config.QueueConfig.Empty() {
-		return
-	}
-
-	queueMu.Lock()
-	defer queueMu.Unlock()
-
-	queueAdapter, err := config.QueueConfig.Setup()
+	queueSetupMu.Lock()
+	defer queueSetupMu.Unlock()
+	queueAdapter, err := openQueue(config.QueueConfig)
 	if err != nil {
 		log.Fatalf("queue setup error, %s\n", err.Error())
 	}
+	lifecycleMu.Lock()
+	if storageStopping {
+		lifecycleMu.Unlock()
+		queueAdapter.Shutdown()
+		return
+	}
+	queueMu.Lock()
 
 	previous := installed
 	sdk.Runtime.SetQueueAdapter(queueAdapter)
 	installed = queueAdapter
 	installedGen++
+	var retirement chan struct{}
+	if previous != nil {
+		retirement = make(chan struct{})
+		retiringQueueDone = retirement
+	}
+	queueMu.Unlock()
+	lifecycleMu.Unlock()
 
 	// The previous adapter goes down after the new one is installed, not
 	// before. Shutdown waits for its consumers to deliver what it still holds,
@@ -214,6 +272,12 @@ func setupQueue() {
 	// first start, before anything had used it.
 	if previous != nil {
 		previous.Shutdown()
+		close(retirement)
+		queueMu.Lock()
+		if retiringQueueDone == retirement {
+			retiringQueueDone = nil
+		}
+		queueMu.Unlock()
 	}
 
 	// Deliberately not started here. Run has to come after the consumers have

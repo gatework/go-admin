@@ -23,13 +23,13 @@ func registerSysJobRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlew
 		// The detail answers SysJobItem, whose entryId the edit form reads;
 		// the model itself marshals it as entry_id.
 		r.GET("/:id", actions.PermissionAction(), actions.ViewAs[models2.SysJob, dto2.SysJobById, dto2.SysJobItem]())
-		r.POST("", actions.Create[models2.SysJob, dto2.SysJobControl]())
-		r.PUT("", actions.PermissionAction(), actions.Update[models2.SysJob, dto2.SysJobControl]())
-		r.DELETE("", actions.PermissionAction(), actions.Delete[models2.SysJob, dto2.SysJobById]())
+		r.POST("", apis.ReconcileWrites, actions.Create[models2.SysJob, dto2.SysJobControl]())
+		r.PUT("", actions.PermissionAction(), apis.ReconcileWrites, actions.Update[models2.SysJob, dto2.SysJobControl]())
+		r.DELETE("", actions.PermissionAction(), apis.ReconcileWrites, actions.Delete[models2.SysJob, dto2.SysJobById]())
 	}
 	sysJob := apis.SysJob{}
 
-	r2 := v1.Group("/job").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
+	r2 := v1.Group("/job").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	{
 		r2.GET("/remove/:id", sysJob.RemoveJobForService)
 		r2.GET("/start/:id", sysJob.StartJobForService)

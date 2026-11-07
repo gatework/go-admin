@@ -1,6 +1,11 @@
 package dto
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"go-admin/app/demo/models"
@@ -39,18 +44,81 @@ func (m *DemoProductSearch) Bind(ctx *gin.Context) error {
 // DemoProductControl is the request body of both create and update.
 //
 // actions.Create / actions.Update get the row to write from ToModel, so the
-// model itself is not exposed; field rules are declared with validate tags.
+// model itself is not exposed; Bind validates writable fields and records which fields were supplied.
 type DemoProductControl struct {
-	Id     int     `json:"id" comment:"主键"`
-	Name   string  `json:"name" comment:"名称" validate:"required"`
-	Code   string  `json:"code" comment:"编码" validate:"required"`
-	Price  float64 `json:"price" comment:"单价" validate:"gte=0"`
-	Status string  `json:"status" comment:"状态"`
-	Remark string  `json:"remark" comment:"备注"`
+	Id      int     `json:"id" form:"id" uri:"id" comment:"主键"`
+	Name    string  `json:"name" form:"name" comment:"名称"`
+	Code    string  `json:"code" form:"code" comment:"编码"`
+	Price   float64 `json:"price" form:"price" comment:"单价" binding:"gte=0"`
+	Status  string  `json:"status" form:"status" comment:"状态"`
+	Remark  string  `json:"remark" form:"remark" comment:"备注"`
+	present map[string]json.RawMessage
 }
 
 func (s *DemoProductControl) Bind(ctx *gin.Context) error {
-	return ctx.ShouldBind(s)
+	if err := ctx.ShouldBind(s); err != nil {
+		return err
+	}
+	if s.present == nil {
+		s.present = make(map[string]json.RawMessage)
+		for key := range ctx.Request.Form {
+			s.present[strings.ToLower(key)] = nil
+		}
+		if ctx.Request.MultipartForm != nil {
+			for key := range ctx.Request.MultipartForm.Value {
+				s.present[strings.ToLower(key)] = nil
+			}
+		}
+	}
+	if ctx.Param("id") != "" {
+		if err := ctx.ShouldBindUri(s); err != nil {
+			return err
+		}
+	}
+	if ctx.Request.Method == http.MethodPost {
+		if s.Name == "" || s.Code == "" {
+			return errors.New("name and code are required")
+		}
+	} else {
+		if s.Id <= 0 {
+			return errors.New("id must be positive")
+		}
+		if _, ok := s.present["name"]; ok && s.Name == "" {
+			return errors.New("name must not be empty")
+		}
+		if _, ok := s.present["code"]; ok && s.Code == "" {
+			return errors.New("code must not be empty")
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON distinguishes an omitted field from an explicit zero value.
+func (s *DemoProductControl) UnmarshalJSON(data []byte) error {
+	type plain DemoProductControl
+	if err := json.Unmarshal(data, (*plain)(s)); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	s.present = make(map[string]json.RawMessage, len(fields))
+	for key, value := range fields {
+		s.present[strings.ToLower(key)] = value
+	}
+	return nil
+}
+
+// UpdateFields exposes only client-writable columns that were supplied.
+func (s *DemoProductControl) UpdateFields() []string {
+	fields := make([]string, 0, len(s.present))
+	for _, field := range []string{"name", "code", "price", "status", "remark"} {
+		if _, ok := s.present[field]; ok {
+			fields = append(fields, field)
+		}
+	}
+	return fields
 }
 
 // ToModel builds the row to write. The actions set CreateBy / UpdateBy

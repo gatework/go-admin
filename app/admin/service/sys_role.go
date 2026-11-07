@@ -2,14 +2,14 @@ package service
 
 import (
 	"errors"
-
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"gorm.io/gorm/clause"
+	"fmt"
+	"strings"
 
 	"github.com/casbin/casbin/v3"
-
+	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-admin/app/admin/models"
 	"go-admin/app/admin/service/dto"
@@ -63,166 +63,141 @@ func (e *SysRole) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
 
 // Insert 创建SysRole对象
 func (e *SysRole) Insert(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) error {
-	var err error
+	if strings.TrimSpace(c.RoleKey) == "" {
+		return errors.New("角色标识不能为空")
+	}
 	var data models.SysRole
-	var dataMenu []models.SysMenu
-	err = e.Orm.Preload("SysApi").Where("menu_id in ?", c.MenuIds).Find(&dataMenu).Error
-	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-	c.SysMenu = dataMenu
-	c.Generate(&data)
-	tx := e.Orm
-	if config.DatabaseConfig.Driver != "sqlite3" {
-		tx = e.Orm.Begin()
-		defer func() {
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
-			}
-		}()
-	}
-	var count int64
-	err = tx.Model(&data).Where("role_key = ?", c.RoleKey).Count(&count).Error
-	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-
-	if count > 0 {
-		err = errors.New("roleKey已存在，需更换在提交！")
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-
-	err = tx.Create(&data).Error
-	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-
-	mp := make(map[string]interface{}, 0)
-	polices := make([][]string, 0)
-	for _, menu := range dataMenu {
-		for _, api := range menu.SysApi {
-			if mp[data.RoleKey+"-"+api.Path+"-"+api.Action] != "" {
-				mp[data.RoleKey+"-"+api.Path+"-"+api.Action] = ""
-				polices = append(polices, []string{data.RoleKey, api.Path, api.Action})
-			}
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		var menus []models.SysMenu
+		if err := tx.Preload("SysApi").Where("menu_id IN ?", c.MenuIds).Find(&menus).Error; err != nil {
+			return err
 		}
-	}
-
-	if len(polices) <= 0 {
-		return nil
-	}
-
-	// 写入 sys_casbin_rule 权限表里 当前角色数据的记录
-	_, err = cb.AddNamedPolicies("p", polices)
+		var count int64
+		if err := tx.Model(&data).Where("role_key = ?", c.RoleKey).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errors.New("roleKey已存在，需更换在提交！")
+		}
+		c.SysMenu = menus
+		c.Generate(&data)
+		data.CreateBy = c.CreateBy
+		if err := tx.Create(&data).Error; err != nil {
+			return err
+		}
+		return replaceRolePolicies(tx, data.RoleKey, data.RoleKey, menus)
+	})
 	if err != nil {
 		return err
 	}
-
-	return nil
+	c.RoleId = data.RoleId
+	return reloadRolePolicies(cb)
 }
 
 // Update 修改SysRole对象
 func (e *SysRole) Update(c *dto.SysRoleUpdateReq, cb *casbin.SyncedEnforcer) error {
-	var err error
-	tx := e.Orm
-	if config.DatabaseConfig.Driver != "sqlite3" {
-		tx = e.Orm.Begin()
-		defer func() {
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
-			}
-		}()
+	if strings.TrimSpace(c.RoleKey) == "" {
+		return errors.New("角色标识不能为空")
 	}
-	var model = models.SysRole{}
-	var mlist = make([]models.SysMenu, 0)
-	tx.Preload("SysMenu").First(&model, c.GetId())
-	tx.Preload("SysApi").Where("menu_id in ?", c.MenuIds).Find(&mlist)
-	err = tx.Model(&model).Association("SysMenu").Delete(model.SysMenu)
-	if err != nil {
-		e.Log.Errorf("delete policy error:%s", err)
-		return err
-	}
-	c.Generate(&model)
-	model.SysMenu = &mlist
-	// 更新关联的数据，使用 FullSaveAssociations 模式
-	db := tx.Session(&gorm.Session{FullSaveAssociations: true}).Debug().Save(&model)
-
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-	}
-
-	// 清除 sys_casbin_rule 权限表里 当前角色的所有记录
-	_, err = cb.RemoveFilteredPolicy(0, model.RoleKey)
-	if err != nil {
-		e.Log.Errorf("delete policy error:%s", err)
-		return err
-	}
-	mp := make(map[string]interface{}, 0)
-	polices := make([][]string, 0)
-	for _, menu := range mlist {
-		for _, api := range menu.SysApi {
-			if mp[model.RoleKey+"-"+api.Path+"-"+api.Action] != "" {
-				mp[model.RoleKey+"-"+api.Path+"-"+api.Action] = ""
-				//_, err = cb.AddNamedPolicy("p", model.RoleKey, api.Path, api.Action)
-				polices = append(polices, []string{model.RoleKey, api.Path, api.Action})
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		var model models.SysRole
+		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).First(&model, c.GetId()).Error; err != nil {
+			return err
+		}
+		oldKey := model.RoleKey
+		oldStatus := model.Status
+		oldScope := model.DataScope
+		var count int64
+		if err := tx.Model(&models.SysRole{}).Where("role_key = ? AND role_id <> ?", c.RoleKey, model.RoleId).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errors.New("roleKey已存在，需更换在提交！")
+		}
+		var menus []models.SysMenu
+		if err := tx.Preload("SysApi").Where("menu_id IN ?", c.MenuIds).Find(&menus).Error; err != nil {
+			return err
+		}
+		c.Generate(&model)
+		if oldStatus != model.Status || oldKey != model.RoleKey || oldScope != model.DataScope {
+			if err := revokeRoleSessions(tx, model.RoleId); err != nil {
+				return err
 			}
 		}
-	}
-	if len(polices) <= 0 {
-		return nil
-	}
-
-	// 写入 sys_casbin_rule 权限表里 当前角色数据的记录
-	_, err = cb.AddNamedPolicies("p", polices)
+		model.UpdateBy = c.UpdateBy
+		if err := tx.Omit(clause.Associations).Select("*").Updates(&model).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model).Association("SysMenu").Replace(menus); err != nil {
+			return err
+		}
+		return replaceRolePolicies(tx, oldKey, model.RoleKey, menus)
+	})
 	if err != nil {
 		return err
+	}
+	return reloadRolePolicies(cb)
+}
+
+// replaceRolePolicies 将权限与角色关联写入同一事务，不通过另开连接的 adapter 写入。
+func replaceRolePolicies(tx *gorm.DB, oldKey, roleKey string, menus []models.SysMenu) error {
+	if err := tx.Where("ptype = ? AND v0 IN ?", "p", []string{oldKey, roleKey}).Delete(&gormadapter.CasbinRule{}).Error; err != nil {
+		return err
+	}
+	policies := make([]gormadapter.CasbinRule, 0)
+	seen := make(map[[2]string]bool)
+	for _, menu := range menus {
+		for _, api := range menu.SysApi {
+			key := [2]string{api.Path, api.Action}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			policies = append(policies, gormadapter.CasbinRule{Ptype: "p", V0: roleKey, V1: api.Path, V2: api.Action})
+		}
+	}
+	if len(policies) == 0 {
+		return nil
+	}
+	return tx.Create(&policies).Error
+}
+
+// reloadRolePolicies 提交后刷新内存权限；刷新失败时清空缓存，避免继续使用旧授权。
+func reloadRolePolicies(cb *casbin.SyncedEnforcer) error {
+	if cb == nil || cb.GetAdapter() == nil {
+		return nil
+	}
+	if err := cb.LoadPolicy(); err != nil {
+		cb.ClearPolicy()
+		return fmt.Errorf("role changes committed but policy reload failed: %w", err)
 	}
 	return nil
 }
 
 // Remove 删除SysRole
 func (e *SysRole) Remove(c *dto.SysRoleDeleteReq, cb *casbin.SyncedEnforcer) error {
-	var err error
-	tx := e.Orm
-	if config.DatabaseConfig.Driver != "sqlite3" {
-		tx = e.Orm.Begin()
-		defer func() {
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		var roles []models.SysRole
+		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Where("role_id IN ?", c.Ids).Order("role_id").Find(&roles).Error; err != nil {
+			return err
+		}
+		if len(roles) == 0 {
+			return errors.New("无权删除该数据")
+		}
+		for i := range roles {
+			if err := tx.Select(clause.Associations).Delete(&roles[i]).Error; err != nil {
+				return err
 			}
-		}()
-	}
-	var model = models.SysRole{}
-	tx.Preload("SysMenu").Preload("SysDept").First(&model, c.GetId())
-	//删除 SysRole 时，同时删除角色所有 关联其它表 记录 (SysMenu 和 SysMenu)
-	db := tx.Select(clause.Associations).Delete(&model)
-
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
+			if err := tx.Where("ptype = ? AND v0 = ?", "p", roles[i].RoleKey).Delete(&gormadapter.CasbinRule{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-	}
-
-	// 清除 sys_casbin_rule 权限表里 当前角色的所有记录
-	_, _ = cb.RemoveFilteredPolicy(0, model.RoleKey)
-
-	return nil
+	return reloadRolePolicies(cb)
 }
 
 // GetRoleMenuId 获取角色对应的菜单ids
@@ -241,72 +216,65 @@ func (e *SysRole) GetRoleMenuId(roleId int) ([]int, error) {
 }
 
 func (e *SysRole) UpdateDataScope(c *dto.RoleDataScopeReq) *SysRole {
-	var err error
-	tx := e.Orm
-	if config.DatabaseConfig.Driver != "sqlite3" {
-		tx = e.Orm.Begin()
-		defer func() {
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		var model models.SysRole
+		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Preload("SysDept").First(&model, c.RoleId).Error; err != nil {
+			return err
+		}
+		var depts []models.SysDept
+		if err := tx.Where("dept_id IN ?", c.DeptIds).Find(&depts).Error; err != nil {
+			return err
+		}
+		previous := make(map[int]bool, len(model.SysDept))
+		for _, dept := range model.SysDept {
+			previous[dept.DeptId] = true
+		}
+		changed := len(previous) != len(depts)
+		for _, dept := range depts {
+			if !previous[dept.DeptId] {
+				changed = true
 			}
-		}()
-	}
-	var dlist = make([]models.SysDept, 0)
-	var model = models.SysRole{}
-	tx.Preload("SysDept").First(&model, c.RoleId)
-	tx.Where("dept_id in ?", c.DeptIds).Find(&dlist)
-	// 删除SysRole 和 SysDept 的关联关系
-	err = tx.Model(&model).Association("SysDept").Delete(model.SysDept)
+		}
+		if model.DataScope != c.DataScope || changed {
+			if err := revokeRoleSessions(tx, model.RoleId); err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&model).Update("data_scope", c.DataScope).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model).Association("SysDept").Replace(depts)
+	})
 	if err != nil {
-		e.Log.Errorf("delete SysDept error:%s", err)
 		_ = e.AddError(err)
-		return e
-	}
-	c.Generate(&model)
-	model.SysDept = dlist
-	// 更新关联的数据，使用 FullSaveAssociations 模式
-	db := tx.Model(&model).Session(&gorm.Session{FullSaveAssociations: true}).Debug().Save(&model)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-		return e
-	}
-	if db.RowsAffected == 0 {
-		_ = e.AddError(errors.New("无权更新该数据"))
-		return e
 	}
 	return e
 }
 
 // UpdateStatus 修改SysRole对象status
 func (e *SysRole) UpdateStatus(c *dto.UpdateStatusReq) error {
-	var err error
-	tx := e.Orm
-	if config.DatabaseConfig.Driver != "sqlite3" {
-		tx = e.Orm.Begin()
-		defer func() {
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
+	if c.RoleId <= 0 || (c.Status != "1" && c.Status != "2") {
+		return errors.New("invalid role status")
+	}
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		var model models.SysRole
+		if err := lockAdminRows(tx, model.TableName()).First(&model, c.RoleId).Error; err != nil {
+			return err
+		}
+		if model.Status != c.Status {
+			if err := revokeRoleSessions(tx, c.RoleId); err != nil {
+				return err
 			}
-		}()
-	}
-	var model = models.SysRole{}
-	tx.First(&model, c.GetId())
-	c.Generate(&model)
-	// 更新关联的数据，使用 FullSaveAssociations 模式
-	db := tx.Session(&gorm.Session{FullSaveAssociations: true}).Debug().Save(&model)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-	}
-	return nil
+		}
+		return tx.Model(&model).Updates(map[string]interface{}{"status": c.Status, "update_by": c.UpdateBy}).Error
+	})
+}
+
+// Role state and assigned accounts' session versions commit together. This
+// prevents a disabled role's old sessions reviving when it is re-enabled.
+func revokeRoleSessions(tx *gorm.DB, roleID int) error {
+	return tx.Table("sys_user").Where("role_id = ? AND deleted_at = 0", roleID).
+		UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error
 }
 
 // GetWithName 获取SysRole对象

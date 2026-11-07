@@ -7,7 +7,9 @@ import (
 	"github.com/go-admin-team/go-admin-core/v2/sdk"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
 
+	"go-admin/app/jobs"
 	"go-admin/app/jobs/service"
+	"go-admin/common/actions"
 	"go-admin/common/dto"
 )
 
@@ -26,10 +28,14 @@ func (e SysJob) RemoveJobForService(c *gin.Context) {
 		Errors
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, err.Error())
 		return
 	}
 
 	s.Cron = sdk.Runtime.GetCrontabByTenant(c.Request.Host)
+	s.Tenant = c.Request.Host
+	s.Permission = actions.GetPermissionFromContext(c)
+	s.Orm = s.Orm.WithContext(c.Request.Context())
 	err = s.RemoveJob(&v)
 	if err != nil {
 		e.Logger.Errorf("RemoveJob error, %s", err.Error())
@@ -46,6 +52,7 @@ func (e SysJob) StartJobForService(c *gin.Context) {
 	db, err := e.GetOrm()
 	if err != nil {
 		log.Error(err)
+		e.Error(500, err, err.Error())
 		return
 	}
 	var v dto.GeneralGetDto
@@ -59,6 +66,9 @@ func (e SysJob) StartJobForService(c *gin.Context) {
 	s.Orm = db
 	s.Log = log
 	s.Cron = sdk.Runtime.GetCrontabByTenant(c.Request.Host)
+	s.Tenant = c.Request.Host
+	s.Permission = actions.GetPermissionFromContext(c)
+	s.Orm = s.Orm.WithContext(c.Request.Context())
 	err = s.StartJob(&v)
 	if err != nil {
 		log.Errorf("GetCrontabKey error, %s", err.Error())
@@ -66,4 +76,13 @@ func (e SysJob) StartJobForService(c *gin.Context) {
 		return
 	}
 	e.OK(nil, s.Msg)
+}
+
+// ReconcileWrites observes committed state after generic CRUD. The supervisor
+// also polls it, so a request routed to a standby is applied by the leader.
+func ReconcileWrites(c *gin.Context) {
+	c.Next()
+	if err := jobs.Reconcile(c.Request.Context(), c.Request.Host); err != nil {
+		api.GetRequestLogger(c).Errorf("[Job] reconciling committed job changes: %v", err)
+	}
 }

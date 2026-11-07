@@ -187,6 +187,15 @@ func Create[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 	}
 }
 
+// UpdateFields is an optional request contract for partial updates. Return only
+// GORM field or column names supplied by the client; selected zero values are
+// written, while omitted fields keep their stored values. Keys, creator and
+// creation/deletion timestamps remain server-owned. DTOs without this method
+// retain the legacy nonzero-field update behavior.
+type UpdateFields interface {
+	UpdateFields() []string
+}
+
 // Update writes the T that C builds over the row with its key, if the
 // caller's data permission reaches that row.
 func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
@@ -210,8 +219,13 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		}
 		PT(object).SetUpdateBy(user.GetUserId(c))
 
+		query, err := updateSelection(db.WithContext(c.Request.Context()), object, PC(&req))
+		if err != nil {
+			response.Error(c, 500, err, "更新失败")
+			return
+		}
 		p := GetPermissionFromContext(c)
-		result := db.WithContext(c.Request.Context()).Scopes(
+		result := query.Scopes(
 			Permission(PT(object).TableName(), p),
 		).Where(keyIs(PT(object).GetId())).Updates(object)
 		if err = result.Error; err != nil {
@@ -291,4 +305,32 @@ func keyIs(id any) clause.Expression {
 		return clause.IN{Column: clause.PrimaryColumn, Values: values}
 	}
 	return clause.Eq{Column: clause.PrimaryColumn, Value: id}
+}
+
+// updateSelection resolves DTO field names against the model before selecting
+// them, so wildcard/unknown names cannot turn a partial update into a full write.
+func updateSelection(db *gorm.DB, object, req any) (*gorm.DB, error) {
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(object); err != nil {
+		return nil, err
+	}
+	protected := []string{"CreateBy", "CreatedAt", "DeletedAt"}
+	for _, field := range stmt.Schema.PrimaryFields {
+		protected = append(protected, field.Name)
+	}
+	if fields, ok := req.(UpdateFields); ok {
+		selected := []string{"UpdateBy", "UpdatedAt"}
+		for _, name := range fields.UpdateFields() {
+			field := stmt.Schema.LookUpField(name)
+			if field == nil || !field.Updatable || field.PrimaryKey || field.DBName == "" {
+				continue
+			}
+			if field.Name == "CreateBy" || field.Name == "CreatedAt" || field.Name == "DeletedAt" {
+				continue
+			}
+			selected = append(selected, field.Name)
+		}
+		db = db.Select(selected)
+	}
+	return db.Omit(protected...), nil
 }

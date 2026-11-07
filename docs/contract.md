@@ -806,3 +806,10 @@ core 里那行注释自己写着「The interface has no way to report this to th
 `checksilent` 还检查其他几类"不出声的失败"，写模块时值得先看一眼
 `AGENTS.md` 的「静默失败校验」一节，或者 `tools/checksilent/checks.go` 里的
 `runChecks`（`-h` 只打印命令行参数，不列检查）。
+
+
+### 显式零值与部分更新
+
+实现 `actions.UpdateFields`（`UpdateFields() []string`）的控制 DTO 可返回请求中实际出现的 GORM 字段名或列名。通用 `Update` 仅写这些业务字段，并注入更新人和更新时间；主键、创建人、创建及删除时间始终受保护。遗漏字段不变，显式 `0`、`false`、空字符串可以持久化。
+
+该方法可选，未实现的既有 DTO 保留非零值更新语义。字段存在性和输入校验由 DTO 的 `Bind` 负责，参考 `app/demo/service/dto/demo_product.go`；不能依赖 `validate` 标签自动触发 Gin 的 `binding` 校验。

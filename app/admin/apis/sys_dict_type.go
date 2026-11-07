@@ -142,6 +142,7 @@ func (e SysDictType) Update(c *gin.Context) {
 	err = s.Update(&req)
 	if err != nil {
 		e.Logger.Error(err)
+		e.Error(500, err, "更新失败")
 		return
 	}
 	e.OK(req.GetId(), "更新成功")

@@ -2,9 +2,12 @@ package handler
 
 import (
 	"crypto/hmac"
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"go-admin/common"
 	"go-admin/common/account"
+	"gorm.io/gorm"
 	"net/http"
 	"time"
 
@@ -21,7 +24,21 @@ import (
 	"go-admin/common/global"
 )
 
+// AuthCallbacks keeps the credential MAC on the same immutable startup key as
+// the JWT signer. Rotating the configured key takes effect after restart.
+func AuthCallbacks(secret string) (func(interface{}) jwt.MapClaims, func(interface{}, *gin.Context) bool) {
+	key := []byte(secret)
+	return func(data interface{}) jwt.MapClaims { return payloadFunc(data, key) },
+		func(data interface{}, c *gin.Context) bool { return authorize(data, c, key) }
+}
+
+// PayloadFunc remains available for callers constructing their own middleware.
+// Host middleware uses AuthCallbacks to pin signing and stamp keys together.
 func PayloadFunc(data interface{}) jwt.MapClaims {
+	return payloadFunc(data, []byte(config.JwtConfig.Secret))
+}
+
+func payloadFunc(data interface{}, key []byte) jwt.MapClaims {
 	if v, ok := data.(map[string]interface{}); ok {
 		u, _ := v["user"].(SysUser)
 		r, _ := v["role"].(SysRole)
@@ -36,10 +53,18 @@ func PayloadFunc(data interface{}) jwt.MapClaims {
 			// so it can be read from the token instead of joined for on every
 			// request. core's user.GetDeptId has always read this claim.
 			"deptid":     u.DeptId,
-			"auth_stamp": v["auth_stamp"],
+			"tenant":     v["tenant"],
+			"credential": credentialStamp(u, r, key),
+			"auth_stamp": account.Stamp(string(key), u.Password, accountVersion(v)),
 		}
 	}
 	return jwt.MapClaims{}
+}
+
+// accountVersion defaults to zero for callers issuing a token before MFA is enabled.
+func accountVersion(values map[string]interface{}) int64 {
+	version, _ := values["account_version"].(int64)
+	return version
 }
 
 func IdentityHandler(c *gin.Context) interface{} {
@@ -108,7 +133,9 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 			msg = "MFA 验证失败"
 			return nil, jwt.ErrFailedAuthentication
 		}
-		sysUser = SysUser{UserId: verified.UserId, Username: verified.Username, Password: verified.Password, RoleId: verified.RoleId, DeptId: verified.DeptId}
+		if err = db.Where("user_id = ? AND status = '2' AND deleted_at = 0", verified.UserId).First(&sysUser).Error; err != nil || sysUser.Password != verified.Password {
+			return nil, jwt.ErrFailedAuthentication
+		}
 		authVersion = verified.SessionVersion
 		if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", sysUser.RoleId).First(&role).Error; err != nil {
 			return nil, jwt.ErrFailedAuthentication
@@ -153,7 +180,7 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 		}
 	}
 	username = sysUser.Username
-	return map[string]interface{}{"user": sysUser, "role": role, "auth_stamp": account.Stamp(config.JwtConfig.Secret, sysUser.Password, authVersion)}, nil
+	return map[string]interface{}{"user": sysUser, "role": role, "account_version": authVersion, "tenant": Tenant(c.Request.Host)}, nil
 }
 
 // LoginLogToDB Write log to database
@@ -201,6 +228,24 @@ func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
 // @Router /logout [post]
 // @Security Bearer
 func LogOut(c *gin.Context) {
+	db, err := pkg.GetOrm(c)
+	if err != nil {
+		response.Error(c, 500, err, "退出失败")
+		return
+	}
+	// Table updates deliberately bypass AuthVersion's create-only model field.
+	result := db.WithContext(c.Request.Context()).Table("sys_user").
+		Where("user_id = ? AND deleted_at = ? AND status = ?", user.GetUserId(c), 0, "2").
+		UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1))
+	if result.Error != nil {
+		response.Error(c, 500, result.Error, "退出失败")
+		return
+	}
+	if result.RowsAffected != 1 {
+		response.Error(c, 403, nil, "退出失败")
+		return
+	}
+	closeUserWebsockets(Tenant(c.Request.Host), user.GetUserId(c))
 	LoginLogToDB(c, "2", "退出成功", user.GetUserName(c))
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -209,61 +254,68 @@ func LogOut(c *gin.Context) {
 
 }
 
-// Authorizator decides whether a parsed identity may proceed. It authorizes
-// every identity IdentityHandler was able to build, which is what it has always
-// done.
-//
-// It used to also assert data["user"] and data["role"] into app/admin/models
-// types and copy five fields onto the context. Those two keys are not in the
-// map: IdentityHandler builds it from the token claims and puts in
-// IdentityKey / UserName / RoleKey / UserId / RoleIds / DataScope. Both
-// assertions therefore failed on every request, and because the ok result was
-// discarded, the five c.Set calls stored zero values and the function returned
-// true regardless.
-//
-// Nothing in this repository or in go-admin-core reads role / roleIds /
-// userId / userName / dataScope off the context - the open-source data
-// permission path reads the JWT claims through
-// common/actions.Permission -> user.GetUserIdStr(c). Dropping the block
-// therefore removes five zero values nobody read, and with them the last
-// import of app/admin from a contract package.
-//
-// Anything maintaining its own copy of this file must check its own consumers
-// before taking this change: a codebase that does read those keys off the
-// context needs Authorizator to keep setting them.
+// Tenant resolves the same wildcard precedence as the runtime database registry.
+// Host aliases sharing the wildcard database belong to one tenant.
+func Tenant(host string) string {
+	if sdk.Runtime.GetAllDb()["*"] != nil {
+		return "*"
+	}
+	return host
+}
+
+// credentialStamp revokes old tokens when credentials or authorization identity
+// changes without placing the password hash itself in the readable JWT payload.
+func credentialStamp(u SysUser, r SysRole, key []byte) string {
+	state, _ := json.Marshal([]interface{}{u.UserId, u.CreatedAt.UnixNano(), u.AuthVersion, u.Username, u.Password, u.RoleId, u.DeptId, r.RoleId, r.CreatedAt.UnixNano(), r.RoleKey, r.DataScope, r.Status})
+	mac := hmac.New(sha256.New, key)
+	mac.Write(state)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// Authorizator verifies tenant binding and current account state on every request.
+// A signed token alone does not prove that the account is still enabled.
 func Authorizator(data interface{}, c *gin.Context) bool {
+	return authorize(data, c, []byte(config.JwtConfig.Secret))
+}
+
+func authorize(data interface{}, c *gin.Context, key []byte) bool {
 	if _, ok := data.(map[string]interface{}); !ok {
+		return false
+	}
+	claims := jwt.ExtractClaims(c)
+	tenant, ok := claims["tenant"].(string)
+	if !ok || tenant == "" || tenant != Tenant(c.Request.Host) {
+		return false
+	}
+	stamp, ok := claims["credential"].(string)
+	if !ok || stamp == "" {
 		return false
 	}
 	db, err := pkg.GetOrm(c)
 	if err != nil {
 		return false
 	}
-	security := account.New(db.WithContext(c.Request.Context()))
-	u, err := security.User(user.GetUserId(c))
+	id := user.GetUserId(c)
+	if id <= 0 {
+		return false
+	}
+	var u SysUser
+	if db.Where("user_id = ? AND status = ?", id, "2").First(&u).Error != nil {
+		return false
+	}
+	var r SysRole
+	if db.Where("role_id = ? AND status = ?", u.RoleId, "2").First(&r).Error != nil {
+		return false
+	}
+	state, err := account.New(db.WithContext(c.Request.Context())).State(id)
 	if err != nil {
 		return false
 	}
-	state, err := security.State(u.UserId)
-	if err != nil {
+	accountStamp, ok := claims["auth_stamp"].(string)
+	if !ok || !hmac.Equal([]byte(accountStamp), []byte(account.Stamp(string(key), u.Password, state.Version))) {
 		return false
 	}
-	claims := jwt.ExtractClaims(c)
-	stamp, ok := claims["auth_stamp"].(string)
-	if !ok {
-		return false
-	}
-	if fmt.Sprint(claims[jwt.RoleIdKey]) != fmt.Sprint(u.RoleId) {
-		return false
-	}
-	var role SysRole
-	if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", u.RoleId).First(&role).Error; err != nil {
-		return false
-	}
-	if fmt.Sprint(claims[jwt.RoleKey]) != role.RoleKey {
-		return false
-	}
-	return hmac.Equal([]byte(stamp), []byte(account.Stamp(config.JwtConfig.Secret, u.Password, state.Version)))
+	return hmac.Equal([]byte(stamp), []byte(credentialStamp(u, r, key)))
 }
 
 func Unauthorized(c *gin.Context, code int, message string) {

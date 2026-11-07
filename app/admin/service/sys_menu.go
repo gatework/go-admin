@@ -8,6 +8,7 @@ import (
 	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-admin/app/admin/models"
 	"go-admin/app/admin/service/dto"
@@ -85,39 +86,33 @@ func (e *SysMenu) Get(d *dto.SysMenuGetReq, model *models.SysMenu) *SysMenu {
 	return e
 }
 
+// lockMenuTree 固定锁顺序，防止并发移动让父子关系与路径不一致。
+func lockMenuTree(tx *gorm.DB) error {
+	var menus []models.SysMenu
+	return lockAdminRows(tx, (&models.SysMenu{}).TableName()).Select("menu_id").Order("menu_id").Find(&menus).Error
+}
+
 // Insert 创建SysMenu对象
 func (e *SysMenu) Insert(c *dto.SysMenuInsertReq) *SysMenu {
-	var err error
 	var data models.SysMenu
-	c.Generate(&data)
-	tx := e.Orm.Debug().Begin()
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		if err := lockMenuTree(tx); err != nil {
+			return err
 		}
-	}()
-	err = tx.Where("id in ?", c.Apis).Find(&data.SysApi).Error
+		c.Generate(&data)
+		if err := tx.Where("id IN ?", c.Apis).Find(&data.SysApi).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&data).Error; err != nil {
+			return err
+		}
+		return e.initPaths(tx, &data)
+	})
 	if err != nil {
-		tx.Rollback()
-		e.Log.Errorf("db error:%s", err)
 		_ = e.AddError(err)
+	} else {
+		c.MenuId = data.MenuId
 	}
-	err = tx.Create(&data).Error
-	if err != nil {
-		tx.Rollback()
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-	}
-	c.MenuId = data.MenuId
-	err = e.initPaths(tx, &data)
-	if err != nil {
-		tx.Rollback()
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-	}
-	tx.Commit()
 	return e
 }
 
@@ -126,6 +121,9 @@ func (e *SysMenu) initPaths(tx *gorm.DB, menu *models.SysMenu) error {
 	var data models.SysMenu
 	parentMenu := new(models.SysMenu)
 	if menu.ParentId != 0 {
+		if menu.ParentId == menu.MenuId {
+			return errors.New("菜单不能设置自身为父级")
+		}
 		err = tx.Model(&data).First(parentMenu, menu.ParentId).Error
 		if err != nil {
 			return err
@@ -133,6 +131,9 @@ func (e *SysMenu) initPaths(tx *gorm.DB, menu *models.SysMenu) error {
 		if parentMenu.Paths == "" {
 			err = errors.New("父级paths异常，请尝试对当前节点父级菜单进行更新操作！")
 			return err
+		}
+		if strings.Contains(parentMenu.Paths+"/", "/"+pkg.IntToString(menu.MenuId)+"/") {
+			return errors.New("菜单不能移动到自己的子菜单")
 		}
 		menu.Paths = parentMenu.Paths + "/" + pkg.IntToString(menu.MenuId)
 	} else {
@@ -144,43 +145,49 @@ func (e *SysMenu) initPaths(tx *gorm.DB, menu *models.SysMenu) error {
 
 // Update 修改SysMenu对象
 func (e *SysMenu) Update(c *dto.SysMenuUpdateReq) *SysMenu {
-	var err error
-	tx := e.Orm.Debug().Begin()
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
+	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+		if err := lockMenuTree(tx); err != nil {
+			return err
 		}
-	}()
-	var alist = make([]models.SysApi, 0)
-	var model = models.SysMenu{}
-	tx.Preload("SysApi").First(&model, c.GetId())
-	oldPath := model.Paths
-	tx.Where("id in ?", c.Apis).Find(&alist)
-	err = tx.Model(&model).Association("SysApi").Delete(model.SysApi)
+		var model models.SysMenu
+		if err := tx.First(&model, c.GetId()).Error; err != nil {
+			return err
+		}
+		oldPath := model.Paths
+		if oldPath == "" {
+			return errors.New("菜单路径为空")
+		}
+		var apis []models.SysApi
+		if err := tx.Where("id IN ?", c.Apis).Find(&apis).Error; err != nil {
+			return err
+		}
+		c.Generate(&model)
+		if err := e.initPaths(tx, &model); err != nil {
+			return err
+		}
+		if err := tx.Omit(clause.Associations, "create_by").Select("*").Updates(&model).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model).Association("SysApi").Replace(apis); err != nil {
+			return err
+		}
+		if oldPath == model.Paths {
+			return nil
+		}
+		var descendants []models.SysMenu
+		if err := tx.Where("paths LIKE ?", oldPath+"/%").Find(&descendants).Error; err != nil {
+			return err
+		}
+		for _, child := range descendants {
+			path := model.Paths + strings.TrimPrefix(child.Paths, oldPath)
+			if err := tx.Model(&child).Update("paths", path).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		e.Log.Errorf("delete policy error:%s", err)
 		_ = e.AddError(err)
-		return e
-	}
-	c.Generate(&model)
-	model.SysApi = alist
-	db := tx.Model(&model).Session(&gorm.Session{FullSaveAssociations: true}).Debug().Save(&model)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-		return e
-	}
-	if db.RowsAffected == 0 {
-		_ = e.AddError(errors.New("无权更新该数据"))
-		return e
-	}
-	var menuList []models.SysMenu
-	tx.Where("paths like ?", oldPath+"%").Find(&menuList)
-	for _, v := range menuList {
-		v.Paths = strings.Replace(v.Paths, oldPath, model.Paths, 1)
-		tx.Model(&v).Update("paths", v.Paths)
 	}
 	return e
 }

@@ -3,11 +3,12 @@ package service
 import (
 	"errors"
 
+	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
+	"gorm.io/gorm"
+
 	"go-admin/app/admin/models"
 	"go-admin/app/admin/service/dto"
 	cDto "go-admin/common/dto"
-
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 )
 
 type SysConfig struct {
@@ -54,53 +55,40 @@ func (e *SysConfig) Insert(c *dto.SysConfigControl) error {
 	var err error
 	var data models.SysConfig
 	c.Generate(&data)
+	data.CreateBy = c.CreateBy
 	err = e.Orm.Create(&data).Error
 	if err != nil {
 		e.Log.Errorf("Service InsertSysConfig error:%s", err)
 		return err
 	}
+	c.Id = data.Id
 	return nil
 }
 
 // Update 修改SysConfig对象
 func (e *SysConfig) Update(c *dto.SysConfigControl) error {
-	var err error
-	var model = models.SysConfig{}
-	e.Orm.First(&model, c.GetId())
-	c.Generate(&model)
-	db := e.Orm.Save(&model)
-	err = db.Error
-	if err != nil {
-		e.Log.Errorf("Service UpdateSysConfig error:%s", err)
+	if c.Id <= 0 {
+		return gorm.ErrRecordNotFound
+	}
+	var model models.SysConfig
+	if err := e.Orm.First(&model, c.GetId()).Error; err != nil {
 		return err
+	}
+	c.Generate(&model)
+	model.UpdateBy = c.UpdateBy
+	db := e.Orm.Omit("create_by", "created_at").Select("*").Updates(&model)
+	if db.Error != nil {
+		return db.Error
 	}
 	if db.RowsAffected == 0 {
 		return errors.New("无权更新该数据")
-
 	}
 	return nil
 }
 
-// SetSysConfig 修改SysConfig对象
+// SetSysConfig 修改已有配置，保留跳过不存在配置键的历史行为。
 func (e *SysConfig) SetSysConfig(c *[]dto.GetSetSysConfigReq) error {
-	var err error
-	for _, req := range *c {
-		var model = models.SysConfig{}
-		e.Orm.Where("config_key = ?", req.ConfigKey).First(&model)
-		if model.Id != 0 {
-			req.Generate(&model)
-			db := e.Orm.Save(&model)
-			err = db.Error
-			if err != nil {
-				e.Log.Errorf("Service SetSysConfig error:%s", err)
-				return err
-			}
-			if db.RowsAffected == 0 {
-				return errors.New("无权更新该数据")
-			}
-		}
-	}
-	return nil
+	return e.setValues(c, true)
 }
 
 func (e *SysConfig) GetForSet(c *[]dto.GetSetSysConfigReq) error {
@@ -116,27 +104,34 @@ func (e *SysConfig) GetForSet(c *[]dto.GetSetSysConfigReq) error {
 	return nil
 }
 
+// UpdateForSet 原子更新设置页中的全部配置，不存在的键视为错误。
 func (e *SysConfig) UpdateForSet(c *[]dto.GetSetSysConfigReq) error {
-	m := *c
-	for _, req := range m {
-		var data models.SysConfig
-		if err := e.Orm.Where("config_key = ?", req.ConfigKey).
-			First(&data).Error; err != nil {
-			e.Log.Errorf("Service GetSysConfigPage error:%s", err)
-			return err
-		}
-		if data.ConfigValue != req.ConfigValue {
-			data.ConfigValue = req.ConfigValue
+	return e.setValues(c, false)
+}
 
-			if err := e.Orm.Save(&data).Error; err != nil {
-				e.Log.Errorf("Service GetSysConfigPage error:%s", err)
+func (e *SysConfig) setValues(c *[]dto.GetSetSysConfigReq, skipMissing bool) error {
+	return e.Orm.Transaction(func(tx *gorm.DB) error {
+		for _, req := range *c {
+			var model models.SysConfig
+			if err := tx.Where("config_key = ?", req.ConfigKey).First(&model).Error; err != nil {
+				if skipMissing && errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
 				return err
 			}
+			if model.ConfigValue == req.ConfigValue {
+				continue
+			}
+			db := tx.Model(&model).Update("config_value", req.ConfigValue)
+			if db.Error != nil {
+				return db.Error
+			}
+			if db.RowsAffected == 0 {
+				return errors.New("无权更新该数据")
+			}
 		}
-
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Remove 删除SysConfig
@@ -160,7 +155,7 @@ func (e *SysConfig) Remove(d *dto.SysConfigDeleteReq) error {
 func (e *SysConfig) GetWithKey(c *dto.SysConfigByKeyReq, resp *dto.GetSysConfigByKEYForServiceResp) error {
 	var err error
 	var data models.SysConfig
-	err = e.Orm.Table(data.TableName()).Where("config_key = ?", c.ConfigKey).First(resp).Error
+	err = e.Orm.Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
 	if err != nil {
 		e.Log.Errorf("At Service GetSysConfigByKEY Error:%s", err)
 		return err

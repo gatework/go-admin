@@ -13,7 +13,7 @@ import (
     {{- else if eq .GoField "UpdatedAt" -}}
     {{- else if eq .GoField "DeletedAt" -}}
     {{- else -}}
-    {{- if eq .GoType "time.Time" -}}{{- $bb = true -}}{{- end -}}
+    {{- if or (eq .GoType "time.Time") (eq .GoType "*time.Time") -}}{{- $bb = true -}}{{- end -}}
     {{- end -}}
     {{- end -}}
     {{- if eq $bb true }}
@@ -31,7 +31,7 @@ import (
   would name a field that does not exist.
 */ -}}
 {{- $embed := false -}}
-{{- range .Columns -}}{{- if and .Pk (eq .GoField "Id") (eq .GoType "int") -}}{{- $embed = true -}}{{- end -}}{{- end -}}
+{{- range .Columns -}}{{- if and .Pk (eq .ColumnName "id") (eq .GoField "Id") (eq .GoType "int") (ne .IsIncrement "0") -}}{{- $embed = true -}}{{- end -}}{{- end -}}
 type {{.ClassName}} struct {
     {{- if $embed }}
     models.Model
@@ -40,7 +40,7 @@ type {{.ClassName}} struct {
     {{$x := .Pk}}
     {{- if ($x) }}
     {{- if not $embed }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}" gorm:"primaryKey;type:{{.ColumnType}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"`
+    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};primaryKey;autoIncrement:{{if eq .IsIncrement "0"}}false{{else if eq .IsIncrement "1"}}true{{else if or (eq .GoType "int") (eq .GoType "int64")}}true{{else}}false{{end}};type:{{.ColumnType}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"`
     {{- end }}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
@@ -48,7 +48,7 @@ type {{.ClassName}} struct {
     {{- else if eq .GoField "CreateBy" -}}
     {{- else if eq .GoField "UpdateBy" -}}
     {{- else }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}" gorm:"type:{{.ColumnType}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"` {{end -}}
+    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};type:{{.ColumnType}}{{if and (eq .IsInsert "0") (eq .IsEdit "0")}};->{{end}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"` {{end -}}
     {{- end }}
     models.ModelTime
     models.ControlBy

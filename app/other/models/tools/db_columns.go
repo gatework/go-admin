@@ -3,9 +3,8 @@ package tools
 import (
 	"errors"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DBColumns struct {
@@ -24,7 +23,6 @@ type DBColumns struct {
 }
 
 func (e *DBColumns) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBColumns, int, error) {
-	pkg.Assert(config.DatabaseConfig.Driver == "mysql", "目前只支持mysql数据库", 500)
 
 	var doc []DBColumns
 	var count int64
@@ -33,27 +31,33 @@ func (e *DBColumns) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBColum
 		return nil, 0, errors.New("table name cannot be empty！")
 	}
 
-	table := tx.Table("information_schema.`COLUMNS`")
-	table = table.Where("table_schema= ? ", config.GenConfig.DBName)
-	table = table.Where("TABLE_NAME = ?", e.TableName)
+	table, err := metadataColumns(tx)
+	if err != nil {
+		return nil, 0, err
+	}
+	table = table.Where(clause.Eq{Column: clause.Column{Name: "TABLE_NAME"}, Value: e.TableName})
 
-	if err := table.Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Offset(-1).Limit(-1).Count(&count).Error; err != nil {
+	if err := table.Count(&count).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := table.Order(clause.OrderByColumn{Column: clause.Column{Name: "ORDINAL_POSITION"}}).Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Error; err != nil {
 		return nil, 0, err
 	}
 	return doc, int(count), nil
 }
 
 func (e *DBColumns) GetList(tx *gorm.DB) ([]DBColumns, error) {
-	pkg.Assert(config.DatabaseConfig.Driver == "mysql", "目前只支持mysql数据库", 500)
 
 	var doc []DBColumns
 	if e.TableName == "" {
 		return nil, errors.New("table name cannot be empty！")
 	}
 
-	table := tx.Table("information_schema.columns")
-	table = table.Where("table_schema= ? ", config.GenConfig.DBName)
-	table = table.Where("TABLE_NAME = ?", e.TableName).Order("ORDINAL_POSITION asc")
+	table, err := metadataColumns(tx)
+	if err != nil {
+		return nil, err
+	}
+	table = table.Where(clause.Eq{Column: clause.Column{Name: "TABLE_NAME"}, Value: e.TableName}).Order(clause.OrderByColumn{Column: clause.Column{Name: "ORDINAL_POSITION"}})
 	if err := table.Find(&doc).Error; err != nil {
 		return doc, err
 	}
