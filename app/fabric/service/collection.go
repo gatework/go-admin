@@ -6,11 +6,10 @@ import (
 	"fmt"
 	vxlan "github.com/gatework/go-vxlan"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	"github.com/google/uuid"
 	delivery "go-admin/app/delivery/models"
 	"go-admin/app/fabric/models"
 	"go-admin/app/fabric/service/dto"
-	devicelease "go-admin/app/network/lease"
+	"go-admin/app/network/lease"
 	network "go-admin/app/network/models"
 	"gorm.io/gorm"
 	"sort"
@@ -163,7 +162,7 @@ func (s *Fabric) GetCollection(ctx context.Context, id int, p *actions.DataPermi
 	return row, nil
 }
 func (w *Worker) runCollection(ctx context.Context, job models.Collection) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 	now := time.Now().UTC()
 	until := now.Add(15 * time.Minute)
@@ -189,14 +188,16 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 			}
 			continue
 		}
-		token := uuid.NewString()
-		if e := w.acquire(ctx, t.DeviceID, token, 0); e != nil {
+		held, e := lease.Acquire(opsDB(w.s, ctx), t.DeviceID, 0, runTimeout)
+		if code := leaseFailure(e, "device_busy"); code != "" {
 			t.Status = "failed"
-			t.ErrorCode = "device_busy"
+			t.ErrorCode = code
 			if err := w.persistCollectionFailure(ctx, job, *t, t.Status, t.ErrorCode); err != nil {
 				return err
 			}
 			continue
+		} else if e != nil {
+			return e
 		}
 		started := time.Now().UTC()
 		var snapshot vxlan.Snapshot
@@ -244,7 +245,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 				t.Status = "partial"
 			}
 		}
-		if e := w.release(ctx, t.DeviceID, token, closed); e != nil {
+		if e := w.release(ctx, held, closed); e != nil {
 			return e
 		}
 		if e := opsDB(w.s, ctx).Model(&models.Collection{}).Where("id = ?", job.ID).Update("targets", opsJSON(job.Targets)).Error; e != nil {
@@ -312,22 +313,36 @@ func (w *Worker) persistSnapshot(ctx context.Context, fabric, id int, t models.C
 		return nil
 	})
 }
-func (w *Worker) acquire(ctx context.Context, id int, token string, target int) error {
-	acquired, err := devicelease.TryAcquire(opsDB(w.s, ctx), devicelease.Claim{Owner: devicelease.Owner{DeviceID: id, Token: token}, TargetID: target, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
-	if err != nil {
-		return err
+
+// runTimeout bounds one collection or change run; its leases add lease.Margin.
+const runTimeout = 10 * time.Minute
+
+// leaseFailure maps a refused device lease to the target's error code:
+// busyCode while another run holds it, device_quarantined when it is quarantined.
+// It answers "" for success and for errors that are not refusals.
+func leaseFailure(e error, busyCode string) string {
+	switch {
+	case errors.Is(e, lease.ErrQuarantined):
+		return "device_quarantined"
+	case errors.Is(e, lease.ErrBusy):
+		return busyCode
 	}
-	if !acquired {
-		return errOpsConflict
-	}
-	return nil
+	return ""
 }
-func (w *Worker) release(ctx context.Context, id int, token string, closed bool) error {
+func (w *Worker) release(ctx context.Context, held lease.Lease, closed bool) error {
 	// Shutdown cancellation must not strand a confirmed-closed transport lease.
-	// Unknown closure still quarantines the token owner, within a bounded budget.
+	// Unknown closure still quarantines the device, within a bounded budget.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return devicelease.Complete(opsDB(w.s, ctx), devicelease.Owner{DeviceID: id, Token: token}, closed)
+	outcome := lease.Closed
+	if !closed {
+		outcome = lease.Unconfirmed
+	}
+	// A lost lease was quarantined meanwhile; that quarantine stays.
+	if e := lease.Release(opsDB(w.s, ctx), held, outcome); e != nil && !errors.Is(e, lease.ErrLost) {
+		return e
+	}
+	return nil
 }
 func (w *Worker) checkSource(ctx context.Context, d delivery.DeviceSnapshot, c delivery.Connection, hash string) error {
 	var current network.Device

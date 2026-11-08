@@ -20,15 +20,18 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	result := make(chan bool, 2)
 	failures := make(chan error, 2)
 	var wg sync.WaitGroup
-	for i, db := range []*gorm.DB{a, b} {
+	for _, db := range []*gorm.DB{a, b} {
 		wg.Add(1)
-		go func(i int, db *gorm.DB) {
+		go func(db *gorm.DB) {
 			defer wg.Done()
 			<-start
-			ok, err := lease.TryAcquire(db, lease.Claim{Owner: lease.Owner{DeviceID: 10, Token: []string{"first", "second"}[i]}, ExpiresAt: time.Now().Add(time.Minute)})
-			result <- ok
+			_, err := lease.Acquire(db, 10, 0, time.Minute)
+			result <- err == nil
+			if errors.Is(err, lease.ErrBusy) {
+				err = nil
+			}
 			failures <- err
-		}(i, db)
+		}(db)
 	}
 	close(start)
 	wg.Wait()
@@ -50,30 +53,28 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	}
 	rollback := errors.New("business write failed")
 	err := a.Transaction(func(tx *gorm.DB) error {
-		ok, err := lease.TryAcquire(tx, lease.Claim{Owner: lease.Owner{DeviceID: 20, Token: "rollback"}, ExpiresAt: time.Now().Add(time.Minute)})
+		_, err := lease.Acquire(tx, 20, 0, time.Minute)
 		if err != nil {
 			return err
-		}
-		if !ok {
-			t.Fatal("fresh acquisition refused")
 		}
 		return rollback
 	})
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if ok, err := lease.TryAcquire(b, lease.Claim{Owner: lease.Owner{DeviceID: 20, Token: "next"}, ExpiresAt: time.Now().Add(time.Minute)}); err != nil || !ok {
+	next, err := lease.Acquire(b, 20, 0, time.Minute)
+	if err != nil {
 		t.Fatal("rolled-back claim survived", err)
 	}
 	if err := a.Transaction(func(tx *gorm.DB) error {
-		if err := lease.Complete(tx, lease.Owner{DeviceID: 20, Token: "next"}, true); err != nil {
+		if err := lease.Release(tx, next, lease.Closed); err != nil {
 			return err
 		}
 		return rollback
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if ok, err := lease.TryAcquire(b, lease.Claim{Owner: lease.Owner{DeviceID: 20, Token: "unexpected"}, ExpiresAt: time.Now().Add(time.Minute)}); err != nil || ok {
+	if _, err := lease.Acquire(b, 20, 0, time.Minute); !errors.Is(err, lease.ErrBusy) {
 		t.Fatal("rolled-back release escaped", err)
 	}
 }
@@ -144,18 +145,20 @@ func TestOldOwnerCannotCleanReplacement(t *testing.T) {
 func TestPublicationOwnerLockAndTenantIsolation(t *testing.T) {
 	a, b := database(t)
 	other, _ := database(t)
-	claim := lease.Claim{Owner: lease.Owner{DeviceID: 1, Token: "owner"}, ExpiresAt: time.Now().Add(time.Minute)}
-	for _, db := range []*gorm.DB{a, other} {
-		if ok, err := lease.TryAcquire(db, claim); err != nil || !ok {
-			t.Fatal("tenant claim", ok, err)
-		}
+	owner, err := lease.Acquire(a, 1, 0, time.Minute)
+	if err != nil {
+		t.Fatal("tenant claim", err)
+	}
+	otherOwner, err := lease.Acquire(other, 1, 0, time.Minute)
+	if err != nil {
+		t.Fatal("other tenant claim", err)
 	}
 	tx := a.Begin()
 	if tx.Error != nil {
 		t.Fatal(tx.Error)
 	}
 	defer tx.Rollback()
-	if err := lease.LockOwner(tx, claim.Owner, time.Now()); err != nil {
+	if err := lease.Check(tx, owner); err != nil {
 		t.Fatal(err)
 	}
 	contender := b.Begin()
@@ -165,7 +168,7 @@ func TestPublicationOwnerLockAndTenantIsolation(t *testing.T) {
 	if err := contender.Exec("SET LOCAL lock_timeout = '100ms'").Error; err != nil {
 		t.Fatal(err)
 	}
-	err := contender.Model(&dm.DeviceLease{}).Where("device_id = ?", 1).Update("token", "replacement").Error
+	err = contender.Model(&dm.DeviceLease{}).Where("device_id = ?", 1).Update("token", "replacement").Error
 	contender.Rollback()
 	type sqlState interface{ SQLState() string }
 	var state sqlState
@@ -178,7 +181,7 @@ func TestPublicationOwnerLockAndTenantIsolation(t *testing.T) {
 	if err := b.Model(&dm.DeviceLease{}).Where("device_id = ?", 1).Update("token", "replacement").Error; err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := lease.CheckOwner(other, claim.Owner, time.Now); err != nil || !ok {
+	if err := lease.Check(other, otherOwner); err != nil {
 		t.Fatal("other tenant changed", err)
 	}
 }
@@ -299,7 +302,7 @@ func TestDeliveryCancellationStillCleansConfirmedClose(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("cancel did not stop worker")
 	}
-	if ok, err := lease.TryAcquire(b, lease.Claim{Owner: lease.Owner{DeviceID: target.DeviceID, Token: "after-cancel"}, ExpiresAt: time.Now().Add(time.Minute)}); err != nil || !ok {
+	if _, err := lease.Acquire(b, target.DeviceID, 0, time.Minute); err != nil {
 		t.Fatal("cancel stranded confirmed-closed owner", err)
 	}
 }
@@ -382,5 +385,75 @@ func TestWorkersRacePastCandidateSelection(t *testing.T) {
 				t.Fatalf("transport opened %d times", gate.calls.Load())
 			}
 		})
+	}
+}
+
+func TestReleaseRejectsLeaseThatExpiresWhileWaitingForOwnerLock(t *testing.T) {
+	a, b := database(t)
+	held, err := lease.Acquire(a, 1, 0, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Second)
+	if err := a.Model(&dm.DeviceLease{}).Where("device_id = ?", 1).Update("expires_at", expires).Error; err != nil {
+		t.Fatal(err)
+	}
+	tx := a.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	defer tx.Rollback()
+	var row dm.DeviceLease
+	if err := tx.Raw("SELECT * FROM sys_delivery_device_lease WHERE device_id = ? FOR UPDATE", 1).Scan(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	var once sync.Once
+	enter := func(*gorm.DB) { once.Do(func() { close(entered) }) }
+	const callback = "devicelease_release_wait"
+	if err := b.Callback().Query().Before("gorm:query").Register(callback, enter); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Callback().Delete().Before("gorm:delete").Register(callback, enter); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		b.Callback().Query().Remove(callback)
+		b.Callback().Delete().Remove(callback)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() { finished <- lease.Release(b.WithContext(ctx), held, lease.Closed) }()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("release did not reach the database")
+	}
+	if !time.Now().Before(expires) {
+		t.Fatal("release did not begin before expiry")
+	}
+	// The release's SQL cutoff was sampled while live, then its row lock waits
+	// past expiry. Its decision must use the time after the wait as well.
+	timer := time.NewTimer(time.Until(expires) + 50*time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		t.Fatal("expiry wait timed out")
+	}
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-finished:
+		if !errors.Is(err, lease.ErrLost) {
+			t.Fatalf("late release returned %v, want lease.ErrLost", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("late release did not finish")
+	}
+	if _, err := lease.Acquire(a, 1, 0, time.Minute); !errors.Is(err, lease.ErrQuarantined) {
+		t.Fatalf("late release freed expired device: %v", err)
 	}
 }

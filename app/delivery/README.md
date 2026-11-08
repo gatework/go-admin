@@ -36,12 +36,7 @@ Cancellation marks pending targets cancelled immediately and interrupts active l
 
 ## Reconciling a quarantined device
 
-Expired leases are **never automatically stolen**: an old process might still be able to write. Recovery retains output/receipts and changes the running target to `uncertain` after lease expiry. Other work for that device remains pending while its lease is quarantined. Other devices continue scheduling.
-
-1. Disable delivery on every replica (`NETWORK_DELIVERY_ENABLED=false`) and stop all worker processes. Confirm their SSH/Telnet child processes and sessions have actually ended. A database expiry alone is not evidence that a device session ended.
-2. Inspect `sys_delivery_target` and `sys_delivery_receipt` for the target, and read the actual device configuration through an independently authorized session. Record what was applied, what remains unknown, and the reviewer in the operational change record. Do not change an uncertain target back to pending.
-3. In the correct tenant DB, delete only the reconciled lease with an explicit device ID, target ID, token and `quarantined=true` predicate. For example, within a transaction: `DELETE FROM sys_delivery_device_lease WHERE device_id = :device AND target_id = :target AND token = :token AND quarantined = true;`. Verify exactly one affected row. Leave the original order/target/receipts untouched. This administrative action is intentionally not exposed as an ordinary API button.
-4. If further changes are required, author a reviewed new order based on actual current device state. Restore delivery only after all replica configuration and known-hosts state are consistent.
+Device leases, quarantine and the manual reconciliation procedure are owned by [`app/network/lease`](../network/lease/README.md), shared with firewall, fabric and wireless. Recovery keeps output and receipts and changes the running target to `uncertain` after its lease expires. Pending targets for a quarantined device fail visibly with `device_quarantined`.
 
 ## Dependency provenance
 

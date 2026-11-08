@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"go-admin/app/network/lease"
 	"testing"
 	"time"
 
@@ -183,14 +184,14 @@ func TestLeaseCleanupCannotReleaseAnotherOwnerAfterCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := NewWorker(s, nil).release(ctx, 1, "old-owner", true); err != nil {
+	if err := NewWorker(s, nil).release(ctx, lease.Lease{DeviceID: 1, Token: "old-owner"}, true); err != nil {
 		t.Fatal(err)
 	}
-	var lease delivery.DeviceLease
-	if err := s.Orm.First(&lease, "device_id = ?", 1).Error; err != nil {
+	var row delivery.DeviceLease
+	if err := s.Orm.First(&row, "device_id = ?", 1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if lease.Token != "new-owner" {
+	if row.Token != "new-owner" {
 		t.Fatal("another owner's lease changed")
 	}
 }

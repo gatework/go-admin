@@ -5,12 +5,11 @@ import (
 	"errors"
 	wireless "github.com/gatework/go-wireless"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	"github.com/google/uuid"
-	devicelease "go-admin/app/network/lease"
 	"sync"
 	"time"
 
 	delivery "go-admin/app/delivery/models"
+	"go-admin/app/network/lease"
 	network "go-admin/app/network/models"
 	"go-admin/app/wireless/models"
 	"gorm.io/gorm"
@@ -35,35 +34,38 @@ func NewWorker(s *Wireless, c Collector) *Worker {
 	return &Worker{s: s, collector: c, done: make(chan struct{})}
 }
 
-// Recover marks timed-out work interrupted. A device lease with unknown
-// transport closure is quarantined, never reused merely because time elapsed.
+// collectionTimeout bounds one controller collection; its device lease adds lease.Margin.
+const collectionTimeout = 14 * time.Minute
+
+// Recover marks timed-out work interrupted. The lease sweep quarantines its
+// expired device lease: a lease is never reused merely because time elapsed.
 func (w *Worker) Recover(ctx context.Context) error {
 	now := time.Now().UTC()
-	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.Collection{}).Where("status = ? AND lease_until < ?", "running", now).Updates(map[string]any{"status": "interrupted", "error_code": "worker_lost", "finished_at": now, "version": gorm.Expr("version + 1")}).Error; err != nil {
-			return err
-		}
-		return devicelease.QuarantineExpired(tx, now)
-	})
-}
-
-func (w *Worker) acquire(ctx context.Context, id int, token string) error {
-	if id <= 0 || token == "" {
-		return ErrInvalid
-	}
-	acquired, err := devicelease.TryAcquire(w.s.db(ctx), devicelease.Claim{Owner: devicelease.Owner{DeviceID: id, Token: token}, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
-	if err != nil {
+	if err := lease.Sweep(w.s.db(ctx)); err != nil {
 		return err
 	}
-	if !acquired {
-		return ErrConflict
+	return w.s.db(ctx).Model(&models.Collection{}).Where("status = ? AND lease_until < ?", "running", now).Updates(map[string]any{"status": "interrupted", "error_code": "worker_lost", "finished_at": now, "version": gorm.Expr("version + 1")}).Error
+}
+
+func (w *Worker) release(ctx context.Context, held lease.Lease, closed bool) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	outcome := lease.Closed
+	if !closed {
+		outcome = lease.Unconfirmed
+	}
+	// A lost lease was quarantined meanwhile; that quarantine stays.
+	if err := lease.Release(w.s.db(ctx), held, outcome); err != nil && !errors.Is(err, lease.ErrLost) {
+		return err
 	}
 	return nil
 }
-func (w *Worker) release(ctx context.Context, id int, token string, closed bool) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	return devicelease.Complete(w.s.db(ctx), devicelease.Owner{DeviceID: id, Token: token}, closed)
+
+// failQuarantined fails queued collections whose controller is quarantined, so
+// they show why they cannot run instead of waiting silently.
+func (w *Worker) failQuarantined(ctx context.Context) error {
+	now := time.Now().UTC()
+	return w.s.db(ctx).Model(&models.Collection{}).Where("status = ?", "queued").Scopes(lease.Quarantined("sys_wireless_collection.controller_id")).Updates(map[string]any{"status": "failed", "error_code": "device_quarantined", "finished_at": now, "version": gorm.Expr("version + 1")}).Error
 }
 
 func (w *Worker) Start() {
@@ -107,31 +109,38 @@ func (w *Worker) Tick(ctx context.Context) error {
 	if e := w.Recover(ctx); e != nil {
 		return e
 	}
+	if e := w.failQuarantined(ctx); e != nil {
+		return e
+	}
 	var jobs []models.Collection
-	if e := w.s.db(ctx).Where("status = ?", "queued").Where("controller_id NOT IN (?)", devicelease.OccupiedDevices(w.s.db(ctx))).Order("id").Limit(20).Find(&jobs).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ?", "queued").Scopes(lease.Free("sys_wireless_collection.controller_id")).Order("id").Limit(20).Find(&jobs).Error; e != nil {
 		return e
 	}
 	for _, job := range jobs {
-		token := uuid.NewString()
-		if e := w.acquire(ctx, job.ControllerID, token); e != nil {
-			if errors.Is(e, ErrConflict) {
-				continue
-			}
+		if job.ControllerID <= 0 {
+			return ErrInvalid
+		}
+		held, e := lease.Acquire(w.s.db(ctx), job.ControllerID, 0, collectionTimeout)
+		if errors.Is(e, lease.ErrBusy) || errors.Is(e, lease.ErrQuarantined) {
+			continue
+		}
+		if e != nil {
 			return e
 		}
-		return w.run(ctx, job, token)
+		return w.run(ctx, job, held)
 	}
 	return nil
 }
-func (w *Worker) run(ctx context.Context, job models.Collection, token string) (result error) {
+func (w *Worker) run(ctx context.Context, job models.Collection, held lease.Lease) (result error) {
 	closed := true
 	defer func() {
-		if e := w.release(ctx, job.ControllerID, token, closed); result == nil {
+		if e := w.release(ctx, held, closed); result == nil {
 			result = e
 		}
 	}()
+	token := held.Token
 	started := time.Now().UTC()
-	until := started.Add(15 * time.Minute)
+	until := held.ExpiresAt
 	q := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": started, "lease_token": token, "lease_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil {
 		return q.Error
@@ -147,7 +156,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, token string) (
 	if e != nil || ce != nil || d.Status != "active" || source(d, c) != job.SourceHash {
 		code = "source_changed"
 	} else {
-		run, cancel := context.WithTimeout(ctx, 14*time.Minute)
+		run, cancel := context.WithTimeout(ctx, collectionTimeout)
 		snap, closed, e = w.collector.Collect(run, d, c, job)
 		cancel()
 		if e != nil {
@@ -166,7 +175,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, token string) (
 		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", job.ID, "running", token, time.Now().UTC()).First(&current).Error; e != nil {
 			return e
 		}
-		if e := devicelease.LockOwner(tx, devicelease.Owner{DeviceID: job.ControllerID, Token: token}, time.Now().UTC()); e != nil {
+		if e := lease.Check(tx, held); e != nil {
 			return e
 		}
 		status := "failed"

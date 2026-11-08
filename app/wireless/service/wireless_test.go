@@ -280,28 +280,24 @@ func TestRecoveryQuarantinesExpiredLeaseAndInterruptsRun(t *testing.T) {
 	}
 }
 
-func TestLeaseContentionAndExactOwnerCleanup(t *testing.T) {
+func TestQueuedCollectionOnQuarantinedControllerFailsVisibly(t *testing.T) {
 	s, _ := setup(t)
-	w := NewWorker(s, nil)
-	ctx := context.Background()
-	if err := w.acquire(ctx, 1, "owner"); err != nil {
+	job := models.Collection{ControllerID: 1, CreateBy: 1, RequestKey: "quarantined-job", PayloadHash: "hash", SourceHash: "source", Status: "queued", Version: 1}
+	if err := s.Orm.Create(&job).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := w.acquire(ctx, 1, "other"); !errors.Is(err, ErrConflict) {
-		t.Fatalf("lease collision: %v", err)
-	}
-	if err := w.release(ctx, 1, "other", true); err != nil {
+	// Another module left this controller quarantined.
+	if err := s.Orm.Create(&delivery.DeviceLease{DeviceID: 1, Token: "other-module", ExpiresAt: time.Now().UTC().Add(time.Hour), Quarantined: true}).Error; err != nil {
 		t.Fatal(err)
 	}
-	var lease delivery.DeviceLease
-	if err := s.Orm.First(&lease, "device_id = ?", 1).Error; err != nil {
-		t.Fatal("other owner removed lease", err)
-	}
-	if err := w.release(ctx, 1, "owner", false); err != nil {
+	if err := NewWorker(s, nil).Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Orm.First(&lease, "device_id = ?", 1).Error; err != nil || !lease.Quarantined {
-		t.Fatal("unknown closure must quarantine", err)
+	if err := s.Orm.First(&job, job.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if job.Status != "failed" || job.ErrorCode != "device_quarantined" {
+		t.Fatalf("queued collection on a quarantined controller: %s %s", job.Status, job.ErrorCode)
 	}
 }
 

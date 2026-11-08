@@ -319,3 +319,29 @@ func TestAcknowledgedReceiptPersistsWhenCancellationArrivesAtReturn(t *testing.T
 		t.Fatalf("acknowledgement lost on cancellation %+v receipts %d", out, count)
 	}
 }
+
+func TestQuarantinedDeviceFailsPendingTargetVisibly(t *testing.T) {
+	s := fixture(t)
+	ctx := context.Background()
+	o := queued(t, s)
+	var target models.Target
+	if e := s.Orm.Where("order_id = ?", o.ID).First(&target).Error; e != nil {
+		t.Fatal(e)
+	}
+	// Another module left this device quarantined.
+	if e := s.Orm.Create(&models.DeviceLease{DeviceID: target.DeviceID, Token: "other-module", ExpiresAt: time.Now().UTC().Add(time.Hour), Quarantined: true}).Error; e != nil {
+		t.Fatal(e)
+	}
+	w := NewWorker(s, func(models.Target) (Session, error) { return &fakeSession{}, nil })
+	if next, e := w.Claim(ctx); e != nil || next != nil {
+		t.Fatalf("claimed work on a quarantined device %+v %v", next, e)
+	}
+	out, _ := s.Target(ctx, o.ID, target.ID, scope())
+	if out.Status != "failed" || out.ErrorCode != "device_quarantined" {
+		t.Fatalf("pending target on a quarantined device %+v", out)
+	}
+	var row models.DeviceLease
+	if e := s.Orm.First(&row, "device_id = ?", target.DeviceID).Error; e != nil || !row.Quarantined || row.Token != "other-module" {
+		t.Fatal("the quarantine changed", e)
+	}
+}

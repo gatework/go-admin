@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"github.com/gatework/go-net-connector/connector"
-	"github.com/google/uuid"
 	"go-admin/app/delivery/models"
-	devicelease "go-admin/app/network/lease"
+	"go-admin/app/network/lease"
 	inventory "go-admin/app/network/models"
 	"gorm.io/gorm"
 	"sync"
@@ -14,7 +13,6 @@ import (
 )
 
 const executionTimeout = 10 * time.Minute
-const leaseDuration = 15 * time.Minute
 
 // Session exposes no retries: every Send represents a potentially irreversible write.
 type Session interface {
@@ -95,30 +93,35 @@ func (w *Worker) Close(ctx context.Context) {
 	}
 }
 
-// Claim selects durable due work. A unique device row is the cross-process exclusion
-// boundary. Expired rows are never stolen: the former process may still be alive.
+// Claim selects durable due work. The device lease is the cross-process exclusion
+// boundary; work for a quarantined device fails visibly instead of waiting.
 func (w *Worker) Claim(ctx context.Context) (*models.Target, error) {
 	if !w.s.Config.Enabled {
 		return nil, nil
 	}
 	db := w.s.db(ctx)
 	now := time.Now().UTC()
+	due := func() *gorm.DB {
+		return db.Model(&models.Target{}).Select("sys_delivery_target.*").Joins("JOIN sys_delivery_order o ON o.id = sys_delivery_target.order_id").Where("o.kind <> 'fabric' AND sys_delivery_target.status = ? AND o.cancel_requested = ? AND (o.status IN ? OR (o.status = ? AND o.scheduled_at <= ?))", "pending", false, []string{"queued", "running"}, "scheduled", now)
+	}
+	if e := w.failQuarantined(ctx, due()); e != nil {
+		return nil, e
+	}
 	var candidates []models.Target
-	e := db.Model(&models.Target{}).Select("sys_delivery_target.*").Joins("JOIN sys_delivery_order o ON o.id = sys_delivery_target.order_id").Where("o.kind <> 'fabric' AND sys_delivery_target.device_id NOT IN (?) AND sys_delivery_target.status = ? AND o.cancel_requested = ? AND (o.status IN ? OR (o.status = ? AND o.scheduled_at <= ?))", devicelease.OccupiedDevices(w.s.db(ctx)), "pending", false, []string{"queued", "running"}, "scheduled", now).Order("o.id, sys_delivery_target.id").Limit(100).Find(&candidates).Error
+	e := due().Scopes(lease.Free("sys_delivery_target.device_id")).Order("o.id, sys_delivery_target.id").Limit(100).Find(&candidates).Error
 	if e != nil {
 		return nil, e
 	}
 	for _, t := range candidates {
-		token := uuid.NewString()
-		until := now.Add(leaseDuration)
 		e = db.Transaction(func(tx *gorm.DB) error {
-			acquired, err := devicelease.TryAcquire(tx, devicelease.Claim{Owner: devicelease.Owner{DeviceID: t.DeviceID, Token: token}, TargetID: t.ID, ExpiresAt: until})
-			if err != nil {
-				return err
-			}
-			if !acquired {
+			held, e := lease.Acquire(tx, t.DeviceID, t.ID, executionTimeout)
+			if errors.Is(e, lease.ErrBusy) || errors.Is(e, lease.ErrQuarantined) {
 				return ErrConflict
 			}
+			if e != nil {
+				return e
+			}
+			token, until := held.Token, held.ExpiresAt
 			var o models.Order
 			if e := tx.First(&o, t.OrderID).Error; e != nil {
 				return e
@@ -160,9 +163,33 @@ func (w *Worker) Claim(ctx context.Context) (*models.Target, error) {
 	}
 	return nil, nil
 }
+
+// failQuarantined fails due targets whose device is quarantined, so they show
+// why they cannot run instead of waiting silently.
+func (w *Worker) failQuarantined(ctx context.Context, due *gorm.DB) error {
+	var blocked []models.Target
+	if e := due.Scopes(lease.Quarantined("sys_delivery_target.device_id")).Limit(100).Find(&blocked).Error; e != nil {
+		return e
+	}
+	for _, t := range blocked {
+		if e := w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
+			q := tx.Model(&models.Target{}).Where("id = ? AND status = ?", t.ID, "pending").Updates(map[string]any{"status": "failed", "error_code": "device_quarantined", "finished_at": time.Now().UTC()})
+			if q.Error != nil || q.RowsAffected == 0 {
+				return q.Error
+			}
+			return summarize(tx, t.OrderID)
+		}); e != nil {
+			return e
+		}
+	}
+	return nil
+}
 func (w *Worker) check(ctx context.Context, t models.Target) error {
 	if e := ctx.Err(); e != nil {
 		return e
+	}
+	if e := lease.Check(w.s.db(ctx), lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}); e != nil {
+		return ErrCancelled
 	}
 	var current models.Target
 	if e := w.s.db(ctx).First(&current, t.ID).Error; e != nil {
@@ -347,8 +374,13 @@ func (w *Worker) finish(ctx context.Context, t models.Target, status, code, outp
 		if q.Error != nil {
 			return q.Error
 		}
-		if err := devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, closed); err != nil {
-			return err
+		outcome := lease.Closed
+		if !closed {
+			outcome = lease.Unconfirmed
+		}
+		// A lost lease was quarantined meanwhile; the quarantine stays and the result is still recorded.
+		if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, outcome); e != nil && !errors.Is(e, lease.ErrLost) {
+			return e
 		}
 		return summarize(tx, t.OrderID)
 	})
@@ -386,6 +418,10 @@ func summarize(tx *gorm.DB, id int) error {
 	return tx.Model(&models.Order{}).Where("id = ?", id).Updates(values).Error
 }
 func (w *Worker) Recover(ctx context.Context) error {
+	// The sweep quarantines this module's expired leases along with every other module's.
+	if e := lease.Sweep(w.s.db(ctx)); e != nil {
+		return e
+	}
 	var targets []models.Target
 	if e := w.s.db(ctx).Where("status = ? AND lease_until < ? AND order_id IN (SELECT id FROM sys_delivery_order WHERE kind <> ?)", "running", time.Now().UTC(), "fabric").Find(&targets).Error; e != nil {
 		return e
@@ -399,7 +435,9 @@ func (w *Worker) Recover(ctx context.Context) error {
 			if q.RowsAffected == 0 {
 				return nil
 			}
-			if e := devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, false); e != nil {
+			// The lost worker's session outcome is unknown: quarantine its lease if
+			// the sweep has not already.
+			if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, lease.Unconfirmed); e != nil && !errors.Is(e, lease.ErrLost) {
 				return e
 			}
 			return summarize(tx, t.OrderID)

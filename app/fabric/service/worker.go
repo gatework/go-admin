@@ -2,15 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	vxlan "github.com/gatework/go-vxlan"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	"github.com/google/uuid"
 	delivery "go-admin/app/delivery/models"
 	ds "go-admin/app/delivery/service"
 	"go-admin/app/fabric/models"
 	"go-admin/app/fabric/service/dto"
-	devicelease "go-admin/app/network/lease"
+	"go-admin/app/network/lease"
 	network "go-admin/app/network/models"
 	"gorm.io/gorm"
 	"sync"
@@ -83,12 +83,14 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return e
 	}
 	for _, job := range jobs {
-		token := uuid.NewString()
-		if e := w.acquireCoordinator(ctx, job.FabricID, token, job.ID); e != nil {
+		lock, e := lease.LockFabric(opsDB(w.s, ctx), job.FabricID, job.ID, runTimeout)
+		if errors.Is(e, lease.ErrBusy) {
 			continue
+		} else if e != nil {
+			return e
 		}
-		e := w.runCollection(ctx, job)
-		release := w.releaseCoordinator(context.WithoutCancel(ctx), job.FabricID, token)
+		e = w.runCollection(ctx, job)
+		release := w.unlock(ctx, lock)
 		if e != nil {
 			return e
 		}
@@ -105,12 +107,14 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return e
 	}
 	for _, c := range changes {
-		token := uuid.NewString()
-		if e := w.acquireCoordinator(ctx, c.FabricID, token, c.ID); e != nil {
+		lock, e := lease.LockFabric(opsDB(w.s, ctx), c.FabricID, c.ID, runTimeout)
+		if errors.Is(e, lease.ErrBusy) {
 			continue
+		} else if e != nil {
+			return e
 		}
-		e := w.runChange(ctx, c)
-		release := w.releaseCoordinator(context.WithoutCancel(ctx), c.FabricID, token)
+		e = w.runChange(ctx, c)
+		release := w.unlock(ctx, lock)
 		if e != nil {
 			return e
 		}
@@ -182,6 +186,11 @@ func (w *Worker) schedule(ctx context.Context, now time.Time) error {
 // Recover records interrupted runs once their execution budget has elapsed.
 // It never steals expired device leases or requeues a possibly attempted write.
 func (w *Worker) Recover(ctx context.Context) error {
+	// The sweep quarantines expired device leases and drops expired fabric locks,
+	// this module's and every other module's.
+	if e := lease.Sweep(opsDB(w.s, ctx)); e != nil {
+		return e
+	}
 	now := time.Now().UTC()
 	var collects []models.Collection
 	if e := opsDB(w.s, ctx).Where("status = ? AND lease_until < ?", "running", now).Find(&collects).Error; e != nil {
@@ -226,13 +235,18 @@ func (w *Worker) Recover(ctx context.Context) error {
 			return e
 		}
 	}
-	// Fabric coordinator locks own no transport. Their bounded run has expired;
-	// physical device leases remain quarantined.
-	if e := w.recoverCoordinators(ctx, now); e != nil {
+	return nil
+}
+
+// unlock releases a fabric lock. It guards no session, and a lost lock was
+// already dropped by a sweep.
+func (w *Worker) unlock(ctx context.Context, lock lease.Lease) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if e := lease.Release(opsDB(w.s, ctx), lock, lease.NoSession); e != nil && !errors.Is(e, lease.ErrLost) {
 		return e
 	}
-	// Expired device leases remain quarantined until an operator establishes transport closure.
-	return devicelease.QuarantineExpired(opsDB(w.s, ctx), now)
+	return nil
 }
 func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) error {
 	actor := c.ExecuteBy
@@ -274,7 +288,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 	return nil
 }
 func (w *Worker) runChange(parent context.Context, c models.Change) error {
-	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, runTimeout)
 	defer cancel()
 	now := time.Now().UTC()
 	c.StartedAt = &now
@@ -303,12 +317,14 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 		return e
 	}
 	source = models.CollectionTarget{DeviceID: sd.Id, Device: opsDevice(sd), Connection: sc, SourceHash: c.SourceHash}
-	sourceToken := uuid.NewString()
-	if e := w.acquire(ctx, sd.Id, sourceToken, 0); e != nil {
-		return w.stopChange(ctx, &c, "source_busy")
+	sourceLease, e := lease.Acquire(opsDB(w.s, ctx), sd.Id, 0, runTimeout)
+	if code := leaseFailure(e, "source_busy"); code != "" {
+		return w.stopChange(ctx, &c, code)
+	} else if e != nil {
+		return e
 	}
 	sourceClosed := false
-	defer func() { _ = w.release(context.WithoutCancel(ctx), sd.Id, sourceToken, sourceClosed) }()
+	defer func() { _ = w.release(ctx, sourceLease, sourceClosed) }()
 	started := time.Now().UTC()
 	var sourceSnapshot vxlan.Snapshot
 	e = w.transport.Open(ctx, source.Device, source.Connection, func(session FabricSession) error {
@@ -331,16 +347,18 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 		if e := w.s.validateChange(ctx, c); e != nil {
 			return w.stopChange(ctx, &c, "evidence_or_grouping_changed")
 		}
-		token := uuid.NewString()
-		if e := w.acquire(ctx, t.DeviceID, token, t.DeliveryTargetID); e != nil {
-			return w.stopChange(ctx, &c, "device_busy")
+		held, e := lease.Acquire(opsDB(w.s, ctx), t.DeviceID, t.DeliveryTargetID, runTimeout)
+		if code := leaseFailure(e, "device_busy"); code != "" {
+			return w.stopChange(ctx, &c, code)
+		} else if e != nil {
+			return e
 		}
 		t.Status = "running"
 		if e := w.persistChange(ctx, &c); e != nil {
 			return e
 		}
-		closed, runErr := w.runChangeTarget(ctx, &c, t, plan, token)
-		releaseErr := w.release(context.WithoutCancel(ctx), t.DeviceID, token, closed)
+		closed, runErr := w.runChangeTarget(ctx, &c, t, plan, held)
+		releaseErr := w.release(ctx, held, closed)
 		if releaseErr != nil {
 			return releaseErr
 		}
@@ -362,7 +380,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	}
 	return w.finishChange(ctx, &c, "succeeded")
 }
-func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *models.ChangeTarget, plan *vxlan.ChangePlan, token string) (bool, error) {
+func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *models.ChangeTarget, plan *vxlan.ChangePlan, held lease.Lease) (bool, error) {
 	started := time.Now().UTC()
 	e := w.checkSource(ctx, t.Device, t.Connection, t.SourceHash)
 	if e != nil {
@@ -385,7 +403,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 			return err
 		}
 		for i, command := range plan.Commands() {
-			if e := w.checkLease(ctx, t.DeviceID, token); e != nil {
+			if e := w.checkLease(ctx, held); e != nil {
 				return e
 			}
 			if e := w.s.validateChange(ctx, *c); e != nil {
@@ -535,13 +553,11 @@ func postRuntimeState(snapshot vxlan.Snapshot, configuration vxlan.Record) strin
 	return state
 }
 
-func (w *Worker) checkLease(ctx context.Context, id int, token string) error {
-	valid, err := devicelease.CheckOwner(opsDB(w.s, ctx), devicelease.Owner{DeviceID: id, Token: token}, time.Now)
-	if err != nil {
-		return err
-	}
-	if !valid {
+func (w *Worker) checkLease(ctx context.Context, held lease.Lease) error {
+	if e := lease.Check(opsDB(w.s, ctx), held); errors.Is(e, lease.ErrLost) {
 		return errOpsConflict
+	} else if e != nil {
+		return e
 	}
 	return nil
 }

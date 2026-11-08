@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	devicelease "go-admin/app/network/lease"
+	"go-admin/app/network/lease"
 	"strconv"
 	"sync"
 	"time"
@@ -12,7 +12,6 @@ import (
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/go-net-connector/connector"
-	"github.com/google/uuid"
 	"go-admin/app/firewall/models"
 	"go-admin/app/firewall/storage"
 	"gorm.io/gorm"
@@ -91,15 +90,21 @@ func (w *CollectionWorker) Tick(ctx context.Context) error {
 		return err
 	}
 	var queued []models.CollectionTarget
-	busy := devicelease.ActiveDevices(w.s.db(ctx), time.Now().UTC())
-	if err = w.s.db(ctx).Model(&models.CollectionTarget{}).Where("status = ? AND device_id IN (?)", "queued", busy).Update("stage", "waiting_device").Error; err != nil {
+	const device = "sys_firewall_collection_target.device_id"
+	if err = w.s.db(ctx).Model(&models.CollectionTarget{}).Where("status = ?", "queued").Scopes(lease.Held(device)).Update("stage", "waiting_device").Error; err != nil {
 		return err
 	}
-	// Filter physical leases before limiting candidates, so repeated requests
-	// for busy devices cannot starve unrelated devices with available capacity.
-	if err = w.s.db(ctx).Where("status = ? AND device_id NOT IN (?)", "queued", busy).Order("id").Limit(MaxCollectionTargets).Find(&queued).Error; err != nil {
+	// Filter held devices before limiting candidates, so repeated requests for
+	// busy devices cannot starve unrelated devices with available capacity.
+	// Quarantined devices stay candidates: claim fails them visibly.
+	var quarantined []models.CollectionTarget
+	if err = w.s.db(ctx).Where("status = ?", "queued").Scopes(lease.Quarantined(device)).Order("id").Limit(MaxCollectionTargets).Find(&quarantined).Error; err != nil {
 		return err
 	}
+	if err = w.s.db(ctx).Where("status = ?", "queued").Scopes(lease.Free(device)).Order("id").Limit(MaxCollectionTargets).Find(&queued).Error; err != nil {
+		return err
+	}
+	queued = append(quarantined, queued...)
 	for _, t := range queued {
 		t, source, claimed, err := w.claim(ctx, t)
 		if err != nil {
@@ -163,18 +168,16 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 			}
 		}
 		now := time.Now().UTC()
+		var held lease.Lease
 		if reason == "" {
-			lease, err := devicelease.LockDevice(tx, t.DeviceID)
-			if err == nil {
-				if lease.Quarantined || !lease.ExpiresAt.After(now) {
-					if err = devicelease.Complete(tx, devicelease.Owner{DeviceID: lease.DeviceID, Token: lease.Token}, false); err != nil {
-						return err
-					}
-					reason = "device_quarantined"
-				} else {
-					return tx.Model(&t).Update("stage", "waiting_device").Error
-				}
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			var err error
+			held, err = lease.Acquire(tx, t.DeviceID, 0, CollectionTimeout)
+			switch {
+			case errors.Is(err, lease.ErrBusy):
+				return tx.Model(&t).Update("stage", "waiting_device").Error
+			case errors.Is(err, lease.ErrQuarantined):
+				reason = "device_quarantined"
+			case err != nil:
 				return err
 			}
 		}
@@ -192,15 +195,7 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 			claimed = true
 			return refreshCollection(tx, t.BatchID)
 		}
-		token := uuid.NewString()
-		until := now.Add(CollectionTimeout + time.Minute)
-		acquired, err := devicelease.TryAcquire(tx, devicelease.Claim{Owner: devicelease.Owner{DeviceID: t.DeviceID, Token: token}, ExpiresAt: until})
-		if err != nil {
-			return err
-		}
-		if !acquired {
-			return nil
-		}
+		token, until := held.Token, held.ExpiresAt
 		t.Status = "running"
 		t.Stage = "connecting"
 		t.LeaseToken = token
@@ -339,8 +334,18 @@ func (w *CollectionWorker) finish(ctx context.Context, t models.CollectionTarget
 		return refreshCollection(tx, t.BatchID)
 	})
 }
+
+// releaseCollectionLease ends the target's device lease. A lost lease was
+// quarantined meanwhile; that quarantine stays, even after a recorded clean close.
 func releaseCollectionLease(tx *gorm.DB, t models.CollectionTarget, closed bool) error {
-	return devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, closed)
+	outcome := lease.Closed
+	if !closed {
+		outcome = lease.Unconfirmed
+	}
+	if err := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, outcome); err != nil && !errors.Is(err, lease.ErrLost) {
+		return err
+	}
+	return nil
 }
 
 func publishedCollection(manifest snapshot.Manifest, target models.CollectionTarget) (operations.CollectResult, bool, error) {
@@ -369,6 +374,9 @@ func publishedCollection(manifest snapshot.Manifest, target models.CollectionTar
 	return operations.CollectResult{Revision: publication.Revision, Generation: publication.Generation, Complete: current.Complete}, true, nil
 }
 func (w *CollectionWorker) recover(ctx context.Context, st *storage.Store) error {
+	if err := lease.Sweep(w.s.db(ctx)); err != nil {
+		return err
+	}
 	var expired []models.CollectionTarget
 	if err := w.s.db(ctx).Where("status = ? AND lease_until < ?", "running", time.Now().UTC()).Find(&expired).Error; err != nil {
 		return err

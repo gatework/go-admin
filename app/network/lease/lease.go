@@ -1,14 +1,72 @@
-// Package lease owns device exclusion. Operations retain the supplied database's
-// transaction, context and logger; callers own transaction and cleanup budgets.
+// Package lease owns device leases and fabric locks for every network module
+// (see GLOSSARY.md): which piece of work may open sessions to a device, and
+// which device is quarantined because a session ended without a confirmed
+// close.
+//
+// The rules live here and nowhere else:
+//
+//   - A device has at most one lease. Taking one never waits: a held lease
+//     answers ErrBusy at once, so holding several (a fabric lock, then device
+//     leases, always in that order) cannot deadlock.
+//   - An expired device lease is never reused. Whoever finds it first, a
+//     caller in Acquire or any module's recovery through Sweep, turns it into
+//     a quarantine.
+//   - A quarantine is cleared only by an operator, by hand (see README.md).
+//     No release can clear one, even a late release reporting a clean close.
+//   - A fabric lock guards no session, so an expired one is dropped instead
+//     of quarantined.
+//
+// Every call takes the caller's handle, so a lease can join the caller's
+// transaction. When Acquire answers ErrQuarantined after quarantining an
+// expired lease, that write is part of the caller's transaction; if the caller
+// rolls back, the next Sweep quarantines the lease again.
 package lease
 
 import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"time"
 )
 
-// Record preserves the established storage schema, including legacy coordinator rows.
+// Margin is added to every run timeout, so a lease outlives the work it guards.
+const Margin = 5 * time.Minute
+
+var (
+	// ErrBusy: another piece of work holds the lease. Try again later.
+	ErrBusy = errors.New("lease.busy")
+	// ErrQuarantined: the device may hold an unconfirmed change and takes no new work.
+	ErrQuarantined = errors.New("lease.quarantined")
+	// ErrLost: the caller no longer holds this lease: it expired, was quarantined, or was never taken.
+	ErrLost = errors.New("lease.lost")
+	// ErrInvalid: a device or fabric id that cannot be leased.
+	ErrInvalid = errors.New("lease.invalid")
+)
+
+// Outcome is how the caller's session to the device ended.
+type Outcome int
+
+const (
+	// Closed: the transport closed and the close was confirmed.
+	Closed Outcome = iota
+	// Unconfirmed: the close was not confirmed; the device may still hold an unconfirmed change.
+	Unconfirmed
+	// NoSession: no session was opened under this lease.
+	NoSession
+)
+
+// Lease is a lease the caller holds. Callers store Token on their own job rows
+// so recovery can find it again; they never build one themselves.
+type Lease struct {
+	DeviceID  int
+	Token     string
+	ExpiresAt time.Time
+}
+
+// Record is the stored lease row. The table keeps its original name; only the
+// migration and this package refer to it.
 type Record struct {
 	DeviceID    int `gorm:"primaryKey;autoIncrement:false"`
 	TargetID    int
@@ -17,61 +75,155 @@ type Record struct {
 	Quarantined bool
 }
 
-func (Record) TableName() string { return "sys_delivery_device_lease" }
+func (Record) TableName() string { return table }
 
-// Owner identifies a particular acquisition, not merely a device.
-type Owner struct {
-	DeviceID int
-	Token    string
-}
-type Claim struct {
-	Owner
-	TargetID  int
-	ExpiresAt time.Time
-}
+const table = "sys_delivery_device_lease"
 
-// TryAcquire never replaces an existing row, even after expiry.
-func TryAcquire(db *gorm.DB, claim Claim) (bool, error) {
-	q := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: claim.DeviceID, Token: claim.Token, TargetID: claim.TargetID, ExpiresAt: claim.ExpiresAt})
-	return q.RowsAffected == 1, q.Error
-}
+// now is the module's one clock: UTC from the Go process, replaceable in tests.
+var now = func() time.Time { return time.Now().UTC() }
 
-// Complete removes only a confirmed-closed owner. Missing or replaced owners are no-ops.
-func Complete(db *gorm.DB, owner Owner, closed bool) error {
-	q := db.Where("device_id = ? AND token = ?", owner.DeviceID, owner.Token)
-	if closed {
-		return q.Delete(&Record{}).Error
+// Acquire takes the lease on a device for work that runs at most run. ref
+// identifies the caller's job row for an operator reading the table.
+func Acquire(db *gorm.DB, deviceID, ref int, run time.Duration) (Lease, error) {
+	if deviceID <= 0 {
+		return Lease{}, ErrInvalid
 	}
-	return q.Model(&Record{}).Update("quarantined", true).Error
+	return take(db, deviceID, ref, run, false)
 }
 
-// CheckOwner preserves Fabric's inclusive expiration check for ordinary reads.
-func CheckOwner(db *gorm.DB, owner Owner, now func() time.Time) (bool, error) {
-	var row Record
-	if err := db.First(&row, "device_id = ? AND token = ?", owner.DeviceID, owner.Token).Error; err != nil {
-		return false, err
+// LockFabric takes the fabric lock that serialises coordination of one Fabric.
+// Release it with NoSession.
+func LockFabric(db *gorm.DB, fabricID, ref int, run time.Duration) (Lease, error) {
+	if fabricID <= 0 {
+		return Lease{}, ErrInvalid
 	}
-	return !row.Quarantined && !now().After(row.ExpiresAt), nil
+	// Fabric locks share the device table under negative keys, which no
+	// inventory device can have.
+	return take(db, -fabricID, ref, run, true)
 }
 
-// LockOwner requires a live owner strictly beyond at. The caller must supply its
-// publication transaction so that the lock lasts through publication.
-func LockOwner(db *gorm.DB, owner Owner, at time.Time) error {
-	var row Record
-	return db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", owner.DeviceID, owner.Token, false, at).First(&row).Error
-}
-func LockDevice(db *gorm.DB, id int) (Record, error) {
-	var row Record
-	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&row, id).Error
-	return row, err
+func take(db *gorm.DB, key, ref int, run time.Duration, fabric bool) (Lease, error) {
+	l := Lease{DeviceID: key, Token: uuid.NewString(), ExpiresAt: now().Add(run + Margin)}
+	q := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, TargetID: ref, Token: l.Token, ExpiresAt: l.ExpiresAt})
+	if q.Error != nil {
+		return Lease{}, q.Error
+	}
+	if q.RowsAffected == 1 {
+		return l, nil
+	}
+	var held Record
+	if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ?", key).First(&held).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Released between the insert and the read; the next attempt can take it.
+			return Lease{}, ErrBusy
+		}
+		return Lease{}, err
+	}
+	expired := !held.ExpiresAt.After(now())
+	if fabric {
+		if !expired {
+			return Lease{}, ErrBusy
+		}
+		if err := db.Where("device_id = ? AND token = ?", key, held.Token).Delete(&Record{}).Error; err != nil {
+			return Lease{}, err
+		}
+		q = db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, TargetID: ref, Token: l.Token, ExpiresAt: l.ExpiresAt})
+		if q.Error != nil {
+			return Lease{}, q.Error
+		}
+		if q.RowsAffected != 1 {
+			return Lease{}, ErrBusy
+		}
+		return l, nil
+	}
+	if held.Quarantined {
+		return Lease{}, ErrQuarantined
+	}
+	if expired {
+		if err := db.Model(&Record{}).Where("device_id = ? AND token = ?", key, held.Token).Update("quarantined", true).Error; err != nil {
+			return Lease{}, err
+		}
+		return Lease{}, ErrQuarantined
+	}
+	return Lease{}, ErrBusy
 }
 
-// QuarantineExpired retains the legacy whole-table sweep, including coordinator
-// rows. Fabric separately reclaims its expired coordinators before this call.
-func QuarantineExpired(db *gorm.DB, before time.Time) error {
-	return db.Model(&Record{}).Where("expires_at < ?", before).Update("quarantined", true).Error
+// Release ends a lease according to how its session ended: a confirmed close
+// or no session frees the device, an unconfirmed close quarantines it. It
+// answers ErrLost when the caller no longer holds the lease, and then changes
+// nothing: a quarantine set meanwhile stays.
+func Release(db *gorm.DB, l Lease, outcome Outcome) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		// The owner lock can wait past expiry; validate after acquiring it.
+		if err := Check(tx, l); err != nil {
+			return err
+		}
+		q := tx.Model(&Record{}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", l.DeviceID, l.Token, false, now())
+		var res *gorm.DB
+		if outcome == Unconfirmed {
+			res = q.Update("quarantined", true)
+		} else {
+			res = q.Delete(&Record{})
+		}
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrLost
+		}
+		return nil
+	})
 }
-func OccupiedDevices(db *gorm.DB) *gorm.DB { return db.Model(&Record{}).Select("device_id") }
-func ActiveDevices(db *gorm.DB, at time.Time) *gorm.DB {
-	return OccupiedDevices(db).Where("quarantined = ? AND expires_at > ?", false, at)
+
+// Check confirms, under a row lock in the caller's transaction, that the
+// caller still holds a live lease. Call it before every write to the device
+// and before publishing a result.
+func Check(db *gorm.DB, l Lease) error {
+	var held Record
+	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", l.DeviceID, l.Token, false, now()).First(&held).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrLost
+	}
+	if err != nil {
+		return err
+	}
+	// A row lock or a slow query may have outlived the sampled SQL cutoff.
+	if !held.ExpiresAt.After(now()) {
+		return ErrLost
+	}
+	return nil
+}
+
+// Sweep quarantines every expired device lease and drops every expired fabric
+// lock, whichever module took them. It is idempotent: every module's recovery
+// runs it first, on every replica.
+func Sweep(db *gorm.DB) error {
+	t := now()
+	if err := db.Where("device_id < 0 AND expires_at < ?", t).Delete(&Record{}).Error; err != nil {
+		return err
+	}
+	return db.Model(&Record{}).Where("device_id > 0 AND expires_at < ? AND quarantined = ?", t, false).Update("quarantined", true).Error
+}
+
+// Free limits a query to rows whose device has no lease at all. column is a
+// trusted column reference holding the device id, e.g. "sys_wireless_collection.controller_id".
+func Free(column string) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("NOT EXISTS (SELECT 1 FROM " + table + " lease WHERE lease.device_id = " + column + ")")
+	}
+}
+
+// Held limits a query to rows whose device another piece of work holds live.
+func Held(column string) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("EXISTS (SELECT 1 FROM "+table+" lease WHERE lease.device_id = "+column+" AND lease.quarantined = ? AND lease.expires_at > ?)", false, now())
+	}
+}
+
+// Quarantined limits a query to rows whose device is quarantined, counting an
+// expired lease as quarantined since it can never be reused.
+func Quarantined(column string) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("EXISTS (SELECT 1 FROM "+table+" lease WHERE lease.device_id = "+column+" AND (lease.quarantined = ? OR lease.expires_at <= ?))", true, now())
+	}
 }

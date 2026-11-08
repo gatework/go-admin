@@ -2,7 +2,7 @@ package models
 
 import (
 	"go-admin/app/network/connection"
-	devicelease "go-admin/app/network/lease"
+	"go-admin/app/network/lease"
 	"time"
 )
 
@@ -76,7 +76,9 @@ type Target struct {
 
 func (Target) TableName() string { return "sys_delivery_target" }
 
-type DeviceLease = devicelease.Record
+// DeviceLease is the device lease row, owned by app/network/lease. The alias
+// keeps the migration that created the table, and its readers, unchanged.
+type DeviceLease = lease.Record
 
 type Receipt struct {
 	ID        int    `gorm:"primaryKey"`
