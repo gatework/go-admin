@@ -2,7 +2,7 @@ PROJECT:=go-admin
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -ldflags="-w -s" -o go-admin .
+	CGO_ENABLED=0 go build -ldflags="-w -s" -o $(PROJECT) .
 
 # make build-linux
 build-linux:
@@ -10,7 +10,7 @@ build-linux:
 	@echo "build successful"
 
 build-sqlite:
-	go build -tags sqlite3 -ldflags="-w -s" -o go-admin .
+	go build -tags sqlite3 -ldflags="-w -s" -o $(PROJECT) .
 
 # make run
 run:
