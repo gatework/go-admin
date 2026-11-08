@@ -50,7 +50,8 @@ func dimensionCoverage(state models.Dimension, src string, now time.Time) dto.Wi
 	}
 	result.Status = string(state.Latest.Status())
 	result.ObservedAt = &state.ObservedAt
-	coverage, e := wireless.NewCoverage(wireless.CoverageOptions{Observations: wireless.Record{state.Name: wireless.Record{"latest": state.Latest.ToMap()}}, Projection: wireless.Record{state.Name: wireless.Record{"status": state.ProjectionStatus, "observed_at": state.ObservedAt.Format(time.RFC3339Nano)}}, Dimensions: []wireless.Dimension{wireless.Dimension(state.Name)}, Now: now, StaleAfter: Freshness.Seconds()})
+	// Observation JSON stores microseconds; compare projection time at the same precision.
+	coverage, e := wireless.NewCoverage(wireless.CoverageOptions{Observations: wireless.Record{state.Name: wireless.Record{"latest": state.Latest.ToMap()}}, Projection: wireless.Record{state.Name: wireless.Record{"status": state.ProjectionStatus, "observed_at": state.ObservedAt.Truncate(time.Microsecond).Format(time.RFC3339Nano)}}, Dimensions: []wireless.Dimension{wireless.Dimension(state.Name)}, Now: now, StaleAfter: Freshness.Seconds()})
 	if e == nil {
 		m := coverage.ToMap()["dimensions"].(map[string]any)[state.Name].(map[string]any)
 		result.State = text(m["state"])

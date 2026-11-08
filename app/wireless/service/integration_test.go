@@ -74,7 +74,7 @@ func TestWorkerRetainsUnclosedLease(t *testing.T) {
 func TestAnalysisAndPartialEvidenceRemainHonest(t *testing.T) {
 	s, p := setup(t)
 	ctx := context.Background()
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second).Add(-time.Second + 123456789*time.Nanosecond)
 	d, _ := s.controller(ctx, 1, p)
 	c, _ := s.connection(ctx, d)
 	src := source(d, c)
