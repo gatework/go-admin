@@ -15,6 +15,9 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     # The queue's ordering rule - consumers registered before the queue is
     # started - is invisible on the memory backend, which is the default and
@@ -143,6 +146,9 @@ jobs:
     # which makes it the one place a test gate belongs.
     - name: Test
       run: make test
+
+    - name: Device lease PostgreSQL concurrency
+      run: GOWORK=off go test -mod=readonly -tags integration -race -count=1 ./test/devicelease
 
     # make test builds without the sqlite3 tag, so the tests that open a real
     # sqlite file are skipped by it. These are the ones that prove concurrent
