@@ -2,9 +2,7 @@ package service
 
 import (
 	"errors"
-	"fmt"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -96,38 +94,6 @@ func (e *SysApi) Update(c *dto.SysApiUpdateReq, p *actions.DataPermission) error
 
 	if db.RowsAffected == 0 {
 		return errors.New("无权更新该数据")
-	}
-	return nil
-}
-
-// Remove 删除SysApi
-func (e *SysApi) Remove(d *dto.SysApiDeleteReq, p *actions.DataPermission) error {
-	var data models.SysApi
-
-	db := e.Orm.Model(&data).
-		Scopes(
-			actions.Permission(data.TableName(), p),
-		).Delete(&data, d.GetId())
-	if err := db.Error; err != nil {
-		e.Log.Errorf("Service RemoveSysApi error:%s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		return errors.New("无权删除该数据")
-	}
-	return nil
-}
-
-// CheckStorageSysApi 创建SysApi对象
-func (e *SysApi) CheckStorageSysApi(c *[]runtime.Router) error {
-	for _, v := range *c {
-		err := e.Orm.Debug().Where(models.SysApi{Path: v.RelativePath, Action: v.HttpMethod}).
-			Attrs(models.SysApi{Handle: v.Handler}).
-			FirstOrCreate(&models.SysApi{}).Error
-		if err != nil {
-			err := fmt.Errorf("Service CheckStorageSysApi error: %s \r\n ", err.Error())
-			return err
-		}
 	}
 	return nil
 }

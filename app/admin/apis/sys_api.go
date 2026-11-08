@@ -117,32 +117,3 @@ func (e SysApi) Update(c *gin.Context) {
 	}
 	e.OK(req.GetId(), "更新成功")
 }
-
-// DeleteSysApi 删除接口管理
-// @Summary 删除接口管理
-// @Description 删除接口管理
-// @Tags 接口管理
-// @Param data body dto.SysApiDeleteReq true "body"
-// @Success 200 {object} response.Response	"{"code": 200, "message": "删除成功"}"
-// @Router /api/v1/sys-api [delete]
-// @Security Bearer
-func (e SysApi) DeleteSysApi(c *gin.Context) {
-	req := dto.SysApiDeleteReq{}
-	s := service.SysApi{}
-	err := e.MakeContext(c).
-		MakeOrm().
-		Bind(&req).
-		MakeService(&s.Service).
-		Errors
-	if err != nil {
-		e.Logger.Error(err)
-		return
-	}
-	p := actions.GetPermissionFromContext(c)
-	err = s.Remove(&req, p)
-	if err != nil {
-		e.Error(500, err, "删除失败")
-		return
-	}
-	e.OK(req.GetId(), "删除成功")
-}

@@ -277,31 +277,6 @@ func revokeRoleSessions(tx *gorm.DB, roleID int) error {
 		UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error
 }
 
-// GetWithName 获取SysRole对象
-func (e *SysRole) GetWithName(d *dto.SysRoleByName, model *models.SysRole) *SysRole {
-	var err error
-	db := e.Orm.Where("role_name = ?", d.RoleName).First(model)
-	err = db.Error
-	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-		return e
-	}
-	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-		return e
-	}
-	model.MenuIds, err = e.GetRoleMenuId(model.RoleId)
-	if err != nil {
-		e.Log.Errorf("get menuIds error, %s", err.Error())
-		_ = e.AddError(err)
-		return e
-	}
-	return e
-}
-
 // GetById 获取SysRole对象
 func (e *SysRole) GetById(roleId int) ([]string, error) {
 	permissions := make([]string, 0)

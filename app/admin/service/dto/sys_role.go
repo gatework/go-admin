@@ -124,10 +124,6 @@ func (s *UpdateStatusReq) GetId() interface{} {
 	return s.RoleId
 }
 
-type SysRoleByName struct {
-	RoleName string `form:"role"` // 角色编码
-}
-
 type SysRoleGetReq struct {
 	Id int `uri:"id"`
 }

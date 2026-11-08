@@ -39,13 +39,6 @@ definitions:
     - dataScope
     - roleId
     type: object
-  dto.SysApiDeleteReq:
-    properties:
-      ids:
-        items:
-          type: integer
-        type: array
-    type: object
   dto.SysApiUpdateReq:
     properties:
       action:
@@ -2048,25 +2041,6 @@ paths:
       tags:
       - 配置管理
   /api/v1/sys-api:
-    delete:
-      description: 删除接口管理
-      parameters:
-      - description: body
-        in: body
-        name: data
-        required: true
-        schema:
-          $ref: '#/definitions/dto.SysApiDeleteReq'
-      responses:
-        "200":
-          description: '{"code": 200, "message": "删除成功"}'
-          schema:
-            $ref: '#/definitions/response.Response'
-      security:
-      - Bearer: []
-      summary: 删除接口管理
-      tags:
-      - 接口管理
     get:
       description: 获取接口管理列表
       parameters:

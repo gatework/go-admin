@@ -1692,37 +1692,6 @@ const docTemplateadmin = `{
                         }
                     }
                 }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "删除接口管理",
-                "tags": [
-                    "接口管理"
-                ],
-                "summary": "删除接口管理",
-                "parameters": [
-                    {
-                        "description": "body",
-                        "name": "data",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SysApiDeleteReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "{\"code\": 200, \"message\": \"删除成功\"}",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
             }
         },
         "/api/v1/sys-api/{id}": {
@@ -2848,17 +2817,6 @@ const docTemplateadmin = `{
                 },
                 "roleId": {
                     "type": "integer"
-                }
-            }
-        },
-        "dto.SysApiDeleteReq": {
-            "type": "object",
-            "properties": {
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
                 }
             }
         },

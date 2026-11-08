@@ -38,8 +38,6 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
 	r.Use(Options)
 	// Secure is a middleware function that appends security
 	r.Use(Secure)
-	// 链路追踪
-	//r.Use(middleware.Trace())
 
 	// Build the shared JWT middleware instance here, before any module
 	// registers routes (initRouter runs ahead of runStartupHooks, which is

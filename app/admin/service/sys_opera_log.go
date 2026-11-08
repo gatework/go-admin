@@ -52,20 +52,6 @@ func (e *SysOperaLog) Get(d *dto.SysOperaLogGetReq, model *models.SysOperaLog) e
 	return nil
 }
 
-// Insert 创建SysOperaLog对象
-func (e *SysOperaLog) Insert(model *models.SysOperaLog) error {
-	var err error
-	var data models.SysOperaLog
-
-	err = e.Orm.Model(&data).
-		Create(model).Error
-	if err != nil {
-		e.Log.Errorf("Service InsertSysOperaLog error:%s", err.Error())
-		return err
-	}
-	return nil
-}
-
 // Remove 删除SysOperaLog
 func (e *SysOperaLog) Remove(d *dto.SysOperaLogDeleteReq) error {
 	var err error

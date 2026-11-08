@@ -9,7 +9,7 @@ import (
 	"go-admin/app/admin/models"
 )
 
-// The admin branch of getSysMenuByRoleName carried "deleted_at is null" in its
+// The admin branch of getByRoleName carried "deleted_at is null" in its
 // where clause. GORM adds that condition itself for a model with a DeletedAt
 // field, so the clause was a duplicate — and one written in terms of a column
 // being null, which stops being true the moment the column stops being

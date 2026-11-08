@@ -246,39 +246,6 @@ func (e *SysMenu) SetLabel() (m []dto.MenuLabel, err error) {
 	return
 }
 
-// GetSysMenuByRoleName 左侧菜单
-func (e *SysMenu) GetSysMenuByRoleName(roleName ...string) ([]models.SysMenu, error) {
-	var MenuList []models.SysMenu
-	var role models.SysRole
-	var err error
-	admin := false
-	for _, s := range roleName {
-		if s == "admin" {
-			admin = true
-		}
-	}
-
-	if len(roleName) > 0 && admin {
-		var data []models.SysMenu
-		err = e.Orm.Where(" menu_type in ('M','C')").
-			Order("sort").
-			Find(&data).
-			Error
-		MenuList = data
-	} else {
-		err = e.Orm.Model(&role).Preload("SysMenu", func(db *gorm.DB) *gorm.DB {
-			return db.Where(" menu_type in ('M','C')").Order("sort")
-		}).Where("role_name in ?", roleName).Find(&role).
-			Error
-		MenuList = *role.SysMenu
-	}
-
-	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-	}
-	return MenuList, err
-}
-
 // menuLabelCall 递归构造组织数据
 func menuLabelCall(eList *[]models.SysMenu, dept dto.MenuLabel) dto.MenuLabel {
 	list := *eList

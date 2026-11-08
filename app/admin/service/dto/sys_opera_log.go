@@ -1,12 +1,8 @@
 package dto
 
 import (
-	"time"
-
-	"go-admin/app/admin/models"
 	"go-admin/common/dto"
 	"go-admin/common/global"
-	common "go-admin/common/models"
 )
 
 // Deprecated: use global.OperaStatusEnabled / global.OperaStatusDisabled.
@@ -37,56 +33,6 @@ type SysOperaLogOrder struct {
 
 func (m *SysOperaLogGetPageReq) GetNeedSearch() interface{} {
 	return *m
-}
-
-type SysOperaLogControl struct {
-	ID            int       `uri:"Id" comment:"编码"` // 编码
-	Title         string    `json:"title" comment:"操作模块"`
-	BusinessType  string    `json:"businessType" comment:"操作类型"`
-	BusinessTypes string    `json:"businessTypes" comment:""`
-	Method        string    `json:"method" comment:"函数"`
-	RequestMethod string    `json:"requestMethod" comment:"请求方式"`
-	OperatorType  string    `json:"operatorType" comment:"操作类型"`
-	OperName      string    `json:"operName" comment:"操作者"`
-	DeptName      string    `json:"deptName" comment:"部门名称"`
-	OperUrl       string    `json:"operUrl" comment:"访问地址"`
-	OperIp        string    `json:"operIp" comment:"客户端ip"`
-	OperLocation  string    `json:"operLocation" comment:"访问位置"`
-	OperParam     string    `json:"operParam" comment:"请求参数"`
-	Status        string    `json:"status" comment:"操作状态"`
-	OperTime      time.Time `json:"operTime" comment:"操作时间"`
-	JsonResult    string    `json:"jsonResult" comment:"返回数据"`
-	Remark        string    `json:"remark" comment:"备注"`
-	LatencyTime   string    `json:"latencyTime" comment:"耗时"`
-	UserAgent     string    `json:"userAgent" comment:"ua"`
-}
-
-func (s *SysOperaLogControl) Generate() (*models.SysOperaLog, error) {
-	return &models.SysOperaLog{
-		Model:         common.Model{Id: s.ID},
-		Title:         s.Title,
-		BusinessType:  s.BusinessType,
-		BusinessTypes: s.BusinessTypes,
-		Method:        s.Method,
-		RequestMethod: s.RequestMethod,
-		OperatorType:  s.OperatorType,
-		OperName:      s.OperName,
-		DeptName:      s.DeptName,
-		OperUrl:       s.OperUrl,
-		OperIp:        s.OperIp,
-		OperLocation:  s.OperLocation,
-		OperParam:     s.OperParam,
-		Status:        s.Status,
-		OperTime:      s.OperTime,
-		JsonResult:    s.JsonResult,
-		Remark:        s.Remark,
-		LatencyTime:   s.LatencyTime,
-		UserAgent:     s.UserAgent,
-	}, nil
-}
-
-func (s *SysOperaLogControl) GetId() interface{} {
-	return s.ID
 }
 
 type SysOperaLogGetReq struct {
