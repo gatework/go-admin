@@ -1,10 +1,20 @@
-FROM golang:1.27.2-bookworm
+FROM golang:1.27.3-bookworm
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 update \
+    && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 install -y --no-install-recommends \
+    curl iputils-ping mtr-tiny traceroute iperf3 openssh-client inetutils-telnet \
     && rm -rf /var/lib/apt/lists/*
 
+ARG NEXTTRACE_VERSION=v1.7.4
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOEXPERIMENT=nojsonv2 GOBIN=/usr/local/bin go install -tags=flavor_tiny \
+    -ldflags="-s -w -X github.com/nxtrace/NTrace-core/config.Version=${NEXTTRACE_VERSION}" github.com/nxtrace/NTrace-core@${NEXTTRACE_VERSION} \
+    && mv /usr/local/bin/NTrace-core /usr/local/bin/nexttrace
+
 WORKDIR /workspace/go-admin
-ENV GOTOOLCHAIN=local
+ENV GOTOOLCHAIN=local GOWORK=off
 EXPOSE 8000
 
 # Keep the server itself as PID 1 so Docker's stop signal reaches it.

@@ -1,6 +1,11 @@
-FROM alpine
+FROM golang:1.27.2-alpine AS nexttrace
+ARG NEXTTRACE_VERSION=v1.7.4
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOEXPERIMENT=nojsonv2 GOBIN=/tools go install -tags=flavor_tiny \
+    -ldflags="-s -w -X github.com/nxtrace/NTrace-core/config.Version=${NEXTTRACE_VERSION}" github.com/nxtrace/NTrace-core@${NEXTTRACE_VERSION}
 
-# ENV GOPROXY https://goproxy.cn/
+FROM alpine
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
 
@@ -23,7 +28,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositorie
 # hostname and opens a database connection exactly as one built with it - but
 # it is half a megabyte and it covers a ./main that was linked dynamically,
 # which this Dockerfile has no way to check.
-RUN apk add --no-cache ca-certificates tzdata libc6-compat
+RUN apk add --no-cache ca-certificates tzdata libc6-compat iputils mtr traceroute iperf3 openssh-client busybox-extras
+COPY --from=nexttrace /tools/NTrace-core /usr/local/bin/nexttrace
 ENV TZ Asia/Shanghai
 
 COPY ./main /main

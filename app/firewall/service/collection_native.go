@@ -1,0 +1,181 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	fm "github.com/gatework/firemon"
+	adapter "github.com/gatework/firemon/adapter/netconnector"
+	"github.com/gatework/firemon/config"
+	native "github.com/gatework/firemon/device"
+	"github.com/gatework/firemon/snapshot"
+	"github.com/gatework/firemon/vendors"
+	"github.com/gatework/go-net-connector/connector"
+	delivery "go-admin/app/delivery/models"
+	ds "go-admin/app/delivery/service"
+	"go-admin/app/firewall/models"
+	"go-admin/app/firewall/storage"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+var errCollectionSource = errors.New("firewall collection source changed")
+
+func openFirewallReader(ctx context.Context, source CollectionSource) (native.Reader, error) {
+	factory := adapter.Factory{Resolve: func(ctx context.Context, id string) (adapter.Target, error) {
+		if err := ctx.Err(); err != nil {
+			return adapter.Target{}, err
+		}
+		if id != storage.DeviceKey(source.Instance.ID) || source.reason() != "" {
+			return adapter.Target{}, errCollectionSource
+		}
+		c, err := ds.FromEnvironment().ConnectionConfig(delivery.DeviceSnapshot{ID: source.Device.Id, IP: source.Device.IP}, source.Connection.Settings)
+		if err != nil {
+			return adapter.Target{}, err
+		}
+		c.MaxOutputBytes = config.DefaultMaxBytes
+		c.MaxScriptOutputBytes = config.DefaultMaxBytes
+		return adapter.Target{Metadata: fm.Metadata{Device: id, Vendor: source.Instance.Vendor, Context: source.Instance.NativeContext, Software: source.Device.OS}, Connection: c}, nil
+	}}
+	return factory.OpenReadOnly(ctx, storage.DeviceKey(source.Instance.ID))
+}
+
+type collectionSession struct {
+	worker    *CollectionWorker
+	target    models.CollectionTarget
+	source    CollectionSource
+	attempted bool
+	closed    bool
+}
+
+func (s *collectionSession) OpenReadOnly(ctx context.Context, id string) (native.Reader, error) {
+	if id != storage.DeviceKey(s.target.InstanceID) {
+		return nil, ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// Recheck immediately before opening; publication performs a locked recheck.
+	source, err := collectionSource(ctx, s.worker.s.Orm, s.target.InstanceID, false)
+	if err != nil {
+		return nil, err
+	}
+	if source.fingerprint() != s.target.SourceHash || source.reason() != "" {
+		return nil, errCollectionSource
+	}
+	if err = s.worker.stage(ctx, s.target, "connecting"); err != nil {
+		return nil, err
+	}
+	s.attempted = true
+	reader, err := s.worker.dial(ctx, source)
+	if reader == nil {
+		s.closed = !hasCleanupFailure(err)
+		return nil, err
+	}
+	return &collectionReader{Reader: reader, session: s}, err
+}
+func hasCleanupFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	if e, ok := err.(*connector.Error); ok && e.Code == "cleanup_failed" {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, cause := range joined.Unwrap() {
+			if hasCleanupFailure(cause) {
+				return true
+			}
+		}
+	}
+	if cause, ok := err.(interface{ Unwrap() error }); ok {
+		return hasCleanupFailure(cause.Unwrap())
+	}
+	return false
+}
+
+type collectionReader struct {
+	native.Reader
+	session  *collectionSession
+	once     sync.Once
+	closeErr error
+}
+
+func (r *collectionReader) Read(ctx context.Context, v native.View) (native.Capture, error) {
+	if err := r.session.worker.stage(ctx, r.session.target, "reading"); err != nil {
+		return native.Capture{}, err
+	}
+	return r.Reader.Read(ctx, v)
+}
+func (r *collectionReader) Close() error {
+	r.once.Do(func() {
+		r.closeErr = r.Reader.Close()
+		r.session.closed = r.closeErr == nil
+		// A durable closure acknowledgement allows recovery to release the lease
+		// after a filesystem publication whose final SQL acknowledgement was lost.
+		if r.session.closed {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			q := collectionOwned(r.session.worker.s.db(ctx), r.session.target).Update("session_closed", true)
+			if q.Error != nil {
+				r.closeErr = q.Error
+			}
+		}
+	})
+	return r.closeErr
+}
+
+type collectionParser struct {
+	worker *CollectionWorker
+	target models.CollectionTarget
+}
+
+func (p collectionParser) Parse(ctx context.Context, source config.Source, meta fm.Metadata) (*fm.Firewall, error) {
+	if err := p.worker.stage(ctx, p.target, "parsing"); err != nil {
+		return nil, err
+	}
+	return (vendors.Parser{}).Parse(ctx, source, meta)
+}
+
+type collectionStore struct {
+	*storage.Store
+	worker *CollectionWorker
+	target models.CollectionTarget
+}
+
+func (s *collectionStore) Publish(ctx context.Context, fw *fm.Firewall, options snapshot.PublishOptions) (snapshot.PublishResult, error) {
+	var result snapshot.PublishResult
+	t := s.target
+	if fw == nil || fw.Metadata().Device != storage.DeviceKey(t.InstanceID) || fw.Metadata().Vendor != t.Vendor || fw.Metadata().Context != t.NativeContext || options.PublicationID != publicationID(t) || options.Expected != t.ExpectedRevision || !options.Live {
+		return result, ErrInvalid
+	}
+	err := s.worker.s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		var b models.CollectionBatch
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, t.BatchID).Error; err != nil {
+			return err
+		}
+		source, err := collectionSource(ctx, tx, t.InstanceID, true)
+		if err != nil {
+			return err
+		}
+		if source.fingerprint() != t.SourceHash || source.reason() != "" {
+			return errCollectionSource
+		}
+		var owned models.CollectionTarget
+		if err := collectionOwned(tx, t).Clauses(clause.Locking{Strength: "UPDATE"}).First(&owned).Error; err != nil {
+			return ErrConflict
+		}
+		var lease delivery.DeviceLease
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", t.DeviceID, t.LeaseToken, false, time.Now().UTC()).First(&lease).Error; err != nil {
+			return ErrConflict
+		}
+		if err := tx.Model(&owned).Update("stage", "publishing").Error; err != nil {
+			return err
+		}
+		result, err = s.Store.Publish(ctx, fw, options)
+		return err
+	})
+	return result, err
+}

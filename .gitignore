@@ -40,3 +40,6 @@ config/settings.local.dev.yml
 # the build for everyone else.
 go.work
 go.work.sum
+
+# Imported firewall configurations and immutable native snapshots are private.
+/data/firewall/

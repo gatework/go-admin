@@ -204,9 +204,9 @@ func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqUri string
 	}
 }
 
-// Account credentials and recovery material must never reach operation-log storage.
+// Account secrets, firewall configurations, delivery scripts and device output must never reach operation-log storage.
 func sensitiveAccountPath(path string) bool {
-	return strings.HasPrefix(path, "/api/v1/account/") || path == "/api/v1/login" || strings.HasPrefix(path, "/api/v1/user/pwd/")
+	return strings.HasPrefix(path, "/api/v1/network-firewall/") || path == "/api/v1/network-firewall" || strings.HasPrefix(path, "/api/v1/network-wireless/") || path == "/api/v1/network-wireless" || strings.HasPrefix(path, "/api/v1/network-fabrics/") || path == "/api/v1/network-fabrics" || strings.HasPrefix(path, "/api/v1/network-delivery/") || path == "/api/v1/network-delivery" || strings.HasPrefix(path, "/api/v1/account/") || path == "/api/v1/login" || strings.HasPrefix(path, "/api/v1/user/pwd/")
 }
 
 // Invalid/truncated JSON and arbitrary upload bodies are never retained: they
