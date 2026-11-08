@@ -10,6 +10,7 @@ import (
 	ds "go-admin/app/delivery/service"
 	"go-admin/app/fabric/models"
 	"go-admin/app/fabric/service/dto"
+	devicelease "go-admin/app/network/lease"
 	network "go-admin/app/network/models"
 	"gorm.io/gorm"
 	"sync"
@@ -83,11 +84,11 @@ func (w *Worker) Tick(ctx context.Context) error {
 	}
 	for _, job := range jobs {
 		token := uuid.NewString()
-		if e := w.acquire(ctx, -job.FabricID, token, -job.ID); e != nil {
+		if e := w.acquireCoordinator(ctx, job.FabricID, token, job.ID); e != nil {
 			continue
 		}
 		e := w.runCollection(ctx, job)
-		release := w.release(context.WithoutCancel(ctx), -job.FabricID, token, true)
+		release := w.releaseCoordinator(context.WithoutCancel(ctx), job.FabricID, token)
 		if e != nil {
 			return e
 		}
@@ -105,11 +106,11 @@ func (w *Worker) Tick(ctx context.Context) error {
 	}
 	for _, c := range changes {
 		token := uuid.NewString()
-		if e := w.acquire(ctx, -c.FabricID, token, -c.ID); e != nil {
+		if e := w.acquireCoordinator(ctx, c.FabricID, token, c.ID); e != nil {
 			continue
 		}
 		e := w.runChange(ctx, c)
-		release := w.release(context.WithoutCancel(ctx), -c.FabricID, token, true)
+		release := w.releaseCoordinator(context.WithoutCancel(ctx), c.FabricID, token)
 		if e != nil {
 			return e
 		}
@@ -227,11 +228,11 @@ func (w *Worker) Recover(ctx context.Context) error {
 	}
 	// Fabric coordinator locks own no transport. Their bounded run has expired;
 	// physical device leases remain quarantined.
-	if e := opsDB(w.s, ctx).Where("device_id < 0 AND expires_at < ?", now).Delete(&delivery.DeviceLease{}).Error; e != nil {
+	if e := w.recoverCoordinators(ctx, now); e != nil {
 		return e
 	}
 	// Expired device leases remain quarantined until an operator establishes transport closure.
-	return opsDB(w.s, ctx).Model(&delivery.DeviceLease{}).Where("expires_at < ?", now).Update("quarantined", true).Error
+	return devicelease.QuarantineExpired(opsDB(w.s, ctx), now)
 }
 func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) error {
 	actor := c.ExecuteBy
@@ -535,11 +536,11 @@ func postRuntimeState(snapshot vxlan.Snapshot, configuration vxlan.Record) strin
 }
 
 func (w *Worker) checkLease(ctx context.Context, id int, token string) error {
-	var lease delivery.DeviceLease
-	if e := opsDB(w.s, ctx).First(&lease, "device_id = ? AND token = ?", id, token).Error; e != nil {
-		return e
+	valid, err := devicelease.CheckOwner(opsDB(w.s, ctx), devicelease.Owner{DeviceID: id, Token: token}, time.Now)
+	if err != nil {
+		return err
 	}
-	if lease.Quarantined || time.Now().UTC().After(lease.ExpiresAt) {
+	if !valid {
 		return errOpsConflict
 	}
 	return nil

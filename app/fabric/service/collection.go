@@ -10,9 +10,9 @@ import (
 	delivery "go-admin/app/delivery/models"
 	"go-admin/app/fabric/models"
 	"go-admin/app/fabric/service/dto"
+	devicelease "go-admin/app/network/lease"
 	network "go-admin/app/network/models"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"sort"
 	"time"
 )
@@ -313,11 +313,11 @@ func (w *Worker) persistSnapshot(ctx context.Context, fabric, id int, t models.C
 	})
 }
 func (w *Worker) acquire(ctx context.Context, id int, token string, target int) error {
-	q := opsDB(w.s, ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&delivery.DeviceLease{DeviceID: id, TargetID: target, Token: token, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
-	if q.Error != nil {
-		return q.Error
+	acquired, err := devicelease.TryAcquire(opsDB(w.s, ctx), devicelease.Claim{Owner: devicelease.Owner{DeviceID: id, Token: token}, TargetID: target, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
+	if err != nil {
+		return err
 	}
-	if q.RowsAffected != 1 {
+	if !acquired {
 		return errOpsConflict
 	}
 	return nil
@@ -327,11 +327,7 @@ func (w *Worker) release(ctx context.Context, id int, token string, closed bool)
 	// Unknown closure still quarantines the token owner, within a bounded budget.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	q := opsDB(w.s, ctx).Where("device_id = ? AND token = ?", id, token)
-	if closed {
-		return q.Delete(&delivery.DeviceLease{}).Error
-	}
-	return q.Model(&delivery.DeviceLease{}).Update("quarantined", true).Error
+	return devicelease.Complete(opsDB(w.s, ctx), devicelease.Owner{DeviceID: id, Token: token}, closed)
 }
 func (w *Worker) checkSource(ctx context.Context, d delivery.DeviceSnapshot, c delivery.Connection, hash string) error {
 	var current network.Device

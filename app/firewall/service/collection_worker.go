@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	devicelease "go-admin/app/network/lease"
 	"strconv"
 	"sync"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/go-net-connector/connector"
 	"github.com/google/uuid"
-	delivery "go-admin/app/delivery/models"
 	"go-admin/app/firewall/models"
 	"go-admin/app/firewall/storage"
 	"gorm.io/gorm"
@@ -91,7 +91,7 @@ func (w *CollectionWorker) Tick(ctx context.Context) error {
 		return err
 	}
 	var queued []models.CollectionTarget
-	busy := w.s.db(ctx).Model(&delivery.DeviceLease{}).Select("device_id").Where("quarantined = ? AND expires_at > ?", false, time.Now().UTC())
+	busy := devicelease.ActiveDevices(w.s.db(ctx), time.Now().UTC())
 	if err = w.s.db(ctx).Model(&models.CollectionTarget{}).Where("status = ? AND device_id IN (?)", "queued", busy).Update("stage", "waiting_device").Error; err != nil {
 		return err
 	}
@@ -164,11 +164,10 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 		}
 		now := time.Now().UTC()
 		if reason == "" {
-			var lease delivery.DeviceLease
-			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lease, t.DeviceID).Error
+			lease, err := devicelease.LockDevice(tx, t.DeviceID)
 			if err == nil {
 				if lease.Quarantined || !lease.ExpiresAt.After(now) {
-					if err = tx.Model(&lease).Update("quarantined", true).Error; err != nil {
+					if err = devicelease.Complete(tx, devicelease.Owner{DeviceID: lease.DeviceID, Token: lease.Token}, false); err != nil {
 						return err
 					}
 					reason = "device_quarantined"
@@ -195,12 +194,11 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 		}
 		token := uuid.NewString()
 		until := now.Add(CollectionTimeout + time.Minute)
-		lease := delivery.DeviceLease{DeviceID: t.DeviceID, Token: token, ExpiresAt: until}
-		q := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lease)
-		if q.Error != nil {
-			return q.Error
+		acquired, err := devicelease.TryAcquire(tx, devicelease.Claim{Owner: devicelease.Owner{DeviceID: t.DeviceID, Token: token}, ExpiresAt: until})
+		if err != nil {
+			return err
 		}
-		if q.RowsAffected != 1 {
+		if !acquired {
 			return nil
 		}
 		t.Status = "running"
@@ -342,11 +340,7 @@ func (w *CollectionWorker) finish(ctx context.Context, t models.CollectionTarget
 	})
 }
 func releaseCollectionLease(tx *gorm.DB, t models.CollectionTarget, closed bool) error {
-	q := tx.Where("device_id = ? AND token = ?", t.DeviceID, t.LeaseToken)
-	if closed {
-		return q.Delete(&delivery.DeviceLease{}).Error
-	}
-	return q.Model(&delivery.DeviceLease{}).Update("quarantined", true).Error
+	return devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, closed)
 }
 
 func publishedCollection(manifest snapshot.Manifest, target models.CollectionTarget) (operations.CollectResult, bool, error) {

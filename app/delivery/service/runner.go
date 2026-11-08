@@ -6,9 +6,9 @@ import (
 	"github.com/gatework/go-net-connector/connector"
 	"github.com/google/uuid"
 	"go-admin/app/delivery/models"
+	devicelease "go-admin/app/network/lease"
 	inventory "go-admin/app/network/models"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"sync"
 	"time"
 )
@@ -104,7 +104,7 @@ func (w *Worker) Claim(ctx context.Context) (*models.Target, error) {
 	db := w.s.db(ctx)
 	now := time.Now().UTC()
 	var candidates []models.Target
-	e := db.Model(&models.Target{}).Select("sys_delivery_target.*").Joins("JOIN sys_delivery_order o ON o.id = sys_delivery_target.order_id").Where("o.kind <> 'fabric' AND NOT EXISTS (SELECT 1 FROM sys_delivery_device_lease l WHERE l.device_id = sys_delivery_target.device_id) AND sys_delivery_target.status = ? AND o.cancel_requested = ? AND (o.status IN ? OR (o.status = ? AND o.scheduled_at <= ?))", "pending", false, []string{"queued", "running"}, "scheduled", now).Order("o.id, sys_delivery_target.id").Limit(100).Find(&candidates).Error
+	e := db.Model(&models.Target{}).Select("sys_delivery_target.*").Joins("JOIN sys_delivery_order o ON o.id = sys_delivery_target.order_id").Where("o.kind <> 'fabric' AND sys_delivery_target.device_id NOT IN (?) AND sys_delivery_target.status = ? AND o.cancel_requested = ? AND (o.status IN ? OR (o.status = ? AND o.scheduled_at <= ?))", devicelease.OccupiedDevices(w.s.db(ctx)), "pending", false, []string{"queued", "running"}, "scheduled", now).Order("o.id, sys_delivery_target.id").Limit(100).Find(&candidates).Error
 	if e != nil {
 		return nil, e
 	}
@@ -112,11 +112,11 @@ func (w *Worker) Claim(ctx context.Context) (*models.Target, error) {
 		token := uuid.NewString()
 		until := now.Add(leaseDuration)
 		e = db.Transaction(func(tx *gorm.DB) error {
-			q := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceLease{DeviceID: t.DeviceID, TargetID: t.ID, Token: token, ExpiresAt: until})
-			if q.Error != nil {
-				return q.Error
+			acquired, err := devicelease.TryAcquire(tx, devicelease.Claim{Owner: devicelease.Owner{DeviceID: t.DeviceID, Token: token}, TargetID: t.ID, ExpiresAt: until})
+			if err != nil {
+				return err
 			}
-			if q.RowsAffected == 0 {
+			if !acquired {
 				return ErrConflict
 			}
 			var o models.Order
@@ -131,7 +131,7 @@ func (w *Worker) Claim(ctx context.Context) (*models.Target, error) {
 			if o.StartedAt == nil {
 				values["started_at"] = now
 			}
-			q = tx.Model(&models.Order{}).Where("id = ? AND version = ? AND cancel_requested = ?", o.ID, o.Version, false).Updates(values)
+			q := tx.Model(&models.Order{}).Where("id = ? AND version = ? AND cancel_requested = ?", o.ID, o.Version, false).Updates(values)
 			if q.Error != nil {
 				return q.Error
 			}
@@ -347,14 +347,8 @@ func (w *Worker) finish(ctx context.Context, t models.Target, status, code, outp
 		if q.Error != nil {
 			return q.Error
 		}
-		if closed {
-			if e := tx.Where("device_id = ? AND token = ?", t.DeviceID, t.LeaseToken).Delete(&models.DeviceLease{}).Error; e != nil {
-				return e
-			}
-		} else {
-			if e := tx.Model(&models.DeviceLease{}).Where("device_id = ? AND token = ?", t.DeviceID, t.LeaseToken).Update("quarantined", true).Error; e != nil {
-				return e
-			}
+		if err := devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, closed); err != nil {
+			return err
 		}
 		return summarize(tx, t.OrderID)
 	})
@@ -405,7 +399,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 			if q.RowsAffected == 0 {
 				return nil
 			}
-			if e := tx.Model(&models.DeviceLease{}).Where("device_id = ? AND token = ?", t.DeviceID, t.LeaseToken).Update("quarantined", true).Error; e != nil {
+			if e := devicelease.Complete(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, false); e != nil {
 				return e
 			}
 			return summarize(tx, t.OrderID)

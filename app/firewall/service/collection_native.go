@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	devicelease "go-admin/app/network/lease"
 	"sync"
 	"time"
 
@@ -167,8 +168,7 @@ func (s *collectionStore) Publish(ctx context.Context, fw *fm.Firewall, options 
 		if err := collectionOwned(tx, t).Clauses(clause.Locking{Strength: "UPDATE"}).First(&owned).Error; err != nil {
 			return ErrConflict
 		}
-		var lease delivery.DeviceLease
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", t.DeviceID, t.LeaseToken, false, time.Now().UTC()).First(&lease).Error; err != nil {
+		if err := devicelease.LockOwner(tx, devicelease.Owner{DeviceID: t.DeviceID, Token: t.LeaseToken}, time.Now().UTC()); err != nil {
 			return ErrConflict
 		}
 		if err := tx.Model(&owned).Update("stage", "publishing").Error; err != nil {

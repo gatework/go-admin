@@ -2,6 +2,7 @@ package models
 
 import (
 	"go-admin/app/network/connection"
+	devicelease "go-admin/app/network/lease"
 	"time"
 )
 
@@ -75,15 +76,7 @@ type Target struct {
 
 func (Target) TableName() string { return "sys_delivery_target" }
 
-type DeviceLease struct {
-	DeviceID    int `gorm:"primaryKey;autoIncrement:false"`
-	TargetID    int
-	Token       string `gorm:"size:40"`
-	ExpiresAt   time.Time
-	Quarantined bool
-}
-
-func (DeviceLease) TableName() string { return "sys_delivery_device_lease" }
+type DeviceLease = devicelease.Record
 
 type Receipt struct {
 	ID        int    `gorm:"primaryKey"`

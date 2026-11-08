@@ -6,6 +6,7 @@ import (
 	wireless "github.com/gatework/go-wireless"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
 	"github.com/google/uuid"
+	devicelease "go-admin/app/network/lease"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 		if err := tx.Model(&models.Collection{}).Where("status = ? AND lease_until < ?", "running", now).Updates(map[string]any{"status": "interrupted", "error_code": "worker_lost", "finished_at": now, "version": gorm.Expr("version + 1")}).Error; err != nil {
 			return err
 		}
-		return tx.Model(&delivery.DeviceLease{}).Where("expires_at < ?", now).Update("quarantined", true).Error
+		return devicelease.QuarantineExpired(tx, now)
 	})
 }
 
@@ -50,11 +51,11 @@ func (w *Worker) acquire(ctx context.Context, id int, token string) error {
 	if id <= 0 || token == "" {
 		return ErrInvalid
 	}
-	q := w.s.db(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&delivery.DeviceLease{DeviceID: id, Token: token, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
-	if q.Error != nil {
-		return q.Error
+	acquired, err := devicelease.TryAcquire(w.s.db(ctx), devicelease.Claim{Owner: devicelease.Owner{DeviceID: id, Token: token}, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)})
+	if err != nil {
+		return err
 	}
-	if q.RowsAffected != 1 {
+	if !acquired {
 		return ErrConflict
 	}
 	return nil
@@ -62,11 +63,7 @@ func (w *Worker) acquire(ctx context.Context, id int, token string) error {
 func (w *Worker) release(ctx context.Context, id int, token string, closed bool) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	q := w.s.db(ctx).Where("device_id = ? AND token = ?", id, token)
-	if closed {
-		return q.Delete(&delivery.DeviceLease{}).Error
-	}
-	return q.Model(&delivery.DeviceLease{}).Update("quarantined", true).Error
+	return devicelease.Complete(w.s.db(ctx), devicelease.Owner{DeviceID: id, Token: token}, closed)
 }
 
 func (w *Worker) Start() {
@@ -111,7 +108,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return e
 	}
 	var jobs []models.Collection
-	if e := w.s.db(ctx).Where("status = ?", "queued").Where("NOT EXISTS (SELECT 1 FROM sys_delivery_device_lease lease WHERE lease.device_id = sys_wireless_collection.controller_id)").Order("id").Limit(20).Find(&jobs).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ?", "queued").Where("controller_id NOT IN (?)", devicelease.OccupiedDevices(w.s.db(ctx))).Order("id").Limit(20).Find(&jobs).Error; e != nil {
 		return e
 	}
 	for _, job := range jobs {
@@ -169,8 +166,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, token string) (
 		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", job.ID, "running", token, time.Now().UTC()).First(&current).Error; e != nil {
 			return e
 		}
-		var lease delivery.DeviceLease
-		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_id = ? AND token = ? AND quarantined = ? AND expires_at > ?", job.ControllerID, token, false, time.Now().UTC()).First(&lease).Error; e != nil {
+		if e := devicelease.LockOwner(tx, devicelease.Owner{DeviceID: job.ControllerID, Token: token}, time.Now().UTC()); e != nil {
 			return e
 		}
 		status := "failed"
