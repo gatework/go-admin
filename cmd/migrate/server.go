@@ -142,11 +142,18 @@ func resolveDB() (*gorm.DB, error) {
 	if db == nil {
 		return nil, fmt.Errorf("未找到数据库配置")
 	}
-	if config.Current().Settings.Databases[host].Driver == "mysql" {
-		//初始化数据库时候用
-		db.Set("gorm:table_options", "ENGINE=InnoDB CHARSET=utf8mb4")
+	return withTableOptions(db, config.Current().Settings.Databases[host].Driver), nil
+}
+
+// withTableOptions makes tables created by migrations on MySQL use InnoDB and
+// utf8mb4. Set returns a new handle rather than changing its receiver, so the
+// result must be the handle that is returned; Session then makes it a reusable
+// base again, with the setting carried into every statement started from it.
+func withTableOptions(db *gorm.DB, driver string) *gorm.DB {
+	if driver != "mysql" {
+		return db
 	}
-	return db, nil
+	return db.Set("gorm:table_options", "ENGINE=InnoDB CHARSET=utf8mb4").Session(&gorm.Session{})
 }
 
 // exitUnlessAppRegistered ends the command when --app names something no
@@ -358,7 +365,9 @@ func genFile() error {
 	}
 	m := map[string]string{}
 	m["GenerateTime"] = strconv.FormatInt(time.Now().UnixNano()/1e6, 10)
-	m["Package"] = "version_local"
+	// The package name of cmd/migrate/migration/version-local, not its directory
+	// name: a generated file in any other package does not compile there.
+	m["Package"] = "versionlocal"
 	if framework {
 		m["Package"] = "version"
 	}

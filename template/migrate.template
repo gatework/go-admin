@@ -1,25 +1,27 @@
 package {{.Package}}
 
 import (
-	"gorm.io/gorm"
 	"runtime"
+
+	"gorm.io/gorm"
 
 	"github.com/gatework/motor/cmd/migrate/migration"
 	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
-	_, fileName, _, _ := runtime.Caller(0)
-	migration.Migrate.SetVersion(migration.GetFilename(fileName), _{{.GenerateTime}}Test)
+	_, file, _, _ := runtime.Caller(0)
+	migration.Migrate.SetVersion(migration.GetFilename(file), migrate{{.GenerateTime}})
 }
 
-func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
+// migrate{{.GenerateTime}} is frozen once it has run anywhere: correct it with a
+// new migration, never by editing this one. Rename it after what it changes.
+func migrate{{.GenerateTime}}(db *gorm.DB, version string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 
-	    // TODO: 这里开始写入要变更的内容
+		// TODO: 这里开始写入要变更的内容
 
-		return tx.Create(&common.Migration{
-			Version: version,
-		}).Error
+		return tx.Create(&common.Migration{Version: version}).Error
 	})
 }
