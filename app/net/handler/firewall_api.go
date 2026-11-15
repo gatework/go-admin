@@ -25,7 +25,9 @@ import (
 	"github.com/gatework/motor/app/net/service/firewall/engine"
 )
 
-// Firewall carries firewall state for this module.
+// Firewall adapts firewall HTTP routes. Its methods take a value receiver: gin
+// registers each route once and serves it concurrently, so the request-scoped
+// API assigned in run must live on a per-call copy, never on a shared pointer.
 type Firewall struct{ api.API }
 type pageResult struct {
 	List  any
@@ -40,7 +42,7 @@ type operation func(*service.Firewall) (any, error)
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/options [get]
 // @Security Bearer
-func (e *Firewall) Options(c *gin.Context) {
+func (e Firewall) Options(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		domains, err := s.Domains(c.Request.Context())
 		return gin.H{"domains": domains, "vendors": []string{"paloalto", "srx", "huawei", "hillstone", "fortinet", "netscreen", "asa"}, "limits": gin.H{"maxRows": engine.MaxRows, "maxDesignRows": engine.MaxDesignRows, "maxFileBytes": config.DefaultMaxBytes, "maxCollectionTargets": service.MaxCollectionTargets, "collectionConcurrency": service.CollectionConcurrency}, "defaultProtocol": "tcp"}, err
@@ -54,7 +56,7 @@ func (e *Firewall) Options(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/normalize [post]
 // @Security Bearer
-func (e *Firewall) Normalize(c *gin.Context) {
+func (e Firewall) Normalize(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		var in types.Input
 		if err := decodeFirewallRequest(c, &in); err != nil {
@@ -99,7 +101,7 @@ func page(c *gin.Context) (service.Page, error) {
 }
 func permission(c *gin.Context) *actions.DataPermission { return actions.GetPermissionFromContext(c) }
 
-func (e *Firewall) respond(err error) {
+func (e Firewall) respond(err error) {
 	code, msg := 500, "firewall.operation_failed"
 	switch {
 	case errors.Is(err, service.InvalidErr), errors.Is(err, engine.InputErr), errors.Is(err, engine.BudgetErr), errors.Is(err, storage.InvalidErr):
@@ -114,7 +116,7 @@ func (e *Firewall) respond(err error) {
 	e.Error(code, nil, msg)
 }
 
-func (e *Firewall) run(c *gin.Context, fn operation) {
+func (e Firewall) run(c *gin.Context, fn operation) {
 	s := &service.Firewall{Actor: user.ID(c)}
 	var err error
 	e.API, err = request.New(c)

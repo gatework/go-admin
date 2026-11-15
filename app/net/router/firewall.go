@@ -14,7 +14,7 @@ import (
 // RegisterFirewall mounts firewall routes with authentication and data permissions.
 func RegisterFirewall(engine *gin.Engine, auth *jwt.GinJWTMiddleware) {
 	r := engine.Group("/api/v1/network-firewall").Use(auth.MiddlewareFunc()).Use(firewallRoutePermission()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
-	handlers := (&handler.Firewall{}).Handlers()
+	handlers := handler.Firewall{}.Handlers()
 	for _, route := range FirewallRoutes {
 		handler := handlers[route.Handler]
 		if handler == nil {

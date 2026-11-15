@@ -14,7 +14,7 @@ import (
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/domains [get]
 // @Security Bearer
-func (e *Firewall) Domains(c *gin.Context) {
+func (e Firewall) Domains(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		return s.Domains(ctx)
@@ -28,7 +28,7 @@ func (e *Firewall) Domains(c *gin.Context) {
 // @Router /api/v1/network-firewall/domains [post]
 // @Router /api/v1/network-firewall/domains/{id} [put]
 // @Security Bearer
-func (e *Firewall) SaveDomain(c *gin.Context) {
+func (e Firewall) SaveDomain(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -49,7 +49,7 @@ func (e *Firewall) SaveDomain(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances [get]
 // @Security Bearer
-func (e *Firewall) Instances(c *gin.Context) {
+func (e Firewall) Instances(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		p, err := page(c)
@@ -67,7 +67,7 @@ func (e *Firewall) Instances(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances [post]
 // @Security Bearer
-func (e *Firewall) CreateInstance(c *gin.Context) {
+func (e Firewall) CreateInstance(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		var in service.InstanceInput
@@ -84,7 +84,7 @@ func (e *Firewall) CreateInstance(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id} [get]
 // @Security Bearer
-func (e *Firewall) Instance(c *gin.Context) {
+func (e Firewall) Instance(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -101,7 +101,7 @@ func (e *Firewall) Instance(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/settings [get]
 // @Security Bearer
-func (e *Firewall) Settings(c *gin.Context) {
+func (e Firewall) Settings(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -118,7 +118,7 @@ func (e *Firewall) Settings(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/settings [put]
 // @Security Bearer
-func (e *Firewall) SaveSettings(c *gin.Context) {
+func (e Firewall) SaveSettings(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -139,7 +139,7 @@ func (e *Firewall) SaveSettings(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/coverage [get]
 // @Security Bearer
-func (e *Firewall) Coverage(c *gin.Context) {
+func (e Firewall) Coverage(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -156,7 +156,7 @@ func (e *Firewall) Coverage(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/imports [post]
 // @Security Bearer
-func (e *Firewall) EnqueueImport(c *gin.Context) {
+func (e Firewall) EnqueueImport(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -177,7 +177,7 @@ func (e *Firewall) EnqueueImport(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/imports [get]
 // @Security Bearer
-func (e *Firewall) Imports(c *gin.Context) {
+func (e Firewall) Imports(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -199,7 +199,7 @@ func (e *Firewall) Imports(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/imports/{id} [get]
 // @Security Bearer
-func (e *Firewall) Import(c *gin.Context) {
+func (e Firewall) Import(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -216,7 +216,7 @@ func (e *Firewall) Import(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/imports/{id}/cancel [post]
 // @Security Bearer
-func (e *Firewall) CancelImport(c *gin.Context) {
+func (e Firewall) CancelImport(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -236,7 +236,7 @@ func (e *Firewall) CancelImport(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/instances/{id}/snapshots [get]
 // @Security Bearer
-func (e *Firewall) Snapshots(c *gin.Context) {
+func (e Firewall) Snapshots(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -258,7 +258,7 @@ func (e *Firewall) Snapshots(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/snapshots/{id}/objects/{kind} [get]
 // @Security Bearer
-func (e *Firewall) Objects(c *gin.Context) {
+func (e Firewall) Objects(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -280,7 +280,7 @@ func (e *Firewall) Objects(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/snapshots/{id}/objects/{kind}/{objectId} [get]
 // @Security Bearer
-func (e *Firewall) Object(c *gin.Context) {
+func (e Firewall) Object(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -301,7 +301,7 @@ func (e *Firewall) Object(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/snapshots/{id}/objects/{kind}/{objectId}/references [get]
 // @Security Bearer
-func (e *Firewall) References(c *gin.Context) {
+func (e Firewall) References(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -322,7 +322,7 @@ func (e *Firewall) References(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/requests [get]
 // @Security Bearer
-func (e *Firewall) Requests(c *gin.Context) {
+func (e Firewall) Requests(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		p, err := page(c)
@@ -341,7 +341,7 @@ func (e *Firewall) Requests(c *gin.Context) {
 // @Router /api/v1/network-firewall/requests [post]
 // @Router /api/v1/network-firewall/requests/{id} [put]
 // @Security Bearer
-func (e *Firewall) SaveRequest(c *gin.Context) {
+func (e Firewall) SaveRequest(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -362,7 +362,7 @@ func (e *Firewall) SaveRequest(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/requests/{id} [get]
 // @Security Bearer
-func (e *Firewall) Request(c *gin.Context) {
+func (e Firewall) Request(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -379,7 +379,7 @@ func (e *Firewall) Request(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/requests/{id}/analyses [post]
 // @Security Bearer
-func (e *Firewall) EnqueueAnalysis(c *gin.Context) {
+func (e Firewall) EnqueueAnalysis(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -400,7 +400,7 @@ func (e *Firewall) EnqueueAnalysis(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/requests/{id}/analyses [get]
 // @Security Bearer
-func (e *Firewall) Analyses(c *gin.Context) {
+func (e Firewall) Analyses(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -422,7 +422,7 @@ func (e *Firewall) Analyses(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/analyses/{id} [get]
 // @Security Bearer
-func (e *Firewall) Analysis(c *gin.Context) {
+func (e Firewall) Analysis(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -439,7 +439,7 @@ func (e *Firewall) Analysis(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/analyses/{id}/cancel [post]
 // @Security Bearer
-func (e *Firewall) CancelAnalysis(c *gin.Context) {
+func (e Firewall) CancelAnalysis(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -459,7 +459,7 @@ func (e *Firewall) CancelAnalysis(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/drafts [post]
 // @Security Bearer
-func (e *Firewall) EnqueueDraft(c *gin.Context) {
+func (e Firewall) EnqueueDraft(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		var in service.DraftInput
@@ -476,7 +476,7 @@ func (e *Firewall) EnqueueDraft(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/drafts [get]
 // @Security Bearer
-func (e *Firewall) Drafts(c *gin.Context) {
+func (e Firewall) Drafts(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		p, err := page(c)
@@ -494,7 +494,7 @@ func (e *Firewall) Drafts(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/drafts/{id} [get]
 // @Security Bearer
-func (e *Firewall) Draft(c *gin.Context) {
+func (e Firewall) Draft(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -511,7 +511,7 @@ func (e *Firewall) Draft(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/drafts/{id} [put]
 // @Security Bearer
-func (e *Firewall) EditDraft(c *gin.Context) {
+func (e Firewall) EditDraft(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -532,7 +532,7 @@ func (e *Firewall) EditDraft(c *gin.Context) {
 // @Success 200 {object} response.Response
 // @Router /api/v1/network-firewall/drafts/{id}/reanalyze [post]
 // @Security Bearer
-func (e *Firewall) ReanalyzeDraft(c *gin.Context) {
+func (e Firewall) ReanalyzeDraft(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
 		i, err := id(c, "id")
@@ -548,6 +548,6 @@ func (e *Firewall) ReanalyzeDraft(c *gin.Context) {
 }
 
 // Handlers is the compile-time method map used by the declared route contract.
-func (e *Firewall) Handlers() map[string]gin.HandlerFunc {
+func (e Firewall) Handlers() map[string]gin.HandlerFunc {
 	return map[string]gin.HandlerFunc{"Devices": e.Devices, "Connection": e.Connection, "SetConnection": e.SetConnection, "EnqueueCollection": e.EnqueueCollection, "Collections": e.Collections, "Collection": e.Collection, "CancelCollection": e.CancelCollection, "Options": e.Options, "Normalize": e.Normalize, "Domains": e.Domains, "SaveDomain": e.SaveDomain, "Instances": e.Instances, "CreateInstance": e.CreateInstance, "Instance": e.Instance, "Settings": e.Settings, "SaveSettings": e.SaveSettings, "Coverage": e.Coverage, "EnqueueImport": e.EnqueueImport, "Imports": e.Imports, "Import": e.Import, "CancelImport": e.CancelImport, "Snapshots": e.Snapshots, "Objects": e.Objects, "Object": e.Object, "References": e.References, "Requests": e.Requests, "SaveRequest": e.SaveRequest, "Request": e.Request, "EnqueueAnalysis": e.EnqueueAnalysis, "Analyses": e.Analyses, "Analysis": e.Analysis, "CancelAnalysis": e.CancelAnalysis, "EnqueueDraft": e.EnqueueDraft, "Drafts": e.Drafts, "Draft": e.Draft, "EditDraft": e.EditDraft, "ReanalyzeDraft": e.ReanalyzeDraft}
 }
