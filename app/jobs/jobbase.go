@@ -55,7 +55,7 @@ func (e *ExecJob) Run() {
 		logger.Warn("job: execution target is not registered")
 		return
 	}
-	if err := CallExec(job, e.Args); err != nil {
+	if err := job.Exec(e.Args); err != nil {
 		logger.Errorf("job %s: %v", e.Name, err)
 		return
 	}
@@ -160,24 +160,3 @@ func (e *ExecJob) addJob(c *cron.Cron) (int, error) {
 	}
 	return int(id), nil
 }
-
-// Remove 移除任务
-func Remove(c *cron.Cron, entryID int) chan bool {
-	ch := make(chan bool, 1)
-	go func() {
-		c.Remove(cron.EntryID(entryID))
-		log.NewHelper(log.Default()).Infof("removed scheduler entry %d", entryID)
-		ch <- true
-	}()
-	return ch
-}
-
-// 任务停止
-//func Stop() chan bool {
-//	ch := make(chan bool)
-//	go func() {
-//		global.GADMCron.Stop()
-//		ch <- true
-//	}()
-//	return ch
-//}

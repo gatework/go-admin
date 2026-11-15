@@ -1,9 +1,21 @@
 package models
 
 import (
-	"gorm.io/gorm"
-
 	"github.com/gatework/motor/common/models"
+)
+
+// Job types (sys_job.job_type).
+const (
+	// TypeHTTP requests InvokeTarget as a URL.
+	TypeHTTP = 1
+	// TypeTask runs the registered task named by InvokeTarget.
+	TypeTask = 2
+)
+
+// Job states (sys_job.status), as the sys_job_status dictionary labels them.
+const (
+	StatusStopped = 1
+	StatusEnabled = 2
 )
 
 // SysJob stores sys job data in the database.
@@ -43,22 +55,4 @@ func (e *SysJob) SetCreateBy(createBy int) {
 // SetUpdateBy stores set update by data in the database.
 func (e *SysJob) SetUpdateBy(updateBy int) {
 	e.UpdateBy = updateBy
-}
-
-// GetList stores get list data in the database.
-func (e *SysJob) GetList(tx *gorm.DB, list any) (err error) {
-	return tx.Table(e.TableName()).Where("status = ?", 2).Find(list).Error
-}
-
-// Update 更新SysJob
-func (e *SysJob) Update(tx *gorm.DB, id any) (err error) {
-	return tx.Table(e.TableName()).Where(id).Updates(&e).Error
-}
-
-// RemoveAllEntryID stores remove all entry id data in the database.
-func (e *SysJob) RemoveAllEntryID(tx *gorm.DB) (update SysJob, err error) {
-	if err = tx.Table(e.TableName()).Where("entry_id > ?", 0).Update("entry_id", 0).Error; err != nil {
-		return
-	}
-	return
 }

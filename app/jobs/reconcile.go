@@ -47,7 +47,7 @@ func ReconcileCron(ctx context.Context, db *gorm.DB, c *cron.Cron) error {
 		// Explicit standalone Cron callers retain the legacy entry-ID removal
 		// contract for custom jobs; managed schedulers use stable job IDs instead.
 		var stopped []models.SysJob
-		if err := db.WithContext(ctx).Where("status <> ? AND entry_id <> ?", 2, 0).Find(&stopped).Error; err != nil {
+		if err := db.WithContext(ctx).Where("status <> ? AND entry_id <> ?", models.StatusEnabled, 0).Find(&stopped).Error; err != nil {
 			return err
 		}
 		for _, job := range stopped {
@@ -69,7 +69,7 @@ func ReconcileCron(ctx context.Context, db *gorm.DB, c *cron.Cron) error {
 
 func loadJobs(ctx context.Context, db *gorm.DB) ([]models.SysJob, error) {
 	var list []models.SysJob
-	err := db.WithContext(ctx).Where("status = ?", 2).Find(&list).Error
+	err := db.WithContext(ctx).Where("status = ?", models.StatusEnabled).Find(&list).Error
 	return list, err
 }
 
@@ -81,9 +81,9 @@ func jobCore(job models.SysJob) JobCore {
 func entryCore(job cron.Job) (JobCore, int) {
 	switch j := job.(type) {
 	case *HTTPJob:
-		return j.JobCore, 1
+		return j.JobCore, models.TypeHTTP
 	case *ExecJob:
-		return j.JobCore, 2
+		return j.JobCore, models.TypeTask
 	default:
 		return JobCore{}, 0
 	}
@@ -142,9 +142,9 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, executio
 		}
 		var runnable Job
 		switch job.JobType {
-		case 1:
+		case models.TypeHTTP:
 			runnable = &HTTPJob{JobCore: jobCore(*job), allowed: execution.allowed, execution: execution.ctx}
-		case 2:
+		case models.TypeTask:
 			runnable = &ExecJob{JobCore: jobCore(*job), allowed: execution.allowed}
 		default:
 			return fmt.Errorf("unsupported job type %d for job %d", job.JobType, job.JobID)
@@ -161,10 +161,10 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, executio
 func saveEntryIDs(ctx context.Context, db *gorm.DB, list []models.SysJob) error {
 	for _, job := range list {
 		if err := db.WithContext(ctx).Model(&models.SysJob{}).
-			Where("job_id = ? AND status = ? AND entry_id <> ?", job.JobID, 2, job.EntryID).
+			Where("job_id = ? AND status = ? AND entry_id <> ?", job.JobID, models.StatusEnabled, job.EntryID).
 			UpdateColumn("entry_id", job.EntryID).Error; err != nil {
 			return err
 		}
 	}
-	return db.WithContext(ctx).Model(&models.SysJob{}).Where("status <> ? AND entry_id <> ?", 2, 0).UpdateColumn("entry_id", 0).Error
+	return db.WithContext(ctx).Model(&models.SysJob{}).Where("status <> ? AND entry_id <> ?", models.StatusEnabled, 0).UpdateColumn("entry_id", 0).Error
 }

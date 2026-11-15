@@ -27,13 +27,13 @@ type SysJob struct {
 // RemoveJob persists stopped intent so a restart or lease takeover cannot
 // resurrect it. Running invocations are allowed to finish.
 func (e *SysJob) RemoveJob(c *dto.DeleteRequest) error {
-	return e.setStatus(c.ID, 1)
+	return e.setStatus(c.ID, models.StatusStopped)
 }
 
 // StartJob is idempotent and enables the persisted job. Standby requests
 // persist intent; only the lease holder dispatches it after reconciliation.
 func (e *SysJob) StartJob(c *dto.GetRequest) error {
-	return e.setStatus(c.ID, 2)
+	return e.setStatus(c.ID, models.StatusEnabled)
 }
 
 func (e *SysJob) setStatus(id int, status int) error {
@@ -42,8 +42,8 @@ func (e *SysJob) setStatus(id int, status int) error {
 	if err := db.First(&job, id).Error; err != nil {
 		return err
 	}
-	if status == 2 {
-		if job.JobType != 1 && job.JobType != 2 {
+	if status == models.StatusEnabled {
+		if job.JobType != models.TypeHTTP && job.JobType != models.TypeTask {
 			return fmt.Errorf("unsupported job type %d", job.JobType)
 		}
 		parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.DowOptional | cron.Descriptor)

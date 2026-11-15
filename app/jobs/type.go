@@ -12,8 +12,3 @@ type Job interface {
 type JobExec interface {
 	Exec(arg any) error
 }
-
-// CallExec provides call exec for this module.
-func CallExec(e JobExec, arg any) error {
-	return e.Exec(arg)
-}

@@ -88,12 +88,12 @@ func (s *SysJobControl) Bind(ctx *gin.Context) error {
 		}
 	}
 	if _, ok := s.present["jobtype"]; ok || ctx.Request.Method == http.MethodPost {
-		if s.JobType != 1 && s.JobType != 2 {
+		if s.JobType != models.TypeHTTP && s.JobType != models.TypeTask {
 			return errors.New("jobType must be 1 or 2")
 		}
 	}
 	if _, ok := s.present["status"]; ok || ctx.Request.Method == http.MethodPost {
-		if s.Status != 1 && s.Status != 2 {
+		if s.Status != models.StatusStopped && s.Status != models.StatusEnabled {
 			return errors.New("status must be 1 or 2")
 		}
 	}
