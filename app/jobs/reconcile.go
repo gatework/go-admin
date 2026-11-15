@@ -60,10 +60,11 @@ func ReconcileCron(ctx context.Context, db *gorm.DB, c *cron.Cron) error {
 		if err != nil {
 			return err
 		}
+		stored := storedEntryIDs(list)
 		if err = applyJobs(ctx, c, list, jobExecution{ctx: context.Background()}); err != nil {
 			return err
 		}
-		return saveEntryIDs(ctx, db, list)
+		return saveEntryIDs(ctx, db, list, stored)
 	})
 }
 
@@ -158,10 +159,26 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, executio
 	return nil
 }
 
-func saveEntryIDs(ctx context.Context, db *gorm.DB, list []models.SysJob) error {
+// storedEntryIDs records each job's entry_id as loaded, before applyJobs
+// overwrites it, so that only changes are written back.
+func storedEntryIDs(list []models.SysJob) map[int]int {
+	stored := make(map[int]int, len(list))
 	for _, job := range list {
+		stored[job.JobID] = job.EntryID
+	}
+	return stored
+}
+
+// saveEntryIDs writes back the entry IDs that changed. The leader reconciles
+// every heartbeat, and almost always nothing has: it used to issue one UPDATE
+// per enabled job each time regardless.
+func saveEntryIDs(ctx context.Context, db *gorm.DB, list []models.SysJob, stored map[int]int) error {
+	for _, job := range list {
+		if stored[job.JobID] == job.EntryID {
+			continue
+		}
 		if err := db.WithContext(ctx).Model(&models.SysJob{}).
-			Where("job_id = ? AND status = ? AND entry_id <> ?", job.JobID, models.StatusEnabled, job.EntryID).
+			Where("job_id = ? AND status = ?", job.JobID, models.StatusEnabled).
 			UpdateColumn("entry_id", job.EntryID).Error; err != nil {
 			return err
 		}

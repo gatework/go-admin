@@ -218,6 +218,7 @@ func (s *supervisor) reconcile(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		stored := storedEntryIDs(list)
 		if !s.holdsLease() {
 			return nil
 		}
@@ -228,6 +229,6 @@ func (s *supervisor) reconcile(ctx context.Context) error {
 			return ctx.Err()
 		}
 		s.control.start()
-		return saveEntryIDs(ctx, s.db, list)
+		return saveEntryIDs(ctx, s.db, list, stored)
 	})
 }
