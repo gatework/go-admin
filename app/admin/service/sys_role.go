@@ -28,7 +28,7 @@ func (e *Role) List(ctx context.Context, c *dto.RoleSearch, list *[]models.SysRo
 	var err error
 	var data models.SysRole
 
-	err = e.DB.WithContext(ctx).Model(&data).Preload("SysMenu").
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
