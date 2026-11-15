@@ -10,10 +10,11 @@ import (
 // DictionarySearch carries validated administration request parameters.
 type DictionarySearch struct {
 	dto.Pagination `search:"-"`
-	DictID         []int  `form:"dictId" search:"type:in;column:dict_id;table:sys_dict_type"`
-	DictName       string `form:"dictName" search:"type:icontains;column:dict_name;table:sys_dict_type"`
-	DictType       string `form:"dictType" search:"type:icontains;column:dict_type;table:sys_dict_type"`
-	Status         int    `form:"status" search:"type:exact;column:status;table:sys_dict_type"`
+	DictionaryOrder
+	DictID   []int  `form:"dictId" search:"type:in;column:dict_id;table:sys_dict_type"`
+	DictName string `form:"dictName" search:"type:icontains;column:dict_name;table:sys_dict_type"`
+	DictType string `form:"dictType" search:"type:icontains;column:dict_type;table:sys_dict_type"`
+	Status   int    `form:"status" search:"type:exact;column:status;table:sys_dict_type"`
 }
 
 // DictionaryOrder carries validated administration request parameters.

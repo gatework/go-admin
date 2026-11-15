@@ -10,6 +10,7 @@ import (
 // RoleSearch carries validated administration request parameters.
 type RoleSearch struct {
 	dto.Pagination `search:"-"`
+	RoleOrder
 
 	RoleID    int    `form:"roleId" search:"type:exact;column:role_id;table:sys_role" comment:"角色编码"`     // 角色编码
 	RoleName  string `form:"roleName" search:"type:exact;column:role_name;table:sys_role" comment:"角色名称"` // 角色名称
@@ -26,7 +27,7 @@ type RoleSearch struct {
 type RoleOrder struct {
 	RoleIDOrder    string `search:"type:order;column:role_id;table:sys_role" form:"roleIdOrder"`
 	RoleNameOrder  string `search:"type:order;column:role_name;table:sys_role" form:"roleNameOrder"`
-	RoleSortOrder  string `search:"type:order;column:role_sort;table:sys_role" form:"usernameOrder"`
+	RoleSortOrder  string `search:"type:order;column:role_sort;table:sys_role" form:"roleSortOrder"`
 	StatusOrder    string `search:"type:order;column:status;table:sys_role" form:"statusOrder"`
 	CreatedAtOrder string `search:"type:order;column:created_at;table:sys_role" form:"createdAtOrder"`
 }
