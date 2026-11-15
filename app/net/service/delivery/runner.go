@@ -242,43 +242,59 @@ func (w *Worker) failQuarantined(ctx context.Context, due *gorm.DB) error {
 	}
 	return nil
 }
+
+// errCheck is a pre-command check that could not run, usually because the
+// database could not be read. It is not a finding about the order or device.
+var errCheck = errors.New("delivery: pre-command check could not run")
+
+// check confirms, before the target touches its device, that it still holds
+// its device lease and claim, that its order was not cancelled, and that the
+// device and its connection are still the ones planned. A failed finding is
+// CancelledErr or IdentityErr; a check that could not run is errCheck.
 func (w *Worker) check(ctx context.Context, t models.Target) error {
 	if e := ctx.Err(); e != nil {
 		return e
 	}
-	if e := lease.Check(w.s.db(ctx), lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}); e != nil {
+	failed := func(e error) error { return fmt.Errorf("%w: %w", errCheck, e) }
+	db := w.s.db(ctx)
+	if e := lease.Check(db, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}); errors.Is(e, lease.LostErr) {
 		return CancelledErr
+	} else if e != nil {
+		return failed(e)
 	}
 	var current models.Target
-	if e := w.s.db(ctx).First(&current, t.ID).Error; e != nil {
-		return e
+	if e := db.First(&current, t.ID).Error; e != nil {
+		return failed(e)
 	}
 	if current.Status != "running" || current.ClaimToken != t.ClaimToken || current.ClaimUntil == nil || time.Now().After(*current.ClaimUntil) {
 		return CancelledErr
 	}
 	var o models.Order
-	if e := w.s.db(ctx).First(&o, t.OrderID).Error; e != nil {
-		return e
+	if e := db.First(&o, t.OrderID).Error; e != nil {
+		return failed(e)
 	}
 	if o.CancelRequested {
 		return CancelledErr
 	}
 	var d inventory.Device
-	if e := w.s.db(ctx).First(&d, t.DeviceID).Error; e != nil {
+	if e := db.First(&d, t.DeviceID).Error; errors.Is(e, gorm.ErrRecordNotFound) {
 		return IdentityErr
+	} else if e != nil {
+		return failed(e)
 	}
 	if !deviceaccess.Write.Allows(d.Status) {
 		return IdentityErr
 	}
 	c, e := w.s.connection(ctx, d)
 	if e != nil {
-		return IdentityErr
+		return failed(e)
 	}
 	if !matchesSnapshot(deviceSnapshot(d, c.Profile), t.Device) || c.Version != t.ConnectionVersion || c.Profile != t.Connection.Profile || c.Port != t.Connection.Port || c.Protocol != t.Connection.Protocol {
 		return IdentityErr
 	}
 	return nil
 }
+
 func summarize(tx *gorm.DB, id int) error {
 	// Lock the order through a write so concurrent completions cannot overwrite counts
 	// computed before another target commits (works on SQLite as well as SQL engines).
@@ -468,6 +484,9 @@ func executionFailure(e error, attempted bool, status, code string) (string, str
 	} else if errors.Is(e, IdentityErr) {
 		status = "failed"
 		code = "device_changed"
+	} else if errors.Is(e, errCheck) {
+		status = "failed"
+		code = "check_failed"
 	}
 	return status, code
 }

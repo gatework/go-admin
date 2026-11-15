@@ -19,8 +19,10 @@ import (
 // Connection provides the connection operation within the caller's authorized delivery scope.
 func (s *Workflow) Connection(ctx context.Context, id int, p *actions.DataPermission) (models.Connection, error) {
 	var d inventory.Device
-	if e := s.inventory(ctx, p).First(&d, id).Error; e != nil {
+	if e := s.inventory(ctx, p).First(&d, id).Error; errors.Is(e, gorm.ErrRecordNotFound) {
 		return models.Connection{}, NotFoundErr
+	} else if e != nil {
+		return models.Connection{}, e
 	}
 	return s.connection(ctx, d)
 }

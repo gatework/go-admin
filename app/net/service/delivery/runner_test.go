@@ -358,3 +358,40 @@ func TestQuarantinedDeviceFailsPendingTargetVisibly(t *testing.T) {
 		t.Fatal("the quarantine changed", e)
 	}
 }
+
+// The pre-command check reports what it found. A database it cannot read is
+// a failed check, not a cancelled order or a changed device: those two decide
+// what an operator is told and whether a target may be retried.
+func TestCheckDoesNotDisguiseDatabaseFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name, sql string
+		want      error
+	}{
+		{"lease table unreadable", "DROP TABLE sys_delivery_device_lease", errCheck},
+		{"device table unreadable", "DROP TABLE sys_network_device", errCheck},
+		{"device deleted", "DELETE FROM sys_network_device", IdentityErr},
+		{"order cancelled", "UPDATE sys_delivery_order SET cancel_requested = true", CancelledErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fixture(t)
+			queued(t, s)
+			w := NewWorker(s, func(models.Target) (Session, error) { return &fakeSession{}, nil })
+			target, e := w.Claim(context.Background())
+			if e != nil || target == nil {
+				t.Fatal(e)
+			}
+			if err := s.DB.Exec(tc.sql).Error; err != nil {
+				t.Fatal(err)
+			}
+			e = w.check(context.Background(), *target)
+			if !errors.Is(e, tc.want) {
+				t.Fatalf("check = %v, want %v", e, tc.want)
+			}
+			for _, other := range []error{errCheck, IdentityErr, CancelledErr} {
+				if !errors.Is(tc.want, other) && errors.Is(e, other) {
+					t.Fatalf("check = %v, also reads as %v", e, other)
+				}
+			}
+		})
+	}
+}
