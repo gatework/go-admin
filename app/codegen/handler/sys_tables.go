@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/gatework/motor-core/logger"
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/pkg"
@@ -33,8 +32,11 @@ type Table struct {
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/sys/tables/page [get]
 func (e Table) List(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	var data models.SysTables
 	var err error
@@ -55,13 +57,6 @@ func (e Table) List(c *gin.Context) {
 			e.Error(400, err, "invalid pagination")
 			return
 		}
-	}
-
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
-		return
 	}
 
 	data.TBName = c.Request.FormValue("tableName")
@@ -85,15 +80,12 @@ func (e Table) List(c *gin.Context) {
 // @Router /api/v1/sys/tables/info/{tableId} [get]
 // @Security Bearer
 func (e Table) Get(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
-	log := e.Logger
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
 		return
 	}
+	e.API = requestAPI
+	log := e.Logger
 
 	var data models.SysTables
 	data.TableID, _ = pkg.StringToInt(c.Param("tableId"))
@@ -112,15 +104,12 @@ func (e Table) Get(c *gin.Context) {
 
 // Columns provides get sys tables info for this module.
 func (e Table) Columns(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
-	log := e.Logger
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
 		return
 	}
+	e.API = requestAPI
+	log := e.Logger
 
 	var data models.SysTables
 	if c.Request.FormValue("tableName") != "" {
@@ -143,15 +132,12 @@ func (e Table) Columns(c *gin.Context) {
 
 // Tree provides get sys tables tree for this module.
 func (e Table) Tree(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
-	log := e.Logger
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
 		return
 	}
+	e.API = requestAPI
+	log := e.Logger
 
 	var data models.SysTables
 	result, err := data.GetTree(db)
@@ -178,15 +164,12 @@ func (e Table) Tree(c *gin.Context) {
 // @Router /api/v1/sys/tables/info [post]
 // @Security Bearer
 func (e Table) Create(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
-	log := e.Logger
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
 		return
 	}
+	e.API = requestAPI
+	log := e.Logger
 
 	tablesList, err := tablesToImport(c)
 	if err != nil {
@@ -357,18 +340,15 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (mode
 // @Router /api/v1/sys/tables/info [put]
 // @Security Bearer
 func (e Table) Update(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	var data models.SysTables
 	if err := c.ShouldBind(&data); err != nil {
 		e.Error(400, nil, "数据解析失败")
-		return
-	}
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
 		return
 	}
 
@@ -376,17 +356,17 @@ func (e Table) Update(c *gin.Context) {
 	// its own (API契约.md §1.2/§2.1, D6) - see sys_tables_validate.go for
 	// what each check guards and why colWidth is sanitized in place rather
 	// than rejected.
-	if err = validateAndSanitizeColumns(data.Columns); err != nil {
+	if err := validateAndSanitizeColumns(data.Columns); err != nil {
 		log.Errorf("validate columns error, %s", err.Error())
 		e.Error(500, err, err.Error())
 		return
 	}
-	if err = validateGenPathFields(data); err != nil {
+	if err := validateGenPathFields(data); err != nil {
 		log.Errorf("validate table error, %s", err.Error())
 		e.Error(500, err, err.Error())
 		return
 	}
-	if err = validateBusinessNameUnique(db, data.PackageName, data.BusinessName, data.TableID); err != nil {
+	if err := validateBusinessNameUnique(db, data.PackageName, data.BusinessName, data.TableID); err != nil {
 		log.Errorf("validate businessName error, %s", err.Error())
 		e.Error(500, err, err.Error())
 		return
@@ -412,19 +392,16 @@ func (e Table) Update(c *gin.Context) {
 // @Success 200 {string} string	"{"code": -1, "message": "删除失败"}"
 // @Router /api/v1/sys/tables/info/{tableId} [delete]
 func (e Table) Delete(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
-	log := e.Logger
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
 		return
 	}
+	e.API = requestAPI
+	log := e.Logger
 
 	var data models.SysTables
 	IDs := pkg.IDsStrToIDsIntGroup("tableId", c)
-	_, err = data.BatchDelete(db, IDs)
+	_, err := data.BatchDelete(db, IDs)
 	if err != nil {
 		log.Errorf("BatchDelete error, %s", err.Error())
 		e.Error(500, err, "删除失败")

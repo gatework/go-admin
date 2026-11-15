@@ -18,7 +18,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/pkg"
@@ -56,7 +55,11 @@ func parseGenTemplate(path string) (*template.Template, error) {
 
 // Preview provides preview for this module.
 func (e Generator) Preview(c *gin.Context) {
-	e.API = api.API{Context: c, Logger: logger.NewHelper(logger.Default())}
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	table := models.SysTables{}
 	id, err := pkg.StringToInt(c.Param("tableId"))
@@ -70,13 +73,6 @@ func (e Generator) Preview(c *gin.Context) {
 	if err != nil {
 		log.Error(err)
 		e.Error(500, err, fmt.Sprintf("%s！错误详情：%s", message, err.Error()))
-		return
-	}
-
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, fmt.Sprintf("数据库链接获取失败！错误详情：%s", err.Error()))
 		return
 	}
 
@@ -123,20 +119,17 @@ func (e Generator) Preview(c *gin.Context) {
 
 // Generate provides gen code for this module.
 func (e Generator) Generate(c *gin.Context) {
-	e.API = api.API{Context: c, Logger: logger.NewHelper(logger.Default())}
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	table := models.SysTables{}
 	id, err := pkg.StringToInt(c.Param("tableId"))
 	if err != nil {
 		log.Error(err)
 		e.Error(500, err, fmt.Sprintf("tableId参数接收失败！错误详情：%s", err.Error()))
-		return
-	}
-
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, fmt.Sprintf("数据库链接获取失败！错误详情：%s", err.Error()))
 		return
 	}
 
@@ -157,20 +150,17 @@ func (e Generator) Generate(c *gin.Context) {
 
 // GenerateMigration provides gen apito file for this module.
 func (e Generator) GenerateMigration(c *gin.Context) {
-	e.API = api.API{Context: c, Logger: logger.NewHelper(logger.Default())}
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	table := models.SysTables{}
 	id, err := pkg.StringToInt(c.Param("tableId"))
 	if err != nil {
 		log.Error(err)
 		e.Error(500, err, fmt.Sprintf("tableId参数获取失败！错误详情：%s", err.Error()))
-		return
-	}
-
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, fmt.Sprintf("数据库链接获取失败！错误详情：%s", err.Error()))
 		return
 	}
 
@@ -401,7 +391,9 @@ func generatedActionMenu(tab models.SysTables, parentID, creator int, title, per
 // reports whether it did. On false it has already written the error response,
 // and nothing has been written to disk if a template failed to render.
 func (e Generator) writeFiles(c *gin.Context, tab models.SysTables) bool {
-	e.API = api.API{Context: c, Logger: logger.NewHelper(logger.Default())}
+	if e.Context == nil {
+		e.API = api.API{Context: c, Logger: api.GetRequestLogger(c)}
+	}
 	log := e.Logger
 	tab.MLTBName = strings.ReplaceAll(tab.TBName, "_", "-")
 	if err := requireSinglePrimaryKey(tab); err != nil {

@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/gatework/motor-core/logger"
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/pkg"
 
@@ -26,8 +25,11 @@ const emptyTableNameMsg = "table name cannot be empty！"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/db/columns/page [get]
 func (e Generator) GetDBColumnList(c *gin.Context) {
-	e.Context = c
-	e.Logger = logger.NewHelper(logger.Default())
+	requestAPI, db, ok := prepareRequest(c)
+	if !ok {
+		return
+	}
+	e.API = requestAPI
 	log := e.Logger
 	var data models.DBColumns
 	var err error
@@ -48,13 +50,6 @@ func (e Generator) GetDBColumnList(c *gin.Context) {
 			e.Error(400, err, "invalid pagination")
 			return
 		}
-	}
-
-	db, err := pkg.GetORM(c)
-	if err != nil {
-		log.Errorf("get db connection error, %s", err.Error())
-		e.Error(500, err, "数据库连接获取失败")
-		return
 	}
 
 	data.TableName = c.Request.FormValue("tableName")
