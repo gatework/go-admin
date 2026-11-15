@@ -203,7 +203,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 			}
 			continue
 		}
-		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, 0, runTimeout)
+		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, lease.Holder{Kind: lease.FabricCollectionNode, ID: job.ID}, runTimeout)
 		if code := leaseFailure(e, "device_busy"); code != "" {
 			t.Status = "failed"
 			t.ErrorCode = code

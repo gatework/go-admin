@@ -27,7 +27,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 		go func(db *gorm.DB) {
 			defer wg.Done()
 			<-start
-			_, err := lease.Acquire(db, 10, 0, time.Minute)
+			_, err := lease.Acquire(db, 10, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 			result <- err == nil
 			if errors.Is(err, lease.BusyErr) {
 				err = nil
@@ -55,7 +55,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	}
 	rollback := errors.New("business write failed")
 	err := a.Transaction(func(tx *gorm.DB) error {
-		_, err := lease.Acquire(tx, 20, 0, time.Minute)
+		_, err := lease.Acquire(tx, 20, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	next, err := lease.Acquire(b, 20, 0, time.Minute)
+	next, err := lease.Acquire(b, 20, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 	if err != nil {
 		t.Fatal("rolled-back claim survived", err)
 	}
@@ -76,7 +76,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if _, err := lease.Acquire(b, 20, 0, time.Minute); !errors.Is(err, lease.BusyErr) {
+	if _, err := lease.Acquire(b, 20, lease.Holder{Kind: "test", ID: 0}, time.Minute); !errors.Is(err, lease.BusyErr) {
 		t.Fatal("rolled-back release escaped", err)
 	}
 }
@@ -147,11 +147,11 @@ func TestOldOwnerCannotCleanReplacement(t *testing.T) {
 func TestPublicationOwnerLockAndTenantIsolation(t *testing.T) {
 	a, b := database(t)
 	other, _ := database(t)
-	owner, err := lease.Acquire(a, 1, 0, time.Minute)
+	owner, err := lease.Acquire(a, 1, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 	if err != nil {
 		t.Fatal("tenant claim", err)
 	}
-	otherOwner, err := lease.Acquire(other, 1, 0, time.Minute)
+	otherOwner, err := lease.Acquire(other, 1, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 	if err != nil {
 		t.Fatal("other tenant claim", err)
 	}
@@ -304,7 +304,7 @@ func TestDeliveryCancellationStillCleansConfirmedClose(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("cancel did not stop worker")
 	}
-	if _, err := lease.Acquire(b, target.DeviceID, 0, time.Minute); err != nil {
+	if _, err := lease.Acquire(b, target.DeviceID, lease.Holder{Kind: "test", ID: 0}, time.Minute); err != nil {
 		t.Fatal("cancel stranded confirmed-closed owner", err)
 	}
 }
@@ -395,7 +395,7 @@ func TestWorkersRacePastCandidateSelection(t *testing.T) {
 
 func TestReleaseRejectsLeaseThatExpiresWhileWaitingForOwnerLock(t *testing.T) {
 	a, b := database(t)
-	held, err := lease.Acquire(a, 1, 0, time.Minute)
+	held, err := lease.Acquire(a, 1, lease.Holder{Kind: "test", ID: 0}, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +458,7 @@ func TestReleaseRejectsLeaseThatExpiresWhileWaitingForOwnerLock(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("late release did not finish")
 	}
-	if _, err := lease.Acquire(a, 1, 0, time.Minute); !errors.Is(err, lease.QuarantinedErr) {
+	if _, err := lease.Acquire(a, 1, lease.Holder{Kind: "test", ID: 0}, time.Minute); !errors.Is(err, lease.QuarantinedErr) {
 		t.Fatalf("late release freed expired device: %v", err)
 	}
 }

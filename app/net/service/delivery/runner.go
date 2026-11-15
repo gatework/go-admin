@@ -344,7 +344,7 @@ func (w *Worker) finish(ctx context.Context, t models.Target, status, code, outp
 }
 
 func claimTarget(tx *gorm.DB, t *models.Target, now time.Time) error {
-	held, e := lease.Acquire(tx, t.DeviceID, t.ID, executionTimeout)
+	held, e := lease.Acquire(tx, t.DeviceID, lease.Holder{Kind: lease.DeliveryTarget, ID: t.ID}, executionTimeout)
 	if errors.Is(e, lease.BusyErr) || errors.Is(e, lease.QuarantinedErr) {
 		return ConflictErr
 	}

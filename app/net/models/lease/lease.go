@@ -6,7 +6,7 @@
 // The rules live here and nowhere else:
 //
 //   - A device has at most one lease. Taking one never waits: a held lease
-//     answers ErrBusy at once, so holding several (a fabric lock, then device
+//     answers BusyErr at once, so holding several (a fabric lock, then device
 //     leases, always in that order) cannot deadlock.
 //   - An expired device lease is never reused. Whoever finds it first, a
 //     caller in Acquire or any module's recovery through Sweep, turns it into
@@ -17,13 +17,14 @@
 //     of quarantined.
 //
 // Every call takes the caller's handle, so a lease can join the caller's
-// transaction. When Acquire answers ErrQuarantined after quarantining an
+// transaction. When Acquire answers QuarantinedErr after quarantining an
 // expired lease, that write is part of the caller's transaction; if the caller
 // rolls back, the next Sweep quarantines the lease again.
 package lease
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,11 +77,36 @@ type Lease struct {
 	ExpiresAt time.Time
 }
 
+// Holder names the job holding a lease, so that an operator reading the lease
+// table (for instance before clearing a quarantine) can find it. Kind names
+// the job's type, ID its row.
+type Holder struct {
+	Kind string
+	ID   int
+}
+
+// Holder kinds, one per kind of job that takes leases.
+const (
+	DeliveryTarget       = "delivery.target"
+	FabricCollection     = "fabric.collection"
+	FabricCollectionNode = "fabric.collection.target"
+	FabricChange         = "fabric.change"
+	FabricChangeSource   = "fabric.change.source"
+	FirewallCollection   = "firewall.collection"
+	WirelessCollection   = "wireless.collection"
+)
+
+// String is the holder as recorded, e.g. "fabric.change:12".
+func (h Holder) String() string { return fmt.Sprintf("%s:%d", h.Kind, h.ID) }
+
 // Record is the stored lease row. The table keeps its original name; only the
 // migration and this package refer to it.
 type Record struct {
-	DeviceID    int `gorm:"primaryKey;autoIncrement:false"`
-	TargetID    int
+	DeviceID int `gorm:"primaryKey;autoIncrement:false"`
+	// HolderID is the holder's row, in the column first named for delivery
+	// targets; Holder says whose row it is.
+	HolderID    int    `gorm:"column:target_id"`
+	Holder      string `gorm:"size:64"`
 	Token       string `gorm:"size:40"`
 	ExpiresAt   time.Time
 	Quarantined bool
@@ -94,29 +120,29 @@ const table = "sys_delivery_device_lease"
 // now is the module's one clock: UTC from the Go process, replaceable in tests.
 var now = func() time.Time { return time.Now().UTC() }
 
-// Acquire takes the lease on a device for work that runs at most run. ref
-// identifies the caller's job row for an operator reading the table.
-func Acquire(db *gorm.DB, deviceID, ref int, run time.Duration) (Lease, error) {
+// Acquire takes the lease on a device for work that runs at most run,
+// recording holder for an operator reading the table.
+func Acquire(db *gorm.DB, deviceID int, holder Holder, run time.Duration) (Lease, error) {
 	if deviceID <= 0 {
 		return Lease{}, InvalidErr
 	}
-	return take(db, deviceID, ref, run, false)
+	return take(db, deviceID, holder, run, false)
 }
 
 // LockFabric takes the fabric lock that serialises coordination of one Fabric.
 // Release it with NoSession.
-func LockFabric(db *gorm.DB, fabricID, ref int, run time.Duration) (Lease, error) {
+func LockFabric(db *gorm.DB, fabricID int, holder Holder, run time.Duration) (Lease, error) {
 	if fabricID <= 0 {
 		return Lease{}, InvalidErr
 	}
 	// Fabric locks share the device table under negative keys, which no
 	// inventory device can have.
-	return take(db, -fabricID, ref, run, true)
+	return take(db, -fabricID, holder, run, true)
 }
 
-func take(db *gorm.DB, key, ref int, run time.Duration, fabric bool) (Lease, error) {
+func take(db *gorm.DB, key int, holder Holder, run time.Duration, fabric bool) (Lease, error) {
 	l := Lease{DeviceID: key, Token: uuid.NewString(), ExpiresAt: now().Add(run + Margin)}
-	q := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, TargetID: ref, Token: l.Token, ExpiresAt: l.ExpiresAt})
+	q := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, HolderID: holder.ID, Holder: holder.String(), Token: l.Token, ExpiresAt: l.ExpiresAt})
 	if q.Error != nil {
 		return Lease{}, q.Error
 	}
@@ -139,7 +165,7 @@ func take(db *gorm.DB, key, ref int, run time.Duration, fabric bool) (Lease, err
 		if err := db.Where("device_id = ? AND token = ?", key, held.Token).Delete(&Record{}).Error; err != nil {
 			return Lease{}, err
 		}
-		q = db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, TargetID: ref, Token: l.Token, ExpiresAt: l.ExpiresAt})
+		q = db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Record{DeviceID: key, HolderID: holder.ID, Holder: holder.String(), Token: l.Token, ExpiresAt: l.ExpiresAt})
 		if q.Error != nil {
 			return Lease{}, q.Error
 		}
@@ -162,7 +188,7 @@ func take(db *gorm.DB, key, ref int, run time.Duration, fabric bool) (Lease, err
 
 // Release ends a lease according to how its session ended: a confirmed close
 // or no session frees the device, an unconfirmed close quarantines it. It
-// answers ErrLost when the caller no longer holds the lease, and then changes
+// answers LostErr when the caller no longer holds the lease, and then changes
 // nothing: a quarantine set meanwhile stays.
 func Release(db *gorm.DB, l Lease, outcome Outcome) error {
 	return db.Transaction(func(tx *gorm.DB) error {

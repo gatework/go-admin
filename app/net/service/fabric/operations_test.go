@@ -183,7 +183,7 @@ func TestCollectionCannotRaceDeliveryDeviceLease(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = s.DB.Create(&delivery.DeviceLease{DeviceID: 1, TargetID: 22, Token: "delivery", ExpiresAt: time.Now().Add(time.Minute)}).Error; e != nil {
+	if e = s.DB.Create(&delivery.DeviceLease{DeviceID: 1, HolderID: 22, Token: "delivery", ExpiresAt: time.Now().Add(time.Minute)}).Error; e != nil {
 		t.Fatal(e)
 	}
 	fake := &fakeFabricTransport{bodies: map[int]string{2: gatewayConfig, 3: gatewayConfig}}
@@ -311,7 +311,7 @@ func TestRecoverInterruptedChangeDoesNotRequeueAndKeepsLease(t *testing.T) {
 	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Updates(map[string]any{"status": "running", "targets": opsJSON(c.Targets), "lease_until": past}).Error; e != nil {
 		t.Fatal(e)
 	}
-	s.DB.Create(&delivery.DeviceLease{DeviceID: 2, TargetID: c.Targets[0].DeliveryTargetID, Token: "dead", ExpiresAt: past})
+	s.DB.Create(&delivery.DeviceLease{DeviceID: 2, HolderID: c.Targets[0].DeliveryTargetID, Token: "dead", ExpiresAt: past})
 	fake := &fakeFabricTransport{}
 	w := NewWorker(s, fake)
 	if e := w.Recover(context.Background()); e != nil {

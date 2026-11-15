@@ -71,7 +71,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 		if job.ControllerID <= 0 {
 			return InvalidErr
 		}
-		held, e := lease.Acquire(w.s.db(ctx), job.ControllerID, 0, collectionTimeout)
+		held, e := lease.Acquire(w.s.db(ctx), job.ControllerID, lease.Holder{Kind: lease.WirelessCollection, ID: job.ID}, collectionTimeout)
 		if errors.Is(e, lease.BusyErr) || errors.Is(e, lease.QuarantinedErr) {
 			continue
 		}

@@ -132,7 +132,7 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 		var held lease.Lease
 		if reason == "" {
 			var err error
-			held, err = lease.Acquire(tx, t.DeviceID, 0, CollectionTimeout)
+			held, err = lease.Acquire(tx, t.DeviceID, lease.Holder{Kind: lease.FirewallCollection, ID: t.ID}, CollectionTimeout)
 			switch {
 			case errors.Is(err, lease.BusyErr):
 				return tx.Model(&t).Update("stage", "waiting_device").Error

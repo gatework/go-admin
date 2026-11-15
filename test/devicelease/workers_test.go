@@ -193,7 +193,7 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 	if err := a.Create(&dm.Connection{DeviceID: d.ID, Profile: profile, Protocol: "ssh", Port: 22, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	flow := &ds.Workflow{Service: base.Service{DB: a}, Config: ds.Config{Enabled: true, Username: "fixture", Password: "fixture", Grace: time.Minute, Concurrency: 2}}
+	flow := &ds.Workflow{Service: base.Service{DB: a}, Config: ds.Config{Enabled: true, Shared: ds.Credentials{Username: "fixture", Password: "fixture"}, Grace: time.Minute, Concurrency: 2}}
 	order, err := flow.Create(context.Background(), dd.Create{RequestKey: "lease-delivery-request", Title: "lease test", Targets: []dd.InputTarget{{DeviceID: d.ID, Script: "show version"}}}, 7, "fixture", permission)
 	if err != nil {
 		t.Fatal(err)

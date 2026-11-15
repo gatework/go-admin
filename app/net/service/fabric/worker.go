@@ -65,7 +65,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return e
 	}
 	for _, job := range jobs {
-		lock, e := lease.LockFabric(opsDB(ctx, w.s), job.FabricID, job.ID, runTimeout)
+		lock, e := lease.LockFabric(opsDB(ctx, w.s), job.FabricID, lease.Holder{Kind: lease.FabricCollection, ID: job.ID}, runTimeout)
 		if errors.Is(e, lease.BusyErr) {
 			continue
 		} else if e != nil {
@@ -89,7 +89,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return e
 	}
 	for _, c := range changes {
-		lock, e := lease.LockFabric(opsDB(ctx, w.s), c.FabricID, c.ID, runTimeout)
+		lock, e := lease.LockFabric(opsDB(ctx, w.s), c.FabricID, lease.Holder{Kind: lease.FabricChange, ID: c.ID}, runTimeout)
 		if errors.Is(e, lease.BusyErr) {
 			continue
 		} else if e != nil {
@@ -237,7 +237,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 		return e
 	}
 	source = models.CollectionTarget{DeviceID: sd.ID, Device: opsDevice(sd), Connection: sc, SourceHash: c.SourceHash}
-	sourceLease, e := lease.Acquire(opsDB(ctx, w.s), sd.ID, 0, runTimeout)
+	sourceLease, e := lease.Acquire(opsDB(ctx, w.s), sd.ID, lease.Holder{Kind: lease.FabricChangeSource, ID: c.ID}, runTimeout)
 	if code := leaseFailure(e, "source_busy"); code != "" {
 		return w.stopChange(ctx, &c, code)
 	} else if e != nil {
@@ -509,7 +509,7 @@ func (w *Worker) runChangeTargets(ctx context.Context, c *models.Change, plan *v
 		if e := w.s.validateChange(ctx, *c); e != nil {
 			return w.stopChange(ctx, c, "evidence_or_grouping_changed")
 		}
-		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, t.DeliveryTargetID, runTimeout)
+		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, lease.Holder{Kind: lease.DeliveryTarget, ID: t.DeliveryTargetID}, runTimeout)
 		if code := leaseFailure(e, "device_busy"); code != "" {
 			return w.stopChange(ctx, c, code)
 		} else if e != nil {
