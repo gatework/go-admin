@@ -46,9 +46,9 @@ func TestJobWritesReconcileScheduler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
-	router.POST("/sysjob", ReconcileWrites, actions.Create[models.SysJob, jobdto.SysJobControl]())
-	router.PUT("/sysjob", ReconcileWrites, actions.Update[models.SysJob, jobdto.SysJobControl]())
-	router.DELETE("/sysjob", ReconcileWrites, actions.Delete[models.SysJob, jobdto.SysJobByID]())
+	router.POST("/sysjob", ReconcileWrites, actions.Create[models.SysJob, jobdto.JobControl]())
+	router.PUT("/sysjob", ReconcileWrites, actions.Update[models.SysJob, jobdto.JobControl]())
+	router.DELETE("/sysjob", ReconcileWrites, actions.Delete[models.SysJob, jobdto.JobByID]())
 	request := func(method, body string) {
 		t.Helper()
 		req := httptest.NewRequest(method, "/sysjob", strings.NewReader(body))

@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestSysJobControlBindPreservesPresence(t *testing.T) {
+func TestJobControlBindPreservesPresence(t *testing.T) {
 	for _, tc := range []struct {
 		name, contentType, body string
 		uri                     bool
@@ -29,7 +29,7 @@ func TestSysJobControlBindPreservesPresence(t *testing.T) {
 			if tc.uri {
 				ctx.Params = gin.Params{{Key: "id", Value: "42"}}
 			}
-			var req SysJobControl
+			var req JobControl
 			if err := req.Bind(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -49,7 +49,7 @@ func TestSysJobControlBindPreservesPresence(t *testing.T) {
 	}
 }
 
-func TestSysJobControlValidationMatchesScheduler(t *testing.T) {
+func TestJobControlValidationMatchesScheduler(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
 		wantError  bool
@@ -64,7 +64,7 @@ func TestSysJobControlValidationMatchesScheduler(t *testing.T) {
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest(http.MethodPut, "/sysjob", strings.NewReader(tc.body))
 			ctx.Request.Header.Set("Content-Type", "application/json")
-			var req SysJobControl
+			var req JobControl
 			if err := req.Bind(ctx); (err != nil) != tc.wantError {
 				t.Fatalf("Bind error=%v want error=%v", err, tc.wantError)
 			}
@@ -72,7 +72,7 @@ func TestSysJobControlValidationMatchesScheduler(t *testing.T) {
 	}
 }
 
-func TestSysJobControlRequiresJobName(t *testing.T) {
+func TestJobControlRequiresJobName(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, body string
 		wantError          bool
@@ -89,7 +89,7 @@ func TestSysJobControlRequiresJobName(t *testing.T) {
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest(tc.method, "/sysjob", strings.NewReader(tc.body))
 			ctx.Request.Header.Set("Content-Type", "application/json")
-			var req SysJobControl
+			var req JobControl
 			err := req.Bind(ctx)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("Bind error=%v want error=%v", err, tc.wantError)

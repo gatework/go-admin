@@ -17,8 +17,8 @@ import (
 	"github.com/gatework/motor/common/dto"
 )
 
-// SysJobSearch carries sys job search state for this module.
-type SysJobSearch struct {
+// JobSearch carries sys job search state for this module.
+type JobSearch struct {
 	dto.Pagination `search:"-"`
 	JobID          int    `form:"jobId" search:"type:exact;column:job_id;table:sys_job"`
 	JobName        string `form:"jobName" search:"type:icontains;column:job_name;table:sys_job"`
@@ -29,12 +29,12 @@ type SysJobSearch struct {
 }
 
 // GetNeedSearch supplies the tagged search criteria.
-func (m *SysJobSearch) GetNeedSearch() any {
+func (m *JobSearch) GetNeedSearch() any {
 	return *m
 }
 
 // Bind decodes and validates the request parameters.
-func (m *SysJobSearch) Bind(ctx *gin.Context) error {
+func (m *JobSearch) Bind(ctx *gin.Context) error {
 	log := api.GetRequestLogger(ctx)
 	err := ctx.ShouldBind(m)
 	if err != nil {
@@ -43,8 +43,8 @@ func (m *SysJobSearch) Bind(ctx *gin.Context) error {
 	return err
 }
 
-// SysJobControl carries sys job control state for this module.
-type SysJobControl struct {
+// JobControl carries sys job control state for this module.
+type JobControl struct {
 	present        map[string]json.RawMessage
 	JobID          int    `json:"jobId" uri:"id"`
 	JobName        string `json:"jobName"`        // 名称
@@ -60,7 +60,7 @@ type SysJobControl struct {
 }
 
 // Bind decodes supplied fields and validates job creation or partial updates.
-func (s *SysJobControl) Bind(ctx *gin.Context) error {
+func (s *JobControl) Bind(ctx *gin.Context) error {
 	if err := ctx.ShouldBind(s); err != nil {
 		return err
 	}
@@ -78,8 +78,8 @@ func (s *SysJobControl) Bind(ctx *gin.Context) error {
 }
 
 // UnmarshalJSON records supplied fields independently from their zero values.
-func (s *SysJobControl) UnmarshalJSON(data []byte) error {
-	type plain SysJobControl
+func (s *JobControl) UnmarshalJSON(data []byte) error {
+	type plain JobControl
 	if err := json.Unmarshal(data, (*plain)(s)); err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (s *SysJobControl) UnmarshalJSON(data []byte) error {
 }
 
 // UpdateFields excludes process-local entry IDs and all server-owned metadata.
-func (s *SysJobControl) UpdateFields() []string {
+func (s *JobControl) UpdateFields() []string {
 	names := map[string]string{"jobName": "JobName", "jobGroup": "JobGroup", "jobType": "JobType", "cronExpression": "CronExpression", "invokeTarget": "InvokeTarget", "args": "Args", "misfirePolicy": "MisfirePolicy", "concurrent": "Concurrent", "status": "Status"}
 	fields := make([]string, 0, len(s.present))
 	for name, field := range names {
@@ -107,7 +107,7 @@ func (s *SysJobControl) UpdateFields() []string {
 }
 
 // ToModel provides to model for this module.
-func (s *SysJobControl) ToModel() (*models.SysJob, error) {
+func (s *JobControl) ToModel() (*models.SysJob, error) {
 	return &models.SysJob{
 		JobID:          s.JobID,
 		JobName:        s.JobName,
@@ -124,12 +124,12 @@ func (s *SysJobControl) ToModel() (*models.SysJob, error) {
 
 // sets reports whether this request sets field: every field on create, only
 // the supplied ones on a partial update.
-func (s *SysJobControl) sets(field string, creating bool) bool {
+func (s *JobControl) sets(field string, creating bool) bool {
 	_, ok := s.present[field]
 	return ok || creating
 }
 
-func (s *SysJobControl) validate(creating bool) error {
+func (s *JobControl) validate(creating bool) error {
 	if !creating && s.JobID <= 0 {
 		return errors.New("jobId must be positive")
 	}
@@ -157,27 +157,12 @@ func (s *SysJobControl) validate(creating bool) error {
 	return nil
 }
 
-// SysJobByID carries sys job by id state for this module.
-type SysJobByID struct {
+// JobByID carries sys job by id state for this module.
+type JobByID struct {
 	dto.ObjectByID
 }
 
-// SysJobItem carries sys job item state for this module.
-type SysJobItem struct {
-	JobID          int    `json:"jobId"`
-	JobName        string `json:"jobName" validate:"required"` // 名称
-	JobGroup       string `json:"jobGroup"`                    // 任务分组
-	JobType        int    `json:"jobType"`                     // 任务类型
-	CronExpression string `json:"cronExpression"`              // cron表达式
-	InvokeTarget   string `json:"invokeTarget"`                // 调用目标
-	Args           string `json:"args"`                        // 目标参数
-	MisfirePolicy  int    `json:"misfirePolicy"`               // 执行策略
-	Concurrent     int    `json:"concurrent"`                  // 是否并发
-	Status         int    `json:"status"`                      // 状态
-	EntryID        int    `json:"entryId"`                     // job启动时返回的id
-}
-
-func (s *SysJobControl) bindForm(request *http.Request) error {
+func (s *JobControl) bindForm(request *http.Request) error {
 	// Gin's legacy form binding accepts Go field names. Also accept the
 	// JSON names and normalize presence so both formats update the same fields.
 	values := make(map[string][]string)

@@ -32,7 +32,7 @@ type SysJob struct {
 	MisfirePolicy  int    `json:"misfirePolicy" gorm:"size:255;"`        // 执行策略
 	Concurrent     int    `json:"concurrent" gorm:"size:1;"`             // 是否并发
 	Status         int    `json:"status" gorm:"size:1;"`                 // 状态
-	EntryID        int    `json:"entry_id" gorm:"size:11;"`              // job启动时返回的id
+	EntryID        int    `json:"entryId" gorm:"size:11;"`               // job启动时返回的id
 
 	DataScope string `json:"dataScope" gorm:"-"`
 }
