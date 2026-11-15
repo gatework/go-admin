@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -19,7 +20,6 @@ import (
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/contract/actions"
-	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	service "github.com/gatework/motor/app/net/service/firewall"
 	"github.com/gatework/motor/app/net/service/firewall/engine"
@@ -101,19 +101,18 @@ func page(c *gin.Context) (service.Page, error) {
 }
 func permission(c *gin.Context) *actions.DataPermission { return actions.GetPermissionFromContext(c) }
 
+// respond translates the two failures that arrive unclassified - a dependency's
+// conflict and a missing row - into this module's codes, then lets the shared
+// adapter answer by kind. Anything else unclassified is logged and reported
+// as an internal error without its detail.
 func (e Firewall) respond(err error) {
-	code, msg := 500, "firewall.operation_failed"
 	switch {
-	case errors.Is(err, service.InvalidErr), errors.Is(err, engine.InputErr), errors.Is(err, engine.BudgetErr), errors.Is(err, storage.InvalidErr):
-		code, msg = 400, "firewall.invalid_input"
-	case errors.Is(err, service.NotFoundErr), errors.Is(err, gorm.ErrRecordNotFound):
-		code, msg = 404, "firewall.not_found"
-	case errors.Is(err, service.ConflictErr), errors.Is(err, storage.VersionErr), errors.Is(err, snapshot.ErrConflict):
-		code, msg = 409, "firewall.version_conflict"
-	case errors.Is(err, service.UnavailableErr):
-		code, msg = 503, "firewall.evidence_unavailable"
+	case errors.Is(err, snapshot.ErrConflict):
+		err = fmt.Errorf("%w: %w", service.ConflictErr, err)
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		err = fmt.Errorf("%w: %w", service.NotFoundErr, err)
 	}
-	e.Error(code, nil, msg)
+	request.Fail(&e.API, err)
 }
 
 func (e Firewall) run(c *gin.Context, fn operation) {

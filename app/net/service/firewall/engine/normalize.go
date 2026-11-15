@@ -4,7 +4,6 @@ package engine
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/gatework/motor/common/errkind"
 
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/motor/app/net/models/firewall/types"
@@ -31,16 +32,16 @@ const MaxRegions = 4096
 // BudgetErr reports a calculation exceeding a configured bound.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var BudgetErr = errors.New("firewall: calculation budget exceeded")
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var BudgetErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
 
 //revive:enable:error-naming
 
 // InputErr reports malformed or incomplete firewall input.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var InputErr = errors.New("firewall: invalid input")
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var InputErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
 
 //revive:enable:error-naming
 var digits = regexp.MustCompile(`^[0-9]+$`)

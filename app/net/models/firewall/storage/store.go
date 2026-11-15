@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gatework/motor/common/errkind"
+
 	"github.com/gatework/firemon/flow"
 
 	"gorm.io/gorm"
@@ -27,16 +29,16 @@ import (
 // InvalidErr reports invalid.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var InvalidErr = errors.New("invalid firewall storage argument")
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var InvalidErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
 
 //revive:enable:error-naming
 
 // VersionErr reports version.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var VersionErr = errors.New("firewall settings version conflict")
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var VersionErr = errkind.New(errkind.Conflict, "firewall.version_conflict")
 
 //revive:enable:error-naming
 

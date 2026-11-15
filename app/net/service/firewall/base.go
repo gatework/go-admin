@@ -13,6 +13,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	"github.com/gatework/motor/common/errkind"
+
 	"gorm.io/gorm"
 
 	fm "github.com/gatework/firemon"
@@ -25,16 +27,16 @@ import (
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr reports invalid.
-	InvalidErr = errors.New("firewall.invalid_input")
+	InvalidErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
 	// NotFoundErr describes the err not found used by this module.
-	NotFoundErr = errors.New("firewall.not_found")
+	NotFoundErr = errkind.New(errkind.NotFound, "firewall.not_found")
 	// ConflictErr reports a concurrent firewall update.
-	ConflictErr = errors.New("firewall.version_conflict")
+	ConflictErr = errkind.New(errkind.Conflict, "firewall.version_conflict")
 	// UnavailableErr reports missing firewall evidence.
-	UnavailableErr = errors.New("firewall.evidence_unavailable")
+	UnavailableErr = errkind.New(errkind.Unavailable, "firewall.evidence_unavailable")
 )
 
 //revive:enable:error-naming
