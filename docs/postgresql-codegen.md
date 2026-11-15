@@ -49,7 +49,7 @@ source: host=127.0.0.1 port=5432 user=app password=CHANGE_ME dbname=app sslmode=
 
 ```sh
 MOTOR_TEST_POSTGRES_DSN='host=127.0.0.1 port=5432 user=postgres password=test dbname=motor_test sslmode=disable' \
-  go test -race ./app/other/models/tools ./app/other/handler/tools -count=1
+  go test -race ./app/codegen/models ./app/codegen/handler -count=1
 ```
 
 PostgreSQL 测试建立并清理独立 schema。端到端测试覆盖表/列列表、导入、九类预览产物、生成代码的 vet/编译，以及生成接口的真实数据库 CRUD。现有 MySQL 回归继续使用 `MOTOR_TEST_MYSQL_DSN`。CI 已提供这两个数据库连接，因此 PostgreSQL 测试不会仅依赖 SQLite 模拟。

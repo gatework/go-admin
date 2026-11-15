@@ -10,7 +10,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/runtime"
 
-	otherrouter "github.com/gatework/motor/app/other/router"
+	platformrouter "github.com/gatework/motor/app/platform/router"
 	common "github.com/gatework/motor/common/middleware"
 	ext "github.com/gatework/motor/config"
 )
@@ -94,8 +94,8 @@ func initRouter() error {
 
 // probePaths are the two routes the rate limiter must not answer for.
 var probePaths = map[string]bool{
-	otherrouter.APIPrefix + otherrouter.HealthPath: true,
-	otherrouter.APIPrefix + otherrouter.ReadyPath:  true,
+	platformrouter.APIPrefix + platformrouter.HealthPath: true,
+	platformrouter.APIPrefix + platformrouter.ReadyPath:  true,
 }
 
 // exemptProbes wraps a middleware so the health and readiness routes skip it.

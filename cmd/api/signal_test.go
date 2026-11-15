@@ -19,7 +19,7 @@ import (
 
 	"github.com/gatework/motor-core/sdk"
 
-	otherrouter "github.com/gatework/motor/app/other/router"
+	platformrouter "github.com/gatework/motor/app/platform/router"
 )
 
 // The signal path cannot be exercised in-process: delivering a signal to the
@@ -58,9 +58,9 @@ const (
 const childPingRoute = "/signal-test-ping"
 
 var (
-	readyPath  = otherrouter.APIPrefix + otherrouter.ReadyPath
-	healthPath = otherrouter.APIPrefix + otherrouter.HealthPath
-	pingPath   = otherrouter.APIPrefix + childPingRoute
+	readyPath  = platformrouter.APIPrefix + platformrouter.ReadyPath
+	healthPath = platformrouter.APIPrefix + platformrouter.HealthPath
+	pingPath   = platformrouter.APIPrefix + childPingRoute
 )
 
 // TestSignalChild is the child process. It is skipped in a normal run.
@@ -71,8 +71,8 @@ func TestSignalChild(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	v1 := engine.Group(otherrouter.APIPrefix)
-	otherrouter.RegisterMonitorRouter(v1)
+	v1 := engine.Group(platformrouter.APIPrefix)
+	platformrouter.RegisterMonitorRouter(v1)
 	v1.GET(childPingRoute, func(c *gin.Context) { c.String(http.StatusOK, "pong") })
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

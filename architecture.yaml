@@ -6,6 +6,9 @@ declared:
   - ./app/admin/router
   - ./app/admin/service
   - ./app/admin/service/dto
+  - ./app/codegen/handler
+  - ./app/codegen/models
+  - ./app/codegen/router
   - ./app/demo/models
   - ./app/demo/router
   - ./app/demo/service/dto
@@ -40,10 +43,8 @@ declared:
   - ./app/net/service/inventory
   - ./app/net/service/inventory/provider
   - ./app/net/service/wireless
-  - ./app/other/handler
-  - ./app/other/handler/tools
-  - ./app/other/models/tools
-  - ./app/other/router
+  - ./app/platform/handler
+  - ./app/platform/router
   - ./cmd
   - ./cmd/api
   - ./cmd/app

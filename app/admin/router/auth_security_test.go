@@ -22,7 +22,7 @@ import (
 
 	adminhandler "github.com/gatework/motor/app/admin/handler"
 	"github.com/gatework/motor/app/admin/models"
-	filehandler "github.com/gatework/motor/app/other/handler"
+	filehandler "github.com/gatework/motor/app/platform/handler"
 	accountsecurity "github.com/gatework/motor/common/account"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"

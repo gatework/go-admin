@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/gatework/motor/app/other/models/tools"
+	tools "github.com/gatework/motor/app/codegen/models"
 	"github.com/gatework/motor/cmd/migrate/migration"
 	common "github.com/gatework/motor/common/models"
 )

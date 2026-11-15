@@ -4,7 +4,7 @@ import (
 	log "github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk/config"
 
-	otherrouter "github.com/gatework/motor/app/other/router"
+	codegenrouter "github.com/gatework/motor/app/codegen/router"
 )
 
 // Start-up warnings about configurations that expose more than intended.
@@ -39,5 +39,5 @@ func reportGeneratorWriteRoutes() {
 // make fire is indistinguishable from no warning at all, and this one exists
 // precisely for the case nobody is looking at.
 func generatorWriteRoutesNeedWarning() bool {
-	return otherrouter.GenWriteRoutesEnabled() && config.Current().Settings.Application.Mode != "demo"
+	return codegenrouter.GenWriteRoutesEnabled() && config.Current().Settings.Application.Mode != "demo"
 }

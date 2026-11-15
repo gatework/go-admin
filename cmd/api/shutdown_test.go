@@ -16,7 +16,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/storage/cache"
 
-	otherrouter "github.com/gatework/motor/app/other/router"
+	platformrouter "github.com/gatework/motor/app/platform/router"
 	"github.com/gatework/motor/common/health"
 	ext "github.com/gatework/motor/config"
 	"github.com/gatework/motor/internal/testconfig"
@@ -71,21 +71,21 @@ func TestTheProbesSkipTheRateLimiter(t *testing.T) {
 		reached = append(reached, c.FullPath())
 		c.AbortWithStatus(http.StatusTooManyRequests)
 	}))
-	v1 := r.Group(otherrouter.APIPrefix)
-	otherrouter.RegisterMonitorRouter(v1)
+	v1 := r.Group(platformrouter.APIPrefix)
+	platformrouter.RegisterMonitorRouter(v1)
 	v1.GET("/business", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	for _, tc := range []struct {
 		path    string
 		limited bool
 	}{
-		{otherrouter.APIPrefix + otherrouter.HealthPath, false},
-		{otherrouter.APIPrefix + otherrouter.ReadyPath, false},
+		{platformrouter.APIPrefix + platformrouter.HealthPath, false},
+		{platformrouter.APIPrefix + platformrouter.ReadyPath, false},
 		// Not a probe, and deliberately not exempt: the exemption is for the
 		// two routes an orchestrator acts on, not for everything under
 		// /api/v1 that happens to be unauthenticated.
-		{otherrouter.APIPrefix + "/metrics", true},
-		{otherrouter.APIPrefix + "/business", true},
+		{platformrouter.APIPrefix + "/metrics", true},
+		{platformrouter.APIPrefix + "/business", true},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			w := httptest.NewRecorder()
@@ -120,8 +120,8 @@ func TestHealthStaysUpWhileDraining(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	r := gin.New()
-	v1 := r.Group(otherrouter.APIPrefix)
-	otherrouter.RegisterMonitorRouter(v1)
+	v1 := r.Group(platformrouter.APIPrefix)
+	platformrouter.RegisterMonitorRouter(v1)
 
 	ask := func(path string) int {
 		w := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestHealthStaysUpWhileDraining(t *testing.T) {
 		return w.Code
 	}
 
-	if got := ask(otherrouter.APIPrefix + otherrouter.HealthPath); got != http.StatusOK {
+	if got := ask(platformrouter.APIPrefix + platformrouter.HealthPath); got != http.StatusOK {
 		t.Fatalf("/health answered %d before draining, want 200", got)
 	}
 
@@ -138,11 +138,11 @@ func TestHealthStaysUpWhileDraining(t *testing.T) {
 	// exercises draining does so in a child process of its own.
 	health.BeginDraining()
 
-	if got := ask(otherrouter.APIPrefix + otherrouter.HealthPath); got != http.StatusOK {
+	if got := ask(platformrouter.APIPrefix + platformrouter.HealthPath); got != http.StatusOK {
 		t.Errorf("/health answered %d while draining, want 200 - liveness is "+
 			"\"should I restart you\", and the answer during a drain is no", got)
 	}
-	if got := ask(otherrouter.APIPrefix + otherrouter.ReadyPath); got != http.StatusServiceUnavailable {
+	if got := ask(platformrouter.APIPrefix + platformrouter.ReadyPath); got != http.StatusServiceUnavailable {
 		t.Errorf("/ready answered %d while draining, want 503", got)
 	}
 }
@@ -177,7 +177,7 @@ func TestNamedTenantProbesBypassRequestDatabaseSelection(t *testing.T) {
 	sdk.Runtime.SetCache(cache)
 	initRouter()
 	r := sdk.Runtime.Engine().(*gin.Engine)
-	otherrouter.RegisterMonitorRouter(r.Group(otherrouter.APIPrefix))
+	platformrouter.RegisterMonitorRouter(r.Group(platformrouter.APIPrefix))
 	for _, path := range []string{"/api/v1/health", "/api/v1/ready"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Host = "127.0.0.1:8000"
