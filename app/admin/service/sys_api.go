@@ -55,13 +55,11 @@ func (e *Route) Get(ctx context.Context, d *dto.RouteByID, p *actions.DataPermis
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).
-		FirstOrInit(model, d.GetID()).Error
-	if err != nil {
-		e.Logger.Errorf("db error:%s", err)
-		return err
+		First(model, d.GetID()).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New("查看对象不存在或无权查看")
 	}
-	if model.ID == 0 {
-		err = errors.New("查看对象不存在或无权查看")
+	if err != nil {
 		e.Logger.Errorf("loading route: %s", err)
 		return err
 	}

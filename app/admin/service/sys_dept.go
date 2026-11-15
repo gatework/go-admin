@@ -43,18 +43,12 @@ func (e *Department) Get(ctx context.Context, d *dto.DepartmentByID, model *mode
 	var err error
 	var data models.SysDept
 
-	err = e.DB.WithContext(ctx).Model(&data).
-		FirstOrInit(model, d.GetID()).
-		Error
-	if err != nil {
-		e.Logger.Errorf("db error:%s", err)
-
-		return err
+	err = e.DB.WithContext(ctx).Model(&data).First(model, d.GetID()).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New("查看对象不存在或无权查看")
 	}
-	if model.DeptID == 0 {
-		err = errors.New("查看对象不存在或无权查看")
+	if err != nil {
 		e.Logger.Errorf("loading department: %s", err)
-
 		return err
 	}
 	return nil
