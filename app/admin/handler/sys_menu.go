@@ -26,7 +26,7 @@ type Menu struct {
 // @Router /api/v1/menu [get]
 // @Security Bearer
 func (e Menu) List(c *gin.Context) {
-	s := service.SysMenu{}
+	s := service.Menu{}
 	req := dto.SysMenuGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -40,7 +40,7 @@ func (e Menu) List(c *gin.Context) {
 		return
 	}
 	var list = make([]models.SysMenu, 0)
-	err = s.GetPage(&req, &list)
+	err = s.List(&req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -58,7 +58,7 @@ func (e Menu) List(c *gin.Context) {
 // @Security Bearer
 func (e Menu) Get(c *gin.Context) {
 	req := dto.SysMenuGetReq{}
-	s := new(service.SysMenu)
+	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -92,7 +92,7 @@ func (e Menu) Get(c *gin.Context) {
 // @Security Bearer
 func (e Menu) Create(c *gin.Context) {
 	req := dto.SysMenuInsertReq{}
-	s := new(service.SysMenu)
+	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -106,7 +106,7 @@ func (e Menu) Create(c *gin.Context) {
 	}
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Insert(&req)
+	err = s.Create(&req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -127,7 +127,7 @@ func (e Menu) Create(c *gin.Context) {
 // @Security Bearer
 func (e Menu) Update(c *gin.Context) {
 	req := dto.SysMenuUpdateReq{}
-	s := new(service.SysMenu)
+	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -159,7 +159,7 @@ func (e Menu) Update(c *gin.Context) {
 // @Security Bearer
 func (e Menu) Delete(c *gin.Context) {
 	control := new(dto.SysMenuDeleteReq)
-	s := new(service.SysMenu)
+	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -171,7 +171,7 @@ func (e Menu) Delete(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	err = s.Remove(control)
+	err = s.Delete(control)
 	if err != nil {
 		e.Logger.Errorf("RemoveSysMenu error, %s", err)
 		e.Error(500, err, "删除失败")
@@ -188,7 +188,7 @@ func (e Menu) Delete(c *gin.Context) {
 // @Router /api/v1/menurole [get]
 // @Security Bearer
 func (e Menu) RoleTree(c *gin.Context) {
-	s := new(service.SysMenu)
+	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -198,7 +198,7 @@ func (e Menu) RoleTree(c *gin.Context) {
 		return
 	}
 
-	result, err := s.SetMenuRole(user.RoleName(c))
+	result, err := s.ForRole(user.RoleName(c))
 
 	if err != nil {
 		e.Error(500, err, "查询失败")
@@ -219,8 +219,8 @@ func (e Menu) RoleTree(c *gin.Context) {
 // @Router /api/v1/menuTreeselect/{roleId} [get]
 // @Security Bearer
 func (e Menu) Tree(c *gin.Context) {
-	m := service.SysMenu{}
-	r := service.SysRole{}
+	m := service.Menu{}
+	r := service.Role{}
 	req := dto.SelectRole{}
 	var err error
 	e.API, err = request.New(c)
@@ -235,7 +235,7 @@ func (e Menu) Tree(c *gin.Context) {
 		return
 	}
 
-	result, err := m.SetLabel()
+	result, err := m.Labels()
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -243,7 +243,7 @@ func (e Menu) Tree(c *gin.Context) {
 
 	menuIDs := make([]int, 0)
 	if req.RoleID != 0 {
-		menuIDs, err = r.GetRoleMenuID(req.RoleID)
+		menuIDs, err = r.MenuIDs(req.RoleID)
 		if err != nil {
 			e.Error(500, err, "")
 			return

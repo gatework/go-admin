@@ -17,13 +17,13 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysUser coordinates administration queries and mutations.
-type SysUser struct {
+// User coordinates administration queries and mutations.
+type User struct {
 	service.Service
 }
 
-// GetPage 获取SysUser列表
-func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
+// List 获取SysUser列表
+func (e *User) List(c *dto.SysUserGetPageReq, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
 	var err error
 	var data models.SysUser
 
@@ -42,7 +42,7 @@ func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, l
 	return nil
 }
 
-// GetSelf 获取调用者自己的 SysUser 对象，不套数据权限
+// Self 获取调用者自己的 SysUser 对象，不套数据权限
 //
 // The data scope answers "whose rows may this user see"; the caller here is
 // reading their own, and the id comes from the token, so there is nothing left
@@ -52,7 +52,7 @@ func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, l
 // every user who did not create their own account.
 //
 // GetProfile has always read the same row this way, with no scope at all.
-func (e *SysUser) GetSelf(d *dto.SysUserByID, model *models.SysUser) error {
+func (e *User) Self(d *dto.SysUserByID, model *models.SysUser) error {
 	err := e.DB.First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
@@ -67,7 +67,7 @@ func (e *SysUser) GetSelf(d *dto.SysUserByID, model *models.SysUser) error {
 }
 
 // Get 获取SysUser对象
-func (e *SysUser) Get(d *dto.SysUserByID, p *actions.DataPermission, model *models.SysUser) error {
+func (e *User) Get(d *dto.SysUserByID, p *actions.DataPermission, model *models.SysUser) error {
 	var data models.SysUser
 
 	err := e.DB.Model(&data).Debug().
@@ -87,8 +87,8 @@ func (e *SysUser) Get(d *dto.SysUserByID, p *actions.DataPermission, model *mode
 	return nil
 }
 
-// Insert 创建SysUser对象
-func (e *SysUser) Insert(c *dto.SysUserInsertReq) error {
+// Create 创建SysUser对象
+func (e *User) Create(c *dto.SysUserInsertReq) error {
 	var err error
 	var data models.SysUser
 	var i int64
@@ -121,7 +121,7 @@ func (e *SysUser) Insert(c *dto.SysUserInsertReq) error {
 // the check in the API handler ahead of this call), and letting a caller
 // grant themselves a different role or department through it would be a
 // privilege escalation the exclusion was never meant to open.
-func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerID int) error {
+func (e *User) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerID int) error {
 	var err error
 	var model models.SysUser
 	if callerID <= 0 || c.UserID <= 0 {
@@ -133,7 +133,7 @@ func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, cal
 	}
 	db := query.First(&model, c.GetID())
 	if err = db.Error; err != nil {
-		e.Logger.Errorf("Service UpdateSysUser error: %s", err)
+		e.Logger.Errorf("updating user: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
@@ -155,7 +155,7 @@ func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, cal
 // UpdateAvatar updates the authenticated caller's avatar. The API supplies the
 // token identity; account ownership does not depend on who created that user.
 // The permission argument is retained for source compatibility.
-func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermission) error {
+func (e *User) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermission) error {
 	if c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
@@ -171,7 +171,7 @@ func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPer
 }
 
 // UpdateStatus 更新用户状态
-func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermission) error {
+func (e *User) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermission) error {
 	if c.UserID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid user status")
 	}
@@ -198,15 +198,15 @@ func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPer
 	return nil
 }
 
-// ResetPwd 重置用户密码
-func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission) error {
+// ResetPassword 重置用户密码
+func (e *User) ResetPassword(c *dto.ResetSysUserPwdReq, p *actions.DataPermission) error {
 	var err error
 	var model models.SysUser
 	db := e.DB.Scopes(
 		actions.Permission(model.TableName(), p),
 	).First(&model, c.GetID())
 	if err = db.Error; err != nil {
-		e.Logger.Errorf("At Service ResetSysUserPwd error: %s", err)
+		e.Logger.Errorf("resetting password: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
@@ -226,8 +226,8 @@ func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission)
 	return nil
 }
 
-// Remove 删除SysUser
-func (e *SysUser) Remove(c *dto.SysUserByID, p *actions.DataPermission) error {
+// Delete 删除SysUser
+func (e *User) Delete(c *dto.SysUserByID, p *actions.DataPermission) error {
 	var err error
 	var data models.SysUser
 
@@ -245,10 +245,10 @@ func (e *SysUser) Remove(c *dto.SysUserByID, p *actions.DataPermission) error {
 	return nil
 }
 
-// UpdatePwd 修改SysUser对象密码
+// ChangePassword 修改SysUser对象密码
 // id must be the authenticated caller's identity, not a request-body user ID.
 // The permission argument is retained for source compatibility.
-func (e *SysUser) UpdatePwd(id int, oldPassword, newPassword string, _ *actions.DataPermission) error {
+func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *actions.DataPermission) error {
 	var err error
 
 	if id <= 0 || oldPassword == "" || newPassword == "" {
@@ -293,8 +293,8 @@ func (e *SysUser) UpdatePwd(id int, oldPassword, newPassword string, _ *actions.
 	return nil
 }
 
-// GetProfile loads the authenticated user's profile.
-func (e *SysUser) GetProfile(c *dto.SysUserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
+// Profile loads the authenticated user's profile.
+func (e *User) Profile(c *dto.SysUserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
 	err := e.DB.Preload("Dept").First(user, c.GetID()).Error
 	if err != nil {
 		return err
@@ -335,7 +335,7 @@ func credentialChanges(model models.SysUser, self bool) ([]string, []any) {
 	return changed, values
 }
 
-func (e *SysUser) persistUserUpdate(tx *gorm.DB, model models.SysUser, p *actions.DataPermission, isSelf bool) error {
+func (e *User) persistUserUpdate(tx *gorm.DB, model models.SysUser, p *actions.DataPermission, isSelf bool) error {
 	omit := []string{"password", "salt", "auth_version", "create_by", "created_at", "deleted_at", "user_id"}
 	self := isSelf
 	if self {

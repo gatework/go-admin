@@ -28,8 +28,8 @@ type Config struct {
 // @Success 200 {object} response.Response{data=map[string]string} "{"code": 200, "data": [...]}"
 // @Router /api/v1/app-config [get]
 func (e Config) AppConfig(c *gin.Context) {
-	req := dto.SysConfigGetToSysAppReq{}
-	s := service.SysConfig{}
+	req := dto.ConfigVisibility{}
+	s := service.Config{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -44,7 +44,7 @@ func (e Config) AppConfig(c *gin.Context) {
 	// 控制只读前台的数据
 	req.IsFrontend = "1"
 	list := make([]models.SysConfig, 0)
-	err = s.GetWithKeyList(&req, &list)
+	err = s.Values(&req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -69,8 +69,8 @@ func (e Config) AppConfig(c *gin.Context) {
 // @Router /api/v1/set-config [get]
 // @Security Bearer
 func (e Config) Settings(c *gin.Context) {
-	s := service.SysConfig{}
-	req := make([]dto.GetSetSysConfigReq, 0)
+	s := service.Config{}
+	req := make([]dto.ConfigSetting, 0)
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -79,7 +79,7 @@ func (e Config) Settings(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	err = s.GetForSet(&req)
+	err = s.Settings(&req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -102,8 +102,8 @@ func (e Config) Settings(c *gin.Context) {
 // @Router /api/v1/set-config [put]
 // @Security Bearer
 func (e Config) UpdateSettings(c *gin.Context) {
-	s := service.SysConfig{}
-	req := make([]dto.GetSetSysConfigReq, 0)
+	s := service.Config{}
+	req := make([]dto.ConfigSetting, 0)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -116,7 +116,7 @@ func (e Config) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	err = s.UpdateForSet(&req)
+	err = s.ReplaceSettings(&req)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
@@ -134,9 +134,9 @@ func (e Config) UpdateSettings(c *gin.Context) {
 // @Router /api/v1/sys-config/{id} [get]
 // @Security Bearer
 func (e Config) GetByKey(c *gin.Context) {
-	var s = new(service.SysConfig)
-	var req = new(dto.SysConfigByKeyReq)
-	var resp = new(dto.GetSysConfigByKEYForServiceResp)
+	var s = new(service.Config)
+	var req = new(dto.ConfigByKey)
+	var resp = new(dto.ConfigEntry)
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -149,7 +149,7 @@ func (e Config) GetByKey(c *gin.Context) {
 		return
 	}
 
-	err = s.GetWithKey(req, resp)
+	err = s.ByKey(req, resp)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		e.Error(404, nil, "配置不存在")
 		return

@@ -99,7 +99,7 @@ func checkConfigDictUpdateBoundaries(t *testing.T, tc configDictUpdateCase) {
 }
 
 func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
-	for _, method := range []string{"SetSysConfig", "UpdateForSet"} {
+	for _, method := range []string{"UpdateExistingSettings", "ReplaceSettings"} {
 		for _, failure := range []string{"missing", "read", "write"} {
 			t.Run(method+"/"+failure, func(t *testing.T) {
 				db := configDictDB(t)
@@ -134,20 +134,20 @@ func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				req := []dto.GetSetSysConfigReq{{ConfigKey: "one", ConfigValue: "new"}, {ConfigKey: "two", ConfigValue: "new"}}
+				req := []dto.ConfigSetting{{ConfigKey: "one", ConfigValue: "new"}, {ConfigKey: "two", ConfigValue: "new"}}
 				if failure == "missing" {
 					req[1].ConfigKey = "missing"
 				}
-				s := &SysConfig{}
+				s := &Config{}
 				s.DB = db
 				s.Logger = logger.NewHelper(logger.Default())
 				var err error
-				if method == "SetSysConfig" {
-					err = s.SetSysConfig(&req)
+				if method == "UpdateExistingSettings" {
+					err = s.UpdateExistingSettings(&req)
 				} else {
-					err = s.UpdateForSet(&req)
+					err = s.ReplaceSettings(&req)
 				}
-				skip := method == "SetSysConfig" && failure == "missing"
+				skip := method == "UpdateExistingSettings" && failure == "missing"
 				if skip && err != nil {
 					t.Fatal(err)
 				}
@@ -180,7 +180,7 @@ func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 	}
 }
 
-func TestConfigGetWithKeyExcludesDeletedRows(t *testing.T) {
+func TestConfigByKeyExcludesDeletedRows(t *testing.T) {
 	db := configDictDB(t)
 	row := models.SysConfig{ConfigKey: "deleted", ConfigValue: "hidden"}
 	if err := db.Create(&row).Error; err != nil {
@@ -189,11 +189,11 @@ func TestConfigGetWithKeyExcludesDeletedRows(t *testing.T) {
 	if err := db.Delete(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysConfig{}
+	s := &Config{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
-	var got dto.GetSysConfigByKEYForServiceResp
-	if err := s.GetWithKey(&dto.SysConfigByKeyReq{ConfigKey: "deleted"}, &got); err == nil {
+	var got dto.ConfigEntry
+	if err := s.ByKey(&dto.ConfigByKey{ConfigKey: "deleted"}, &got); err == nil {
 		t.Fatalf("deleted config returned: %+v", got)
 	}
 }
@@ -209,12 +209,12 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				if err := db.Create(&models.SysDictType{DictType: "new"}).Error; err != nil {
 					t.Fatal(err)
 				}
-				s := &SysDictData{}
+				s := &DictionaryEntry{}
 				s.DB = db
 				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.SysDictDataInsertReq{DictType: "new"}
 				req.CreateBy = 42
-				if err := s.Insert(req); err != nil {
+				if err := s.Create(req); err != nil {
 					t.Fatal(err)
 				}
 				id = req.ID
@@ -224,12 +224,12 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				}
 				creator = row.CreateBy
 			case "dict type":
-				s := &SysDictType{}
+				s := &Dictionary{}
 				s.DB = db
 				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.SysDictTypeInsertReq{DictType: "new"}
 				req.CreateBy = 42
-				if err := s.Insert(req); err != nil {
+				if err := s.Create(req); err != nil {
 					t.Fatal(err)
 				}
 				id = req.ID
@@ -250,7 +250,7 @@ func TestConfigSetReturnsCommitFailure(t *testing.T) {
 	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
 		t.Skip("PostgreSQL required for deferred commit failure")
 	}
-	for _, method := range []string{"SetSysConfig", "UpdateForSet"} {
+	for _, method := range []string{"UpdateExistingSettings", "ReplaceSettings"} {
 		t.Run(method, func(t *testing.T) {
 			db := configDictDB(t)
 			row := models.SysConfig{ConfigKey: "one", ConfigValue: "original"}
@@ -262,15 +262,15 @@ func TestConfigSetReturnsCommitFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			req := []dto.GetSetSysConfigReq{{ConfigKey: "one", ConfigValue: "changed"}}
-			s := &SysConfig{}
+			req := []dto.ConfigSetting{{ConfigKey: "one", ConfigValue: "changed"}}
+			s := &Config{}
 			s.DB = db
 			s.Logger = logger.NewHelper(logger.Default())
 			var err error
-			if method == "SetSysConfig" {
-				err = s.SetSysConfig(&req)
+			if method == "UpdateExistingSettings" {
+				err = s.UpdateExistingSettings(&req)
 			} else {
-				err = s.UpdateForSet(&req)
+				err = s.ReplaceSettings(&req)
 			}
 			if err == nil || !strings.Contains(err.Error(), "injected config commit failure") {
 				t.Fatalf("commit error=%v", err)

@@ -17,13 +17,13 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysRole coordinates administration queries and mutations.
-type SysRole struct {
+// Role coordinates administration queries and mutations.
+type Role struct {
 	service.Service
 }
 
-// GetPage 获取SysRole列表
-func (e *SysRole) GetPage(c *dto.SysRoleGetPageReq, list *[]models.SysRole, count *int64) error {
+// List 获取SysRole列表
+func (e *Role) List(c *dto.SysRoleGetPageReq, list *[]models.SysRole, count *int64) error {
 	var err error
 	var data models.SysRole
 
@@ -42,7 +42,7 @@ func (e *SysRole) GetPage(c *dto.SysRoleGetPageReq, list *[]models.SysRole, coun
 }
 
 // Get 获取SysRole对象
-func (e *SysRole) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
+func (e *Role) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
 	var err error
 	db := e.DB.First(model, d.GetID())
 	err = db.Error
@@ -55,7 +55,7 @@ func (e *SysRole) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
 		e.Logger.Errorf("db error:%s", err)
 		return err
 	}
-	model.MenuIDs, err = e.GetRoleMenuID(model.RoleID)
+	model.MenuIDs, err = e.MenuIDs(model.RoleID)
 	if err != nil {
 		e.Logger.Errorf("get menuIds error, %s", err.Error())
 		return err
@@ -63,8 +63,8 @@ func (e *SysRole) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
 	return nil
 }
 
-// Insert 创建SysRole对象
-func (e *SysRole) Insert(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) error {
+// Create 创建SysRole对象
+func (e *Role) Create(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
@@ -97,7 +97,7 @@ func (e *SysRole) Insert(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) err
 }
 
 // Update 修改SysRole对象
-func (e *SysRole) Update(c *dto.SysRoleUpdateReq, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Update(c *dto.SysRoleUpdateReq, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
@@ -176,8 +176,8 @@ func reloadRolePolicies(cb *casbin.SyncedEnforcer) error {
 	return nil
 }
 
-// Remove 删除SysRole
-func (e *SysRole) Remove(c *dto.SysRoleDeleteReq, cb *casbin.SyncedEnforcer) error {
+// Delete 删除SysRole
+func (e *Role) Delete(c *dto.SysRoleDeleteReq, cb *casbin.SyncedEnforcer) error {
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		var roles []models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Where("role_id IN ?", c.IDs).Order("role_id").Find(&roles).Error; err != nil {
@@ -202,8 +202,8 @@ func (e *SysRole) Remove(c *dto.SysRoleDeleteReq, cb *casbin.SyncedEnforcer) err
 	return reloadRolePolicies(cb)
 }
 
-// GetRoleMenuID performs the get role menu id administration operation.
-func (e *SysRole) GetRoleMenuID(roleID int) ([]int, error) {
+// MenuIDs performs the get role menu id administration operation.
+func (e *Role) MenuIDs(roleID int) ([]int, error) {
 	menuIDs := make([]int, 0)
 	model := models.SysRole{}
 	model.RoleID = roleID
@@ -218,7 +218,7 @@ func (e *SysRole) GetRoleMenuID(roleID int) ([]int, error) {
 }
 
 // UpdateDataScope performs the update data scope administration operation.
-func (e *SysRole) UpdateDataScope(c *dto.RoleDataScopeReq) error {
+func (e *Role) UpdateDataScope(c *dto.RoleDataScopeReq) error {
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		var model models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Preload("SysDept").First(&model, c.RoleID).Error; err != nil {
@@ -255,7 +255,7 @@ func (e *SysRole) UpdateDataScope(c *dto.RoleDataScopeReq) error {
 }
 
 // UpdateStatus 修改SysRole对象status
-func (e *SysRole) UpdateStatus(c *dto.UpdateStatusReq) error {
+func (e *Role) UpdateStatus(c *dto.UpdateStatusReq) error {
 	if c.RoleID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid role status")
 	}
@@ -280,8 +280,8 @@ func revokeRoleSessions(tx *gorm.DB, roleID int) error {
 		UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error
 }
 
-// GetByID performs the get by id administration operation.
-func (e *SysRole) GetByID(roleID int) ([]string, error) {
+// Permissions performs the get by id administration operation.
+func (e *Role) Permissions(roleID int) ([]string, error) {
 	permissions := make([]string, 0)
 	model := models.SysRole{}
 	model.RoleID = roleID

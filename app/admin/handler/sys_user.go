@@ -36,7 +36,7 @@ type User struct {
 // @Router /api/v1/sys-user [get]
 // @Security Bearer
 func (e User) List(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -56,7 +56,7 @@ func (e User) List(c *gin.Context) {
 	list := make([]models.SysUser, 0)
 	var count int64
 
-	err = s.GetPage(&req, p, &list, &count)
+	err = s.List(&req, p, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -74,7 +74,7 @@ func (e User) List(c *gin.Context) {
 // @Router /api/v1/sys-user/{userId} [get]
 // @Security Bearer
 func (e User) Get(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserByID{}
 	var err error
 	e.API, err = request.New(c)
@@ -109,7 +109,7 @@ func (e User) Get(c *gin.Context) {
 // @Router /api/v1/sys-user [post]
 // @Security Bearer
 func (e User) Create(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserInsertReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -124,7 +124,7 @@ func (e User) Create(c *gin.Context) {
 	}
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Insert(&req)
+	err = s.Create(&req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, err.Error())
@@ -145,7 +145,7 @@ func (e User) Create(c *gin.Context) {
 // @Router /api/v1/sys-user/{userId} [put]
 // @Security Bearer
 func (e User) Update(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserUpdateReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -204,7 +204,7 @@ func (e User) Update(c *gin.Context) {
 // @Router /api/v1/sys-user/{userId} [delete]
 // @Security Bearer
 func (e User) Delete(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserByID{}
 	var err error
 	e.API, err = request.New(c)
@@ -224,7 +224,7 @@ func (e User) Delete(c *gin.Context) {
 	// 数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.Remove(&req, p)
+	err = s.Delete(&req, p)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -243,7 +243,7 @@ func (e User) Delete(c *gin.Context) {
 // @Router /api/v1/user/avatar [post]
 // @Security Bearer
 func (e User) UpdateAvatar(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.UpdateSysUserAvatarReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -302,7 +302,7 @@ func (e User) UpdateAvatar(c *gin.Context) {
 // @Router /api/v1/user/status [put]
 // @Security Bearer
 func (e User) UpdateStatus(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.UpdateSysUserStatusReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -341,7 +341,7 @@ func (e User) UpdateStatus(c *gin.Context) {
 // @Router /api/v1/user/pwd/reset [put]
 // @Security Bearer
 func (e User) ResetPassword(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.ResetSysUserPwdReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -360,7 +360,7 @@ func (e User) ResetPassword(c *gin.Context) {
 	//数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.ResetPwd(&req, p)
+	err = s.ResetPassword(&req, p)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -380,7 +380,7 @@ func (e User) ResetPassword(c *gin.Context) {
 // @Router /api/v1/user/pwd/set [put]
 // @Security Bearer
 func (e User) ChangePassword(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.PassWord{}
 	var err error
 	e.API, err = request.New(c)
@@ -394,7 +394,7 @@ func (e User) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	err = s.UpdatePwd(user.ID(c), req.OldPassword, req.NewPassword, nil)
+	err = s.ChangePassword(user.ID(c), req.OldPassword, req.NewPassword, nil)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(http.StatusForbidden, err, "密码修改失败")
@@ -412,7 +412,7 @@ func (e User) ChangePassword(c *gin.Context) {
 // @Router /api/v1/user/profile [get]
 // @Security Bearer
 func (e User) Profile(c *gin.Context) {
-	s := service.SysUser{}
+	s := service.User{}
 	req := dto.SysUserByID{}
 	var err error
 	e.API, err = request.New(c)
@@ -428,7 +428,7 @@ func (e User) Profile(c *gin.Context) {
 	sysUser := models.SysUser{}
 	roles := make([]models.SysRole, 0)
 	posts := make([]models.SysPost, 0)
-	err = s.GetProfile(&req, &sysUser, &roles, &posts)
+	err = s.Profile(&req, &sysUser, &roles, &posts)
 	if err != nil {
 		e.Logger.Errorf("get user profile error, %s", err.Error())
 		e.Error(500, err, "获取用户信息失败")
@@ -450,8 +450,8 @@ func (e User) Profile(c *gin.Context) {
 // @Security Bearer
 func (e User) Current(c *gin.Context) {
 	req := dto.SysUserByID{}
-	s := service.SysUser{}
-	r := service.SysRole{}
+	s := service.User{}
+	r := service.Role{}
 	var err error
 	e.API, err = request.New(c)
 	r.Service = e.Service()
@@ -474,7 +474,7 @@ func (e User) Current(c *gin.Context) {
 		mp["permissions"] = permissions
 		mp["buttons"] = buttons
 	} else {
-		list, _ := r.GetByID(user.RoleID(c))
+		list, _ := r.Permissions(user.RoleID(c))
 		mp["permissions"] = list
 		mp["buttons"] = list
 	}
@@ -487,7 +487,7 @@ func (e User) Current(c *gin.Context) {
 	// scopes started failing closed rather than silently matching everything,
 	// every login on a deployment with enabledp: true ended here with a 401
 	// and the browser went straight back to the login page.
-	err = s.GetSelf(&req, &sysUser)
+	err = s.Self(&req, &sysUser)
 	if err != nil {
 		e.Error(http.StatusUnauthorized, err, "登录失败")
 		return

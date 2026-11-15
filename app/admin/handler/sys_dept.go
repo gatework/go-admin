@@ -30,7 +30,7 @@ type Department struct {
 // @Router /api/v1/dept [get]
 // @Security Bearer
 func (e Department) List(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -43,7 +43,7 @@ func (e Department) List(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	list, err := s.SetDeptPage(&req)
+	list, err := s.List(&req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -60,7 +60,7 @@ func (e Department) List(c *gin.Context) {
 // @Router /api/v1/dept/{deptId} [get]
 // @Security Bearer
 func (e Department) Get(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptGetReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -96,7 +96,7 @@ func (e Department) Get(c *gin.Context) {
 // @Router /api/v1/dept [post]
 // @Security Bearer
 func (e Department) Create(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptInsertReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -112,7 +112,7 @@ func (e Department) Create(c *gin.Context) {
 
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Insert(&req)
+	err = s.Create(&req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -133,7 +133,7 @@ func (e Department) Create(c *gin.Context) {
 // @Router /api/v1/dept/{deptId} [put]
 // @Security Bearer
 func (e Department) Update(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptUpdateReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -165,7 +165,7 @@ func (e Department) Update(c *gin.Context) {
 // @Router /api/v1/dept [delete]
 // @Security Bearer
 func (e Department) Delete(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptDeleteReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -179,7 +179,7 @@ func (e Department) Delete(c *gin.Context) {
 		return
 	}
 
-	err = s.Remove(&req)
+	err = s.Delete(&req)
 	if err != nil {
 		e.Error(500, err, "删除失败")
 		return
@@ -189,7 +189,7 @@ func (e Department) Delete(c *gin.Context) {
 
 // Tree 用户管理 左侧部门树
 func (e Department) Tree(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	req := dto.SysDeptGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -202,7 +202,7 @@ func (e Department) Tree(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	list, err := s.SetDeptTree(&req)
+	list, err := s.Tree(&req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -212,7 +212,7 @@ func (e Department) Tree(c *gin.Context) {
 
 // RoleTree TODO: 此接口需要调整不应该将list和选中放在一起
 func (e Department) RoleTree(c *gin.Context) {
-	s := service.SysDept{}
+	s := service.Department{}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -227,14 +227,14 @@ func (e Department) RoleTree(c *gin.Context) {
 		e.Error(400, err, "invalid role id")
 		return
 	}
-	result, err := s.SetDeptLabel()
+	result, err := s.Labels()
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
 	}
 	menuIDs := make([]int, 0)
 	if id != 0 {
-		menuIDs, err = s.GetWithRoleID(id)
+		menuIDs, err = s.IDsForRole(id)
 		if err != nil {
 			e.Error(500, err, err.Error())
 			return

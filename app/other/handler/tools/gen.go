@@ -188,7 +188,7 @@ func (e Generator) GenerateMigration(c *gin.Context) {
 
 // CreateMenu provides gen menu and api for this module.
 func (e Generator) CreateMenu(c *gin.Context) {
-	s := service.SysMenu{}
+	s := service.Menu{}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -216,20 +216,20 @@ func (e Generator) CreateMenu(c *gin.Context) {
 	tab.MLTBName = strings.ReplaceAll(tab.TBName, "_", "-")
 
 	Mmenu := generatedParentMenu(tab)
-	if err := s.Insert(&Mmenu); err != nil {
+	if err := s.Create(&Mmenu); err != nil {
 		e.Error(500, err, "menu creation failed")
 		return
 	}
 
 	Cmenu := generatedChildMenu(tab, Mmenu.MenuID)
-	if err := s.Insert(&Cmenu); err != nil {
+	if err := s.Create(&Cmenu); err != nil {
 		e.Error(500, err, "menu creation failed")
 		return
 	}
 
 	for _, action := range []struct{ title, permission string }{{"分页获取", "query"}, {"创建", "add"}, {"修改", "edit"}, {"删除", "remove"}} {
 		menu := generatedActionMenu(tab, Cmenu.MenuID, action.title, action.permission)
-		if err := s.Insert(&menu); err != nil {
+		if err := s.Create(&menu); err != nil {
 			e.Error(500, err, "menu creation failed")
 			return
 		}

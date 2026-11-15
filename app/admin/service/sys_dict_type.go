@@ -14,13 +14,13 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysDictType coordinates administration queries and mutations.
-type SysDictType struct {
+// Dictionary coordinates administration queries and mutations.
+type Dictionary struct {
 	service.Service
 }
 
-// GetPage 获取列表
-func (e *SysDictType) GetPage(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType, count *int64) error {
+// List 获取列表
+func (e *Dictionary) List(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType, count *int64) error {
 	var err error
 	var data models.SysDictType
 
@@ -39,7 +39,7 @@ func (e *SysDictType) GetPage(c *dto.SysDictTypeGetPageReq, list *[]models.SysDi
 }
 
 // Get 获取对象
-func (e *SysDictType) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) error {
+func (e *Dictionary) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) error {
 	var err error
 
 	db := e.DB.First(model, d.GetID())
@@ -56,8 +56,8 @@ func (e *SysDictType) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) e
 	return nil
 }
 
-// Insert 创建对象
-func (e *SysDictType) Insert(c *dto.SysDictTypeInsertReq) error {
+// Create 创建对象
+func (e *Dictionary) Create(c *dto.SysDictTypeInsertReq) error {
 	if strings.TrimSpace(c.DictType) == "" {
 		return errors.New("字典类型不能为空")
 	}
@@ -85,7 +85,7 @@ func (e *SysDictType) Insert(c *dto.SysDictTypeInsertReq) error {
 }
 
 // Update 修改对象
-func (e *SysDictType) Update(c *dto.SysDictTypeUpdateReq) error {
+func (e *Dictionary) Update(c *dto.SysDictTypeUpdateReq) error {
 	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
@@ -121,8 +121,8 @@ func (e *SysDictType) Update(c *dto.SysDictTypeUpdateReq) error {
 	})
 }
 
-// Remove 删除
-func (e *SysDictType) Remove(d *dto.SysDictTypeDeleteReq) error {
+// Delete 删除
+func (e *Dictionary) Delete(d *dto.SysDictTypeDeleteReq) error {
 	return e.DB.Transaction(func(tx *gorm.DB) error {
 		var types []models.SysDictType
 		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.IDs).Order("dict_id").Find(&types).Error; err != nil {
@@ -144,8 +144,8 @@ func (e *SysDictType) Remove(d *dto.SysDictTypeDeleteReq) error {
 	})
 }
 
-// GetAll 获取所有
-func (e *SysDictType) GetAll(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType) error {
+// All 获取所有
+func (e *Dictionary) All(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType) error {
 	var err error
 	var data models.SysDictType
 

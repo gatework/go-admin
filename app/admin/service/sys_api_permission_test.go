@@ -41,7 +41,7 @@ func TestSysAPIUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := &SysAPI{DB: db, Logger: logger.NewHelper(logger.Default())}
+	e := &Route{DB: db, Logger: logger.NewHelper(logger.Default())}
 	req := &dto.SysAPIUpdateReq{ID: row.ID, Title: "changed"}
 
 	// User 2, scope 5: only rows they created.
@@ -112,7 +112,7 @@ func TestSysAPIUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			s := SysAPI{DB: db, Logger: logger.NewHelper(logger.Default())}
+			s := Route{DB: db, Logger: logger.NewHelper(logger.Default())}
 			err = s.Update(&dto.SysAPIUpdateReq{ID: row.ID, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserID: 1})
 			if err == nil {
 				t.Fatal("write accepted after row disappeared or left permission scope")

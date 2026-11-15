@@ -15,8 +15,8 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysDept coordinates administration queries and mutations.
-type SysDept struct {
+// Department coordinates administration queries and mutations.
+type Department struct {
 	service.Service
 }
 
@@ -38,7 +38,7 @@ type SysDept struct {
 //}
 
 // Get 获取SysDept对象
-func (e *SysDept) Get(d *dto.SysDeptGetReq, model *models.SysDept) error {
+func (e *Department) Get(d *dto.SysDeptGetReq, model *models.SysDept) error {
 	var err error
 	var data models.SysDept
 
@@ -52,7 +52,7 @@ func (e *SysDept) Get(d *dto.SysDeptGetReq, model *models.SysDept) error {
 	}
 	if model.DeptID == 0 {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Logger.Errorf("Service GetSysAPI error: %s", err)
+		e.Logger.Errorf("loading department: %s", err)
 
 		return err
 	}
@@ -86,8 +86,8 @@ func deptParentPath(tx *gorm.DB, parentID, deptID int) (string, error) {
 	return parent.DeptPath, nil
 }
 
-// Insert 创建SysDept对象
-func (e *SysDept) Insert(c *dto.SysDeptInsertReq) error {
+// Create 创建SysDept对象
+func (e *Department) Create(c *dto.SysDeptInsertReq) error {
 	var data models.SysDept
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockDeptTree(tx); err != nil {
@@ -111,7 +111,7 @@ func (e *SysDept) Insert(c *dto.SysDeptInsertReq) error {
 }
 
 // Update 修改SysDept对象及整棵子树的路径。
-func (e *SysDept) Update(c *dto.SysDeptUpdateReq) error {
+func (e *Department) Update(c *dto.SysDeptUpdateReq) error {
 	return e.DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockDeptTree(tx); err != nil {
 			return err
@@ -151,8 +151,8 @@ func (e *SysDept) Update(c *dto.SysDeptUpdateReq) error {
 	})
 }
 
-// Remove 删除SysDept
-func (e *SysDept) Remove(d *dto.SysDeptDeleteReq) error {
+// Delete 删除SysDept
+func (e *Department) Delete(d *dto.SysDeptDeleteReq) error {
 	var err error
 	var data models.SysDept
 
@@ -168,8 +168,8 @@ func (e *SysDept) Remove(d *dto.SysDeptDeleteReq) error {
 	return nil
 }
 
-// SetDeptTree 设置组织数据
-func (e *SysDept) SetDeptTree(c *dto.SysDeptGetPageReq) (m []dto.DeptLabel, err error) {
+// Tree 设置组织数据
+func (e *Department) Tree(c *dto.SysDeptGetPageReq) (m []dto.DeptLabel, err error) {
 	var list []models.SysDept
 	err = e.getList(c, &list)
 
@@ -204,8 +204,8 @@ func deptTreeCall(deptList *[]models.SysDept, dept dto.DeptLabel) dto.DeptLabel 
 	return dept
 }
 
-// SetDeptPage 设置dept页面数据
-func (e *SysDept) SetDeptPage(c *dto.SysDeptGetPageReq) (m []models.SysDept, err error) {
+// List 设置dept页面数据
+func (e *Department) List(c *dto.SysDeptGetPageReq) (m []models.SysDept, err error) {
 	var list []models.SysDept
 	err = e.getList(c, &list)
 	for i := range list {
@@ -218,8 +218,8 @@ func (e *SysDept) SetDeptPage(c *dto.SysDeptGetPageReq) (m []models.SysDept, err
 	return
 }
 
-// GetWithRoleID performs the get with role id administration operation.
-func (e *SysDept) GetWithRoleID(roleID int) ([]int, error) {
+// IDsForRole performs the get with role id administration operation.
+func (e *Department) IDsForRole(roleID int) ([]int, error) {
 	deptIDs := make([]int, 0)
 	deptList := make([]dto.DeptIDList, 0)
 	if err := e.DB.Table("sys_role_dept").
@@ -236,8 +236,8 @@ func (e *SysDept) GetWithRoleID(roleID int) ([]int, error) {
 	return deptIDs, nil
 }
 
-// SetDeptLabel sets the department display label.
-func (e *SysDept) SetDeptLabel() (m []dto.DeptLabel, err error) {
+// Labels sets the department display label.
+func (e *Department) Labels() (m []dto.DeptLabel, err error) {
 	list := make([]models.SysDept, 0)
 	err = e.DB.Find(&list).Error
 	if err != nil {
@@ -277,7 +277,7 @@ func deptLabelCall(deptList *[]models.SysDept, dept dto.DeptLabel) dto.DeptLabel
 }
 
 // GetSysDeptList 获取组织数据
-func (e *SysDept) getList(c *dto.SysDeptGetPageReq, list *[]models.SysDept) error {
+func (e *Department) getList(c *dto.SysDeptGetPageReq, list *[]models.SysDept) error {
 	var err error
 	var data models.SysDept
 
@@ -293,7 +293,7 @@ func (e *SysDept) getList(c *dto.SysDeptGetPageReq, list *[]models.SysDept) erro
 	return nil
 }
 
-func (e *SysDept) deptPageCall(deptlist *[]models.SysDept, menu models.SysDept) models.SysDept {
+func (e *Department) deptPageCall(deptlist *[]models.SysDept, menu models.SysDept) models.SysDept {
 	list := *deptlist
 	childrenList := make([]models.SysDept, 0)
 	for j := range list {

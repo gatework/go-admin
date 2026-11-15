@@ -12,63 +12,63 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysConfig coordinates administration queries and mutations.
-type SysConfig struct {
+// Config coordinates administration queries and mutations.
+type Config struct {
 	service.Service
 }
 
-// SetSysConfig 修改已有配置，保留跳过不存在配置键的历史行为。
-func (e *SysConfig) SetSysConfig(c *[]dto.GetSetSysConfigReq) error {
+// UpdateExistingSettings 修改已有配置，保留跳过不存在配置键的历史行为。
+func (e *Config) UpdateExistingSettings(c *[]dto.ConfigSetting) error {
 	return e.setValues(c, true)
 }
 
-// GetForSet loads configuration values for the settings form.
-func (e *SysConfig) GetForSet(c *[]dto.GetSetSysConfigReq) error {
+// Settings loads configuration values for the settings form.
+func (e *Config) Settings(c *[]dto.ConfigSetting) error {
 	var err error
 	var data models.SysConfig
 
 	err = e.DB.Model(&data).
 		Find(c).Error
 	if err != nil {
-		e.Logger.Errorf("Service GetSysConfigPage error:%s", err)
+		e.Logger.Errorf("loading settings: %s", err)
 		return err
 	}
 	return nil
 }
 
-// UpdateForSet 原子更新设置页中的全部配置，不存在的键视为错误。
-func (e *SysConfig) UpdateForSet(c *[]dto.GetSetSysConfigReq) error {
+// ReplaceSettings 原子更新设置页中的全部配置，不存在的键视为错误。
+func (e *Config) ReplaceSettings(c *[]dto.ConfigSetting) error {
 	return e.setValues(c, false)
 }
 
-// GetWithKey 根据Key获取SysConfig
-func (e *SysConfig) GetWithKey(c *dto.SysConfigByKeyReq, resp *dto.GetSysConfigByKEYForServiceResp) error {
+// ByKey 根据Key获取SysConfig
+func (e *Config) ByKey(c *dto.ConfigByKey, resp *dto.ConfigEntry) error {
 	var err error
 	var data models.SysConfig
 	err = e.DB.Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
 	if err != nil {
-		e.Logger.Errorf("At Service GetSysConfigByKEY Error:%s", err)
+		e.Logger.Errorf("loading configuration by key: %s", err)
 		return err
 	}
 
 	return nil
 }
 
-// GetWithKeyList loads the configuration values selected by their keys.
-func (e *SysConfig) GetWithKeyList(c *dto.SysConfigGetToSysAppReq, list *[]models.SysConfig) error {
+// Values loads the configuration values selected by their keys.
+func (e *Config) Values(c *dto.ConfigVisibility, list *[]models.SysConfig) error {
 	err := e.DB.
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {
-		e.Logger.Errorf("Service GetSysConfigByKey error:%s", err)
+		e.Logger.Errorf("loading configuration values: %s", err)
 		return err
 	}
 	return nil
 }
 
-func (e *SysConfig) setValues(c *[]dto.GetSetSysConfigReq, skipMissing bool) error {
+func (e *Config) setValues(c *[]dto.ConfigSetting, skipMissing bool) error {
 	return e.DB.Transaction(func(tx *gorm.DB) error {
 		for _, req := range *c {
 			var model models.SysConfig

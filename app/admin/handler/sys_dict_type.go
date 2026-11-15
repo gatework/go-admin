@@ -33,7 +33,7 @@ type Dictionary struct {
 // @Router /api/v1/dict/type [get]
 // @Security Bearer
 func (e Dictionary) List(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -48,7 +48,7 @@ func (e Dictionary) List(c *gin.Context) {
 	}
 	list := make([]models.SysDictType, 0)
 	var count int64
-	err = s.GetPage(&req, &list, &count)
+	err = s.List(&req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -65,7 +65,7 @@ func (e Dictionary) List(c *gin.Context) {
 // @Router /api/v1/dict/type/{dictId} [get]
 // @Security Bearer
 func (e Dictionary) Get(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeGetReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -98,7 +98,7 @@ func (e Dictionary) Get(c *gin.Context) {
 // @Router /api/v1/dict/type [post]
 // @Security Bearer
 func (e Dictionary) Create(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeInsertReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -112,7 +112,7 @@ func (e Dictionary) Create(c *gin.Context) {
 		return
 	}
 	req.SetCreateBy(user.ID(c))
-	err = s.Insert(&req)
+	err = s.Create(&req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, fmt.Sprintf(" 创建字典类型失败，详情：%s", err.Error()))
@@ -132,7 +132,7 @@ func (e Dictionary) Create(c *gin.Context) {
 // @Router /api/v1/dict/type/{dictId} [put]
 // @Security Bearer
 func (e Dictionary) Update(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeUpdateReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -164,7 +164,7 @@ func (e Dictionary) Update(c *gin.Context) {
 // @Router /api/v1/dict/type [delete]
 // @Security Bearer
 func (e Dictionary) Delete(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeDeleteReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -178,7 +178,7 @@ func (e Dictionary) Delete(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Remove(&req)
+	err = s.Delete(&req)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
@@ -197,7 +197,7 @@ func (e Dictionary) Delete(c *gin.Context) {
 // @Router /api/v1/dict/type-option-select [get]
 // @Security Bearer
 func (e Dictionary) All(c *gin.Context) {
-	s := service.SysDictType{}
+	s := service.Dictionary{}
 	req := dto.SysDictTypeGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -211,7 +211,7 @@ func (e Dictionary) All(c *gin.Context) {
 		return
 	}
 	list := make([]models.SysDictType, 0)
-	err = s.GetAll(&req, &list)
+	err = s.All(&req, &list)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return

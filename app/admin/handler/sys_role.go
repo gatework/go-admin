@@ -37,7 +37,7 @@ type Role struct {
 // @Router /api/v1/role [get]
 // @Security Bearer
 func (e Role) List(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.SysRoleGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -54,7 +54,7 @@ func (e Role) List(c *gin.Context) {
 	list := make([]models.SysRole, 0)
 	var count int64
 
-	err = s.GetPage(&req, &list, &count)
+	err = s.List(&req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -72,7 +72,7 @@ func (e Role) List(c *gin.Context) {
 // @Router /api/v1/role/{id} [get]
 // @Security Bearer
 func (e Role) Get(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.SysRoleGetReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -108,7 +108,7 @@ func (e Role) Get(c *gin.Context) {
 // @Router /api/v1/role [post]
 // @Security Bearer
 func (e Role) Create(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.SysRoleInsertReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -128,7 +128,7 @@ func (e Role) Create(c *gin.Context) {
 		req.Status = "2"
 	}
 	cb := sdk.Runtime.Casbin(c.Request.Host)
-	err = s.Insert(&req, cb)
+	err = s.Create(&req, cb)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "创建失败,"+err.Error())
@@ -149,7 +149,7 @@ func (e Role) Create(c *gin.Context) {
 // @Router /api/v1/role/{id} [put]
 // @Security Bearer
 func (e Role) Update(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.SysRoleUpdateReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -185,7 +185,7 @@ func (e Role) Update(c *gin.Context) {
 // @Router /api/v1/role [delete]
 // @Security Bearer
 func (e Role) Delete(c *gin.Context) {
-	s := new(service.SysRole)
+	s := new(service.Role)
 	req := dto.SysRoleDeleteReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -200,7 +200,7 @@ func (e Role) Delete(c *gin.Context) {
 	}
 
 	cb := sdk.Runtime.Casbin(c.Request.Host)
-	err = s.Remove(&req, cb)
+	err = s.Delete(&req, cb)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "")
@@ -221,7 +221,7 @@ func (e Role) Delete(c *gin.Context) {
 // @Router /api/v1/role-status/{id} [put]
 // @Security Bearer
 func (e Role) UpdateStatus(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.UpdateStatusReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -254,7 +254,7 @@ func (e Role) UpdateStatus(c *gin.Context) {
 // @Router /api/v1/role-status/{id} [put]
 // @Security Bearer
 func (e Role) UpdateDataScope(c *gin.Context) {
-	s := service.SysRole{}
+	s := service.Role{}
 	req := dto.RoleDataScopeReq{}
 	var err error
 	e.API, err = request.New(c)

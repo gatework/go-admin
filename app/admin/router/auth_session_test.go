@@ -89,10 +89,10 @@ func TestDisableEnableDoesNotReviveTokens(t *testing.T) {
 			mw := authMiddleware(t)
 			db := dbFor(t, "lifecycle.test", "lifecycle-admin")
 			token := tokenFor(t, mw, db, "lifecycle-admin", "lifecycle.test")
-			users := service.SysUser{
+			users := service.User{
 				DB:     db,
 				Logger: logger.NewHelper(logger.Default())}
-			roles := service.SysRole{
+			roles := service.Role{
 				DB:     db,
 				Logger: users.Logger}
 			set := func(status string) {
@@ -139,7 +139,7 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := tokenFor(t, mw, db, "profile-admin", "profile-session.test")
-	users := service.SysUser{
+	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
 	if err := users.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "profile-admin", NickName: "Updated"}, nil, 1); err != nil {
@@ -167,7 +167,7 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 	authMiddleware(t)
 	db := dbFor(t, "reset-delete.test", "deleted-during-reset")
-	users := service.SysUser{
+	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
 	var deleted bool
@@ -182,7 +182,7 @@ func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
+	err := users.ResetPassword(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
 	if err == nil {
 		t.Fatal("reset reported success after account was deleted")
 	}
@@ -241,7 +241,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 	}
 	sdk.Runtime.SetDB("postgres.test", db)
 	token := tokenFor(t, mw, db, "postgres-admin", "postgres.test")
-	users := service.SysUser{
+	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
 	for _, status := range []string{"1", "2"} {
@@ -278,10 +278,10 @@ func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
 	if err := db.Table("sys_user").Where("user_id=1").UpdateColumn("auth_version", 7).Error; err != nil {
 		t.Fatal(err)
 	}
-	users := service.SysUser{
+	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
-	if err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+	if err := users.ResetPassword(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 		t.Fatal(err)
 	}
 	var account models.SysUser
@@ -303,7 +303,7 @@ func TestRoleReassignmentDoesNotReviveOldToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := tokenFor(t, mw, db, "reassign-admin", "reassign.test")
-	s := &service.SysUser{}
+	s := &service.User{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	for _, roleID := range []int{2, 1} {
@@ -333,7 +333,7 @@ func TestUserUpdateRechecksPermissionAtWrite(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	s := &service.SysUser{}
+	s := &service.User{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	err := s.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "scope-user", NickName: "outside-scope", RoleID: 1, DeptID: 1, Status: "1"}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 10}, 99)
@@ -357,10 +357,10 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 			if err := db.Create(&[]models.SysDept{{DeptID: 1, DeptName: "original"}, {DeptID: 2, DeptName: "alternate"}}).Error; err != nil {
 				t.Fatal(err)
 			}
-			users := service.SysUser{
+			users := service.User{
 				DB:     db,
 				Logger: logger.NewHelper(logger.Default())}
-			roles := service.SysRole{
+			roles := service.Role{
 				DB:     db,
 				Logger: users.Logger}
 			apply := func(alternate bool) {

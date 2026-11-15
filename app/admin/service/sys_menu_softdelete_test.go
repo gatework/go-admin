@@ -39,7 +39,7 @@ func TestSoftDeletedMenusAreNotReturned(t *testing.T) {
 	// reissues the statement passes whether or not the production line still
 	// says what it is supposed to, which is what the first version of this
 	// test did.
-	e := &SysMenu{}
+	e := &Menu{}
 	e.DB = db
 	got, err := e.getByRoleName("admin")
 	if err != nil {

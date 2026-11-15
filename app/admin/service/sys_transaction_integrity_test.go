@@ -36,28 +36,28 @@ func TestAdminMutationsReturnCommitFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			d := &SysDept{}
+			d := &Department{}
 			d.DB = db
-			m := &SysMenu{}
+			m := &Menu{}
 			m.DB = db
-			r := &SysRole{}
+			r := &Role{}
 			r.DB = db
 			var err error
 			switch name {
 			case "dept insert":
-				err = d.Insert(&dto.SysDeptInsertReq{DeptID: 2, DeptName: "new"})
+				err = d.Create(&dto.SysDeptInsertReq{DeptID: 2, DeptName: "new"})
 			case "dept update":
 				err = d.Update(&dto.SysDeptUpdateReq{DeptID: 1, DeptName: "changed"})
 			case "menu insert":
-				err = m.Insert(&dto.SysMenuInsertReq{MenuID: 2, MenuName: "new"})
+				err = m.Create(&dto.SysMenuInsertReq{MenuID: 2, MenuName: "new"})
 			case "menu update":
 				err = m.Update(&dto.SysMenuUpdateReq{MenuID: 1, MenuName: "changed"})
 			case "role insert":
-				err = r.Insert(&dto.SysRoleInsertReq{RoleID: 2, RoleKey: "new"}, cb)
+				err = r.Create(&dto.SysRoleInsertReq{RoleID: 2, RoleKey: "new"}, cb)
 			case "role update":
 				err = r.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "changed"}, cb)
 			case "role remove":
-				err = r.Remove(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
+				err = r.Delete(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
 			case "role scope":
 				err = r.UpdateDataScope(&dto.RoleDataScopeReq{RoleID: 1, DataScope: "2", DeptIDs: []int{1}})
 			case "role status":
@@ -115,11 +115,11 @@ func TestConcurrentHierarchyMovesCannotCreateCycle(t *testing.T) {
 				go func(id int) {
 					<-start
 					if kind == "dept" {
-						s := &SysDept{}
+						s := &Department{}
 						s.DB = db
 						results <- s.Update(&dto.SysDeptUpdateReq{DeptID: id, ParentID: 3 - id})
 					} else {
-						s := &SysMenu{}
+						s := &Menu{}
 						s.DB = db
 						results <- s.Update(&dto.SysMenuUpdateReq{MenuID: id, ParentID: 3 - id})
 					}

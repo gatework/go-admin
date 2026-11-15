@@ -31,7 +31,7 @@ type DictionaryEntry struct {
 // @Router /api/v1/dict/data [get]
 // @Security Bearer
 func (e DictionaryEntry) List(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -47,7 +47,7 @@ func (e DictionaryEntry) List(c *gin.Context) {
 
 	list := make([]models.SysDictData, 0)
 	var count int64
-	err = s.GetPage(&req, &list, &count)
+	err = s.List(&req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -65,7 +65,7 @@ func (e DictionaryEntry) List(c *gin.Context) {
 // @Router /api/v1/dict/data/{dictCode} [get]
 // @Security Bearer
 func (e DictionaryEntry) Get(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataGetReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -102,7 +102,7 @@ func (e DictionaryEntry) Get(c *gin.Context) {
 // @Router /api/v1/dict/data [post]
 // @Security Bearer
 func (e DictionaryEntry) Create(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataInsertReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -116,7 +116,7 @@ func (e DictionaryEntry) Create(c *gin.Context) {
 		return
 	}
 	req.SetCreateBy(user.ID(c))
-	err = s.Insert(&req)
+	err = s.Create(&req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -136,7 +136,7 @@ func (e DictionaryEntry) Create(c *gin.Context) {
 // @Router /api/v1/dict/data/{dictCode} [put]
 // @Security Bearer
 func (e DictionaryEntry) Update(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataUpdateReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -167,7 +167,7 @@ func (e DictionaryEntry) Update(c *gin.Context) {
 // @Router /api/v1/dict/data [delete]
 // @Security Bearer
 func (e DictionaryEntry) Delete(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataDeleteReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -181,7 +181,7 @@ func (e DictionaryEntry) Delete(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Remove(&req)
+	err = s.Delete(&req)
 	if err != nil {
 		e.Error(500, err, "删除失败")
 		return
@@ -198,7 +198,7 @@ func (e DictionaryEntry) Delete(c *gin.Context) {
 // @Router /api/v1/dict-data/option-select [get]
 // @Security Bearer
 func (e DictionaryEntry) All(c *gin.Context) {
-	s := service.SysDictData{}
+	s := service.DictionaryEntry{}
 	req := dto.SysDictDataGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -212,7 +212,7 @@ func (e DictionaryEntry) All(c *gin.Context) {
 		return
 	}
 	list := make([]models.SysDictData, 0)
-	err = s.GetAll(&req, &list)
+	err = s.All(&req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return

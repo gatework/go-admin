@@ -14,7 +14,7 @@ func TestMenuMoveUpdatesOnlyDescendants(t *testing.T) {
 	if err := db.Create(&menus).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysMenu{}
+	s := &Menu{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	if err := s.Update(&dto.SysMenuUpdateReq{MenuID: 3, ParentID: 2}); err != nil {
@@ -42,7 +42,7 @@ func TestMenuRejectsMissingUpdateAndInvalidParent(t *testing.T) {
 			if err := db.Create(&menus).Error; err != nil {
 				t.Fatal(err)
 			}
-			s := &SysMenu{}
+			s := &Menu{}
 			s.DB = db
 			s.Logger = logger.NewHelper(logger.Default())
 			if err := s.Update(&dto.SysMenuUpdateReq{MenuID: tc.id, ParentID: tc.parent}); err == nil {
@@ -66,7 +66,7 @@ func TestMenuUpdatePreservesCreator(t *testing.T) {
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysMenu{}
+	s := &Menu{}
 	s.DB = db
 	req := &dto.SysMenuUpdateReq{MenuID: 1, MenuName: "changed"}
 	req.CreateBy = 999

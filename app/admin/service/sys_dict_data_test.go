@@ -13,7 +13,7 @@ import (
 
 func TestDictDataUpdateBoundaries(t *testing.T) {
 	checkConfigDictUpdateBoundaries(t, configDictUpdateCase{table: "sys_dict_data", model: &models.SysDictData{DictCode: 1, DictType: "one"}, update: func(db *gorm.DB, id int) error {
-		s := &SysDictData{}
+		s := &DictionaryEntry{}
 		s.DB = db
 		s.Logger = logger.NewHelper(logger.Default())
 		return s.Update(&dto.SysDictDataUpdateReq{ID: id, DictType: "one", DictLabel: "changed"})
@@ -30,7 +30,7 @@ func TestDictDataUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysDictData{}
+	s := &DictionaryEntry{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	req := &dto.SysDictDataUpdateReq{ID: 1, DictType: "one"}
@@ -52,12 +52,12 @@ func TestDictDataRejectsMissingTargetType(t *testing.T) {
 	for _, name := range []string{"insert", "update"} {
 		t.Run(name, func(t *testing.T) {
 			db := configDictDB(t)
-			s := &SysDictData{}
+			s := &DictionaryEntry{}
 			s.DB = db
 			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if name == "insert" {
-				err = s.Insert(&dto.SysDictDataInsertReq{DictType: "missing"})
+				err = s.Create(&dto.SysDictDataInsertReq{DictType: "missing"})
 			} else {
 				if err := db.Create(&models.SysDictData{DictCode: 1, DictType: "original"}).Error; err != nil {
 					t.Fatal(err)

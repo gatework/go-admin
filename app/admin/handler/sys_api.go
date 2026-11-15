@@ -33,7 +33,7 @@ type Route struct {
 // @Router /api/v1/sys-api [get]
 // @Security Bearer
 func (e Route) List(c *gin.Context) {
-	s := service.SysAPI{}
+	s := service.Route{}
 	req := dto.SysAPIGetPageReq{}
 	var err error
 	e.API, err = request.New(c)
@@ -50,7 +50,7 @@ func (e Route) List(c *gin.Context) {
 	p := actions.GetPermissionFromContext(c)
 	list := make([]models.SysAPI, 0)
 	var count int64
-	err = s.GetPage(&req, p, &list, &count)
+	err = s.List(&req, p, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -68,7 +68,7 @@ func (e Route) List(c *gin.Context) {
 // @Security Bearer
 func (e Route) Get(c *gin.Context) {
 	req := dto.SysAPIGetReq{}
-	s := service.SysAPI{}
+	s := service.Route{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -102,7 +102,7 @@ func (e Route) Get(c *gin.Context) {
 // @Security Bearer
 func (e Route) Update(c *gin.Context) {
 	req := dto.SysAPIUpdateReq{}
-	s := service.SysAPI{}
+	s := service.Route{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {

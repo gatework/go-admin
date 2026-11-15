@@ -35,13 +35,13 @@ func (s *ConfigSearch) GetNeedSearch() any { return *s }
 // Bind decodes the query.
 func (s *ConfigSearch) Bind(c *gin.Context) error { return c.ShouldBind(s) }
 
-// SysConfigGetToSysAppReq carries validated administration request parameters.
-type SysConfigGetToSysAppReq struct {
+// ConfigVisibility carries validated administration request parameters.
+type ConfigVisibility struct {
 	IsFrontend string `form:"isFrontend" search:"type:exact;column:is_frontend;table:sys_config"`
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysConfigGetToSysAppReq) GetNeedSearch() any {
+func (m *ConfigVisibility) GetNeedSearch() any {
 	return *m
 }
 
@@ -98,32 +98,29 @@ func (s *ConfigControl) ToModel() (*models.SysConfig, error) {
 	return row, nil
 }
 
-// GetSetSysConfigReq 增、改使用的结构体
-type GetSetSysConfigReq struct {
+// ConfigSetting 增、改使用的结构体
+type ConfigSetting struct {
 	ConfigKey   string `json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
 }
 
-// Generate 结构体数据转化 从 SysConfigControl 至 system.SysConfig 对应的模型
-func (s *GetSetSysConfigReq) Generate(model *models.SysConfig) {
+// Generate copies the setting value into model.
+func (s *ConfigSetting) Generate(model *models.SysConfig) {
 	model.ConfigValue = s.ConfigValue
 }
 
-// UpdateSetSysConfigReq carries validated administration request parameters.
-type UpdateSetSysConfigReq map[string]string
-
-// SysConfigByKeyReq 根据Key获取配置
-type SysConfigByKeyReq struct {
+// ConfigByKey 根据Key获取配置
+type ConfigByKey struct {
 	ConfigKey string `uri:"configKey" search:"type:contains;column:config_key;table:sys_config"`
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysConfigByKeyReq) GetNeedSearch() any {
+func (m *ConfigByKey) GetNeedSearch() any {
 	return *m
 }
 
-// GetSysConfigByKEYForServiceResp carries validated administration request parameters.
-type GetSysConfigByKEYForServiceResp struct {
+// ConfigEntry carries validated administration request parameters.
+type ConfigEntry struct {
 	ConfigKey   string `json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
 	// IsFrontend decides who may read the value; it is not part of the response.

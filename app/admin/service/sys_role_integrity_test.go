@@ -114,9 +114,9 @@ func TestRoleBatchDelete(t *testing.T) {
 	if err := db.Create(&roles).Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
-	if err := s.Remove(&dto.SysRoleDeleteReq{IDs: []int{101, 102}}, integrityEnforcer(t)); err != nil {
+	if err := s.Delete(&dto.SysRoleDeleteReq{IDs: []int{101, 102}}, integrityEnforcer(t)); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
@@ -136,7 +136,7 @@ func TestRoleRenameRevokesOldKey(t *testing.T) {
 	if _, err := cb.AddPolicy("old-role", "/sensitive", "GET"); err != nil {
 		t.Fatal(err)
 	}
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
 	if err := s.Update(&dto.SysRoleUpdateReq{RoleID: 103, RoleKey: "new-role", RoleName: "role", DataScope: "1", Status: "2"}, cb); err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestRoleRollbackKeepsOldPolicies(t *testing.T) {
 	if err := db.Exec("ALTER TABLE casbin_rule ADD CONSTRAINT audit_fail_new_policy CHECK(v1 <> '/new')").Error; err != nil {
 		t.Fatal(err)
 	}
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	err := s.Update(&dto.SysRoleUpdateReq{RoleID: 501, RoleKey: "rollback-role", RoleName: "changed", DataScope: "1", Status: "2", MenuIDs: []int{302}}, cb)
@@ -214,9 +214,9 @@ func TestRoleBatchDeleteRemovesAllAssociationsAndPolicies(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
-	if err := s.Remove(&dto.SysRoleDeleteReq{IDs: []int{1, 2, 2, 999}}, cb); err != nil {
+	if err := s.Delete(&dto.SysRoleDeleteReq{IDs: []int{1, 2, 2, 999}}, cb); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"sys_role_menu", "sys_role_dept"} {
@@ -247,7 +247,7 @@ func TestRoleUpdatesDoNotCreateMissingRows(t *testing.T) {
 	for _, name := range []string{"update", "scope", "status"} {
 		t.Run(name, func(t *testing.T) {
 			db := integrityDB(t)
-			s := &SysRole{}
+			s := &Role{}
 			s.DB = db
 			cb := integrityEnforcer(t, db)
 			var err error
@@ -289,7 +289,7 @@ func TestRolePolicyReloadFailureIsExplicitAndDeniesStalePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	cb.SetAdapter(failingPolicyLoader{cb.GetAdapter()})
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
 	err := s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "changed"}, cb)
 	if err == nil || !strings.Contains(err.Error(), "committed but policy reload failed") {
@@ -347,16 +347,16 @@ func TestRolePolicyWriteFailureRollsBackDatabaseAndKeepsCache(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			s := &SysRole{}
+			s := &Role{}
 			s.DB = db
 			var err error
 			switch name {
 			case "insert":
-				err = s.Insert(&dto.SysRoleInsertReq{RoleID: 1, RoleKey: "existing", MenuIDs: []int{1}}, cb)
+				err = s.Create(&dto.SysRoleInsertReq{RoleID: 1, RoleKey: "existing", MenuIDs: []int{1}}, cb)
 			case "update":
 				err = s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "existing", RoleName: "changed", MenuIDs: []int{1}}, cb)
 			case "delete":
-				err = s.Remove(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
+				err = s.Delete(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
 			}
 			if !errors.Is(err, injected) {
 				t.Fatalf("error=%v, want policy failure", err)
@@ -417,7 +417,7 @@ func TestRoleRenameCannotTakeAnotherRolesPoliciesWithoutUniqueIndex(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	s := &SysRole{}
+	s := &Role{}
 	s.DB = db
 	if err := s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "two"}, cb); err == nil {
 		t.Fatal("rename to another active role key succeeded")
@@ -442,14 +442,14 @@ func TestRoleRejectsBlankKey(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db := integrityDB(t)
 			cb := integrityEnforcer(t, db)
-			s := &SysRole{}
+			s := &Role{}
 			s.DB = db
 			if err := db.Create(&models.SysRole{RoleID: 1, RoleKey: "existing"}).Error; err != nil {
 				t.Fatal(err)
 			}
 			var err error
 			if name == "insert" {
-				err = s.Insert(&dto.SysRoleInsertReq{RoleKey: " "}, cb)
+				err = s.Create(&dto.SysRoleInsertReq{RoleKey: " "}, cb)
 			} else {
 				err = s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: " "}, cb)
 			}

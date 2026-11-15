@@ -12,13 +12,13 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysDictData coordinates administration queries and mutations.
-type SysDictData struct {
+// DictionaryEntry coordinates administration queries and mutations.
+type DictionaryEntry struct {
 	service.Service
 }
 
-// GetPage 获取列表
-func (e *SysDictData) GetPage(c *dto.SysDictDataGetPageReq, list *[]models.SysDictData, count *int64) error {
+// List 获取列表
+func (e *DictionaryEntry) List(c *dto.SysDictDataGetPageReq, list *[]models.SysDictData, count *int64) error {
 	var err error
 	var data models.SysDictData
 
@@ -37,7 +37,7 @@ func (e *SysDictData) GetPage(c *dto.SysDictDataGetPageReq, list *[]models.SysDi
 }
 
 // Get 获取对象
-func (e *SysDictData) Get(d *dto.SysDictDataGetReq, model *models.SysDictData) error {
+func (e *DictionaryEntry) Get(d *dto.SysDictDataGetReq, model *models.SysDictData) error {
 	var err error
 	var data models.SysDictData
 
@@ -56,8 +56,8 @@ func (e *SysDictData) Get(d *dto.SysDictDataGetReq, model *models.SysDictData) e
 	return nil
 }
 
-// Insert 创建对象
-func (e *SysDictData) Insert(c *dto.SysDictDataInsertReq) error {
+// Create 创建对象
+func (e *DictionaryEntry) Create(c *dto.SysDictDataInsertReq) error {
 	var data models.SysDictData
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		var parent models.SysDictType
@@ -75,7 +75,7 @@ func (e *SysDictData) Insert(c *dto.SysDictDataInsertReq) error {
 }
 
 // Update 修改对象，锁定目标字典类型以免并发重命名或删除产生孤立数据。
-func (e *SysDictData) Update(c *dto.SysDictDataUpdateReq) error {
+func (e *DictionaryEntry) Update(c *dto.SysDictDataUpdateReq) error {
 	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
@@ -101,8 +101,8 @@ func (e *SysDictData) Update(c *dto.SysDictDataUpdateReq) error {
 	})
 }
 
-// Remove 删除
-func (e *SysDictData) Remove(c *dto.SysDictDataDeleteReq) error {
+// Delete 删除
+func (e *DictionaryEntry) Delete(c *dto.SysDictDataDeleteReq) error {
 	var err error
 	var data models.SysDictData
 
@@ -118,8 +118,8 @@ func (e *SysDictData) Remove(c *dto.SysDictDataDeleteReq) error {
 	return nil
 }
 
-// GetAll 获取所有
-func (e *SysDictData) GetAll(c *dto.SysDictDataGetPageReq, list *[]models.SysDictData) error {
+// All 获取所有
+func (e *DictionaryEntry) All(c *dto.SysDictDataGetPageReq, list *[]models.SysDictData) error {
 	var err error
 	var data models.SysDictData
 

@@ -14,13 +14,13 @@ import (
 	cDto "github.com/gatework/motor/common/dto"
 )
 
-// SysAPI coordinates administration queries and mutations.
-type SysAPI struct {
+// Route coordinates administration queries and mutations.
+type Route struct {
 	service.Service
 }
 
-// GetPage 获取SysAPI列表
-func (e *SysAPI) GetPage(c *dto.SysAPIGetPageReq, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
+// List 获取SysAPI列表
+func (e *Route) List(c *dto.SysAPIGetPageReq, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
 	var err error
 	var data models.SysAPI
 
@@ -41,14 +41,14 @@ func (e *SysAPI) GetPage(c *dto.SysAPIGetPageReq, p *actions.DataPermission, lis
 	err = orm.Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Logger.Errorf("Service GetSysAPIPage error:%s", err)
+		e.Logger.Errorf("listing routes: %s", err)
 		return err
 	}
 	return nil
 }
 
 // Get 获取SysAPI对象with id
-func (e *SysAPI) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *models.SysAPI) error {
+func (e *Route) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *models.SysAPI) error {
 	var data models.SysAPI
 	err := e.DB.Model(&data).
 		Scopes(
@@ -61,14 +61,14 @@ func (e *SysAPI) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *mode
 	}
 	if model.ID == 0 {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Logger.Errorf("Service GetSysAPI error: %s", err)
+		e.Logger.Errorf("loading route: %s", err)
 		return err
 	}
 	return nil
 }
 
 // Update 修改SysAPI对象
-func (e *SysAPI) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error {
+func (e *Route) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error {
 	var model = models.SysAPI{}
 	db := e.DB.Scopes(
 		actions.Permission(model.TableName(), p),
@@ -80,7 +80,7 @@ func (e *SysAPI) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("无权更新该数据")
 		}
-		e.Logger.Errorf("Service UpdateSysAPI error:%s", err)
+		e.Logger.Errorf("updating route: %s", err)
 		return err
 	}
 	c.Generate(&model)
@@ -88,7 +88,7 @@ func (e *SysAPI) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error
 	db = e.DB.Scopes(actions.Permission(model.TableName(), p)).
 		Omit("create_by", "created_at").Select("*").Updates(&model)
 	if err := db.Error; err != nil {
-		e.Logger.Errorf("Service UpdateSysAPI error:%s", err)
+		e.Logger.Errorf("updating route: %s", err)
 		return err
 	}
 
