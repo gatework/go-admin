@@ -139,9 +139,7 @@ func (w *Worker) RunTarget(parent context.Context, t models.Target) {
 	defer func() {
 		closeOK, finalStatus, finalCode := closeSession(session, status, code)
 		status, code = finalStatus, finalCode
-		cleanup, c := context.WithTimeout(context.Background(), 5*time.Second)
-		defer c()
-		_ = w.finish(cleanup, t, status, code, output, steps, attempted, closeOK)
+		w.record(parent, t, status, code, output, steps, attempted, closeOK)
 	}()
 	fail := func(e error) { status, code = executionFailure(e, attempted, status, code) }
 	if e := w.check(ctx, t); e != nil {
@@ -313,6 +311,21 @@ func summarize(tx *gorm.DB, id int) error {
 	}
 	return tx.Model(&models.Order{}).Where("id = ?", id).Updates(values).Error
 }
+
+// record persists a target's outcome with its own short deadline, because the
+// execution context is usually already cancelled or expired by this point.
+func (w *Worker) record(parent context.Context, t models.Target, status, code, output string, steps int, attempted, closed bool) {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+	defer cancel()
+	if e := w.finish(cleanup, t, status, code, output, steps, attempted, closed); e != nil {
+		// The outcome is now unknown to the database: the target stays running and
+		// its device lease is left to expire, which the lease sweep turns into a
+		// quarantine. Say so here, or the operator only sees a device that
+		// stopped taking work.
+		w.s.Logger.Errorf("delivery result not recorded, device lease left to quarantine: order=%d target=%d device=%d status=%s: %v", t.OrderID, t.ID, t.DeviceID, status, e)
+	}
+}
+
 func (w *Worker) finish(ctx context.Context, t models.Target, status, code, output string, steps int, attempted, closed bool) error {
 	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND lease_token = ?", t.ID, "running", t.LeaseToken).Updates(map[string]any{"status": status, "error_code": code, "output": output, "completed_steps": steps, "attempted": attempted, "finished_at": time.Now().UTC()})
