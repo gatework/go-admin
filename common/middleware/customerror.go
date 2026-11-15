@@ -24,7 +24,12 @@ func CustomError(c *gin.Context) {
 			panic(recovered)
 		}
 		api.GetRequestLogger(c).Errorf("request failed: method=%s path=%s status=%d", c.Request.Method, redactLogURL(c.Request.URL), statusCode)
-		c.JSON(http.StatusOK, gin.H{"code": statusCode, "msg": message})
+		status := statusCode
+		if status < http.StatusBadRequest || status > 599 {
+			status = http.StatusInternalServerError
+		}
+		c.Set(statusKey, statusCode)
+		c.JSON(status, gin.H{"code": statusCode, "msg": message})
 	}()
 	c.Next()
 }

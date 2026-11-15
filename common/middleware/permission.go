@@ -64,8 +64,7 @@ func AuthCheckRole() gin.HandlerFunc {
 
 		if !res {
 			log.Warnf("permission denied: role=%v method=%s path=%s", v["rolekey"], c.Request.Method, c.Request.URL.Path)
-			c.JSON(http.StatusOK, gin.H{"code": 403, "msg": "对不起，您没有该接口访问权限，请联系管理员"})
-			c.Abort()
+			response.Error(c, http.StatusForbidden, nil, "对不起，您没有该接口访问权限，请联系管理员")
 			return
 		}
 		log.Infof("permission accepted: role=%v method=%s path=%s", v["rolekey"], c.Request.Method, c.Request.URL.Path)

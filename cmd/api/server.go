@@ -611,6 +611,9 @@ func initRouter() {
 	}
 	// First, so that a panic anywhere below still produces a logged 500.
 	r.Use(common.Recover)
+	// Second, so that every error envelope written below - by Recover's
+	// successors, middleware and handlers alike - carries its real HTTP status.
+	r.Use(common.ErrorStatus)
 	if config.Current().Settings.SSL.Enable {
 		r.Use(handler.TLSHandler())
 	}

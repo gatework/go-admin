@@ -297,7 +297,8 @@ func Unauthorized(c *gin.Context, code int, message string) {
 		c.JSON(http.StatusOK, gin.H{"code": 200, "mfaRequired": true, "challengeToken": token, "expiresIn": 300})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.Set("status", code)
+	c.JSON(code, gin.H{
 		"code": code,
 		"msg":  message,
 	})

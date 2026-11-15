@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/gatework/motor-core/response"
 	"github.com/gatework/motor-core/sdk/config"
 )
 
@@ -95,10 +96,6 @@ func DemoEvn() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"code": 500,
-			"msg":  demoMessage(),
-		})
-		c.Abort()
+		response.Error(c, http.StatusForbidden, nil, demoMessage())
 	}
 }
