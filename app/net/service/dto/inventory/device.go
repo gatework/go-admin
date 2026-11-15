@@ -26,6 +26,9 @@ type DevicePageReq struct {
 	DeviceRoleEmpty bool   `form:"deviceRoleEmpty"`
 	GroupID         *int   `form:"groupId"`
 	Tag             string `form:"tag"`
+	// Absent lists only devices the latest successful sync did not see:
+	// gone from Netdisco, or no longer discovered there. Sync never deletes.
+	Absent bool `form:"absent"`
 }
 
 // Validate normalizes the request and rejects invalid or conflicting fields.

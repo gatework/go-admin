@@ -432,3 +432,30 @@ func TestDeviceExportRefusesMoreThanTheCap(t *testing.T) {
 		t.Fatalf("a filtered export under the cap failed: %v", err)
 	}
 }
+
+// A device the latest successful sync did not see is kept (sync never
+// deletes) and is what the absent filter lists.
+func TestAbsentFilterListsDevicesTheLastSyncDidNotSee(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	s.Source = sourceWithFacts(fact("192.0.2.1", "stays"), fact("192.0.2.2", "goes"))
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
+		t.Fatal(err)
+	}
+	absent := &dto.DevicePageReq{Absent: true}
+	if rows, n, err := s.Page(ctx, absent, fullScope()); err != nil || n != 0 || len(rows) != 0 {
+		t.Fatalf("after the first sync: %d absent, err %v", n, err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	s.Source = sourceWithFacts(fact("192.0.2.1", "stays"))
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
+		t.Fatal(err)
+	}
+	rows, n, err := s.Page(ctx, &dto.DevicePageReq{Absent: true}, fullScope())
+	if err != nil || n != 1 || len(rows) != 1 || rows[0].IP != "192.0.2.2" {
+		t.Fatalf("absent devices %+v (%d), err %v; want only 192.0.2.2", rows, n, err)
+	}
+	if _, n, err := s.Page(ctx, &dto.DevicePageReq{}, fullScope()); err != nil || n != 2 {
+		t.Fatalf("all devices: %d, err %v; the absent one must be kept", n, err)
+	}
+}

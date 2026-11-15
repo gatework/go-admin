@@ -74,6 +74,9 @@ func (s *Device) Get(ctx context.Context, id int, p *actions.DataPermission) (in
 }
 func filters(r *dto.DevicePageReq) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
+		if r.Absent {
+			db = db.Where("last_synced_at < (SELECT last_success_at FROM " + inventory.SyncState{}.TableName() + " WHERE id = 1)")
+		}
 		if r.FirewallOnly {
 			db = db.Where("(device_type = ? OR device_role = ?)", "firewall", "firewall")
 		}

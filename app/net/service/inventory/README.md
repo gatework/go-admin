@@ -2,7 +2,7 @@
 
 路由前缀 `/api/v1/network-device`，遵循宿主 JWT、Casbin、DataScope 和响应信封。`cmd/api/net.go` 通过 `app/net/router` 统一注册路由，数据库结构与菜单/API 权限由宿主迁移注册。
 
-- `GET /` 列表，`GET /:id` 详情，`PUT /:id` 人工资料编辑。
+- `GET /` 列表（`absent=true` 仅列出最近一次成功同步未见到的设备：已从 Netdisco 消失或不再被发现；同步从不删除设备），`GET /:id` 详情，`PUT /:id` 人工资料编辑。
 - `GET /options` 有权查看的厂商、型号与分组；`GET /export` 导出当前筛选下全部有权查看的记录。
 - `GET /sync-status` 配置与最近同步状态；`POST /sync` 将一次全量同步排队，无请求体，立即返回 `status: "queued"` 的同步状态。
 - 失败以真实 HTTP 状态与稳定错误码（`inventory.*`）返回。
