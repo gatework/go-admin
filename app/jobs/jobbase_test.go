@@ -12,7 +12,7 @@ import (
 	"github.com/gatework/motor-core/sdk"
 	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 
-	models2 "github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 // The scheduler had never been stopped. `defer crontab.Stop()` sat directly
@@ -72,8 +72,8 @@ func TestTheSchedulerIsStoppedAndTheLeaseHandedBackOnTheWayOut(t *testing.T) {
 
 	// And the lease is free, so a successor takes it immediately instead of
 	// waiting out a TTL held by a process that has exited.
-	var row models2.SysJobLease
-	if err := db.Where("name = ?", models2.SchedulerLeaseName).First(&row).Error; err != nil {
+	var row models.SysJobLease
+	if err := db.Where("name = ?", models.SchedulerLeaseName).First(&row).Error; err != nil {
 		t.Fatalf("reading the lease row: %v", err)
 	}
 	if row.Owner != "" {
@@ -90,10 +90,10 @@ func leaseDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("opening sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models2.SysJob{}, &models2.SysJobLease{}); err != nil {
+	if err := db.AutoMigrate(&models.SysJob{}, &models.SysJobLease{}); err != nil {
 		t.Fatalf("migrating: %v", err)
 	}
-	row := models2.SysJobLease{Name: models2.SchedulerLeaseName}
+	row := models.SysJobLease{Name: models.SchedulerLeaseName}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("seeding the lease row: %v", err)
 	}

@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 
-	models2 "github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 // The lease is the one thing in this package whose correctness is a property
@@ -81,13 +81,13 @@ func eachDialect(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 func seedLeaseTable(t *testing.T, db *gorm.DB) *gorm.DB {
 	t.Helper()
 
-	if err := db.Migrator().DropTable(&models2.SysJobLease{}); err != nil {
+	if err := db.Migrator().DropTable(&models.SysJobLease{}); err != nil {
 		t.Fatalf("dropping sys_job_lease: %v", err)
 	}
-	if err := db.AutoMigrate(&models2.SysJobLease{}); err != nil {
+	if err := db.AutoMigrate(&models.SysJobLease{}); err != nil {
 		t.Fatalf("creating sys_job_lease: %v", err)
 	}
-	row := models2.SysJobLease{Name: models2.SchedulerLeaseName, AcquiredAtMs: 0, ExpiresAtMs: 0}
+	row := models.SysJobLease{Name: models.SchedulerLeaseName, AcquiredAtMs: 0, ExpiresAtMs: 0}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("seeding the lease row: %v", err)
 	}
@@ -243,8 +243,8 @@ func TestReleasingALeaseSomebodyElseHoldsDoesNothing(t *testing.T) {
 func TestAMissingLeaseRowIsReportedRatherThanSilentlyNeverScheduling(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
 		t.Helper()
-		if err := db.Where("name = ?", models2.SchedulerLeaseName).
-			Delete(&models2.SysJobLease{}).Error; err != nil {
+		if err := db.Where("name = ?", models.SchedulerLeaseName).
+			Delete(&models.SysJobLease{}).Error; err != nil {
 			t.Fatalf("deleting the lease row: %v", err)
 		}
 		a := &lease{db: db, owner: "instance-a", ttl: time.Minute}
@@ -258,10 +258,10 @@ func TestAMissingLeaseRowIsReportedRatherThanSilentlyNeverScheduling(t *testing.
 	})
 }
 
-func readLease(t *testing.T, db *gorm.DB) models2.SysJobLease {
+func readLease(t *testing.T, db *gorm.DB) models.SysJobLease {
 	t.Helper()
-	var row models2.SysJobLease
-	if err := db.Where("name = ?", models2.SchedulerLeaseName).First(&row).Error; err != nil {
+	var row models.SysJobLease
+	if err := db.Where("name = ?", models.SchedulerLeaseName).First(&row).Error; err != nil {
 		t.Fatalf("reading the lease row: %v", err)
 	}
 	return row
@@ -269,8 +269,8 @@ func readLease(t *testing.T, db *gorm.DB) models2.SysJobLease {
 
 func expire(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	if err := db.Model(&models2.SysJobLease{}).
-		Where("name = ?", models2.SchedulerLeaseName).
+	if err := db.Model(&models.SysJobLease{}).
+		Where("name = ?", models.SchedulerLeaseName).
 		Update("expires_at_ms", 0).Error; err != nil {
 		t.Fatalf("expiring the lease: %v", err)
 	}

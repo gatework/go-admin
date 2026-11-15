@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	models2 "github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 // nowExprMs is the dialect's expression for the current time as
@@ -128,8 +128,8 @@ func (l *lease) acquireContext(ctx context.Context) (bool, error) {
 	}
 	expiresMs := nowMs + l.ttl.Milliseconds()
 
-	renewed := db.Model(&models2.SysJobLease{}).
-		Where("name = ? AND owner = ?", models2.SchedulerLeaseName, l.owner).
+	renewed := db.Model(&models.SysJobLease{}).
+		Where("name = ? AND owner = ?", models.SchedulerLeaseName, l.owner).
 		Update("expires_at_ms", expiresMs)
 	if renewed.Error != nil {
 		return false, fmt.Errorf("renewing the scheduler lease: %w", renewed.Error)
@@ -138,8 +138,8 @@ func (l *lease) acquireContext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	taken := db.Model(&models2.SysJobLease{}).
-		Where("name = ? AND expires_at_ms <= ?", models2.SchedulerLeaseName, nowMs).
+	taken := db.Model(&models.SysJobLease{}).
+		Where("name = ? AND expires_at_ms <= ?", models.SchedulerLeaseName, nowMs).
 		Updates(map[string]any{
 			"owner":          l.owner,
 			"acquired_at_ms": nowMs,
@@ -157,14 +157,14 @@ func (l *lease) acquireContext(ctx context.Context) (bool, error) {
 	// the migration seeds is gone, which is, and which would otherwise
 	// present as jobs silently never running anywhere.
 	var rows int64
-	if err := db.Model(&models2.SysJobLease{}).
-		Where("name = ?", models2.SchedulerLeaseName).
+	if err := db.Model(&models.SysJobLease{}).
+		Where("name = ?", models.SchedulerLeaseName).
 		Count(&rows).Error; err != nil {
 		return false, fmt.Errorf("checking for the scheduler lease row: %w", err)
 	}
 	if rows == 0 {
 		return false, fmt.Errorf("the %q lease row is missing from %s; run the migrations",
-			models2.SchedulerLeaseName, (&models2.SysJobLease{}).TableName())
+			models.SchedulerLeaseName, (&models.SysJobLease{}).TableName())
 	}
 	return false, nil
 }
@@ -177,8 +177,8 @@ func (l *lease) release() error {
 }
 
 func (l *lease) releaseContext(ctx context.Context) error {
-	res := l.db.WithContext(ctx).Model(&models2.SysJobLease{}).
-		Where("name = ? AND owner = ?", models2.SchedulerLeaseName, l.owner).
+	res := l.db.WithContext(ctx).Model(&models.SysJobLease{}).
+		Where("name = ? AND owner = ?", models.SchedulerLeaseName, l.owner).
 		Updates(map[string]any{"owner": "", "expires_at_ms": 0})
 	if res.Error != nil {
 		return fmt.Errorf("releasing the scheduler lease: %w", res.Error)

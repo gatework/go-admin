@@ -11,7 +11,7 @@ import (
 	"github.com/gatework/motor-core/sdk"
 	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 
-	models2 "github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 // An instance that starts while another one holds the lease must not
@@ -86,7 +86,7 @@ func TestABrieflyUnreachableDatabaseDoesNotStopTheScheduler(t *testing.T) {
 
 	// The table going missing is how an unreachable database presents to
 	// acquire: every statement against it returns an error.
-	if err := db.Migrator().DropTable(&models2.SysJobLease{}); err != nil {
+	if err := db.Migrator().DropTable(&models.SysJobLease{}); err != nil {
 		t.Fatalf("dropping the lease table: %v", err)
 	}
 
