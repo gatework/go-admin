@@ -3,10 +3,13 @@ package middleware
 import (
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor/config"
 )
 
 // NoCache is a middleware function that appends headers
@@ -18,26 +21,38 @@ func NoCache(c *gin.Context) {
 	c.Next()
 }
 
-// Options is a middleware function that appends headers
-// for options requests and aborts then exits the middleware
-// chain and ends the request.
-func Options(c *gin.Context) {
+// CORS grants cross-origin access to the origins listed in extend.cors.origins
+// and answers every preflight.
+//
+// The browser UI is normally served from the API's own origin and needs no
+// CORS at all; a development UI on another port is the usual exception. Every
+// response used to carry Access-Control-Allow-Origin: *, opening every route
+// to scripts on any site. An origin not on the list gets no CORS headers, so
+// the browser refuses it.
+func CORS(c *gin.Context) {
+	origin := c.GetHeader("Origin")
+	allowed := origin != "" && slices.Contains(config.Ext().CORS.Origins, origin)
+	if allowed {
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Expose-Headers", "X-Request-Id")
+	}
+	c.Writer.Header().Add("Vary", "Origin")
 	if c.Request.Method != http.MethodOptions {
 		c.Next()
-	} else {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept")
-		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Content-Type", "application/json")
-		c.AbortWithStatus(200)
+		return
 	}
+	if allowed {
+		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, x-request-id")
+		c.Header("Access-Control-Max-Age", "600")
+	}
+	c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
+	c.AbortWithStatus(http.StatusNoContent)
 }
 
 // Secure is a middleware function that appends security
 // and resource access headers.
 func Secure(c *gin.Context) {
-	c.Header("Access-Control-Allow-Origin", "*")
 	// Uploaded content must not execute in the administration origin, including
 	// previously uploaded files. Raster images remain usable as avatars.
 	// Filesystems may resolve path components without regard to case.

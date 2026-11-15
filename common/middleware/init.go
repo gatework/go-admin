@@ -27,7 +27,7 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) error {
 	// CORS preflight is answered before the tenant database is resolved: a
 	// preflight carries no credentials and needs no database, and answering it
 	// after the lookup turned every preflight to an unknown host into a 503.
-	r.Use(Options)
+	r.Use(CORS)
 	// 数据库链接
 	r.Use(database)
 	// 日志处理

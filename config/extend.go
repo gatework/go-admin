@@ -38,6 +38,19 @@ type Extend struct {
 	RateLimit RateLimit
 	Shutdown  Shutdown
 	Metrics   Metrics
+	CORS      CORS
+}
+
+// CORS 跨域白名单。界面与接口同源部署时留空即可。
+//
+//	extend:
+//	  cors:
+//	    origins:
+//	      - http://localhost:9527   # 开发时的前端
+type CORS struct {
+	// Origins are exact origins (scheme, host, port) allowed to call the API
+	// from a browser page served elsewhere.
+	Origins []string
 }
 
 // Metrics 控制 Prometheus 指标接口。

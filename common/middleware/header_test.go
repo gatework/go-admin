@@ -4,10 +4,13 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor/config"
 )
 
 func TestNoCache(t *testing.T) {
@@ -31,53 +34,40 @@ func TestNoCache(t *testing.T) {
 	}
 }
 
-func TestOptions(t *testing.T) {
+func TestCORSAnswersOnlyListedOrigins(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	previous := config.Ext()
+	t.Cleanup(func() { config.SetExt(previous) })
+	config.SetExt(config.Extend{CORS: config.CORS{Origins: []string{"http://localhost:9527"}}})
+	engine := gin.New()
+	engine.Use(CORS)
+	engine.GET("/api", func(c *gin.Context) { c.Status(http.StatusOK) })
+	serve := func(method, origin string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, "/api", nil)
+		if origin != "" {
+			request.Header.Set("Origin", origin)
+		}
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, request)
+		return response
+	}
 
-	t.Run("OPTIONS request", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodOptions, "/", nil)
-
-		Options(c)
-
-		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-			t.Errorf("Access-Control-Allow-Origin = %q", got)
+	preflight := serve(http.MethodOptions, "http://localhost:9527")
+	if preflight.Code != http.StatusNoContent || preflight.Header().Get("Access-Control-Allow-Origin") != "http://localhost:9527" ||
+		!strings.Contains(preflight.Header().Get("Access-Control-Allow-Headers"), "authorization") {
+		t.Fatalf("listed preflight: %d %v", preflight.Code, preflight.Header())
+	}
+	if got := serve(http.MethodGet, "http://localhost:9527").Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:9527" {
+		t.Fatalf("listed origin not granted: %q", got)
+	}
+	for _, response := range []*httptest.ResponseRecorder{serve(http.MethodGet, "https://evil.example"), serve(http.MethodOptions, "https://evil.example"), serve(http.MethodGet, "")} {
+		if got := response.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("unlisted origin granted %q", got)
 		}
-		if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET,POST,PUT,PATCH,DELETE,OPTIONS" {
-			t.Errorf("Access-Control-Allow-Methods = %q", got)
+		if !strings.Contains(response.Header().Get("Vary"), "Origin") {
+			t.Fatal("response varies by origin without saying so")
 		}
-		if got := w.Header().Get("Access-Control-Allow-Headers"); got != "authorization, origin, content-type, accept" {
-			t.Errorf("Access-Control-Allow-Headers = %q", got)
-		}
-		if got := w.Header().Get("Allow"); got != "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS" {
-			t.Errorf("Allow = %q", got)
-		}
-		if got := w.Header().Get("Content-Type"); got != "application/json" {
-			t.Errorf("Content-Type = %q", got)
-		}
-		if !c.IsAborted() {
-			t.Error("expected the request to be aborted")
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("status code = %d, want %d", w.Code, http.StatusOK)
-		}
-	})
-
-	t.Run("non-OPTIONS request", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-
-		Options(c)
-
-		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
-			t.Errorf("Access-Control-Allow-Origin = %q, want empty", got)
-		}
-		if c.IsAborted() {
-			t.Error("expected the request not to be aborted")
-		}
-	})
+	}
 }
 
 func TestSecure(t *testing.T) {
@@ -90,8 +80,8 @@ func TestSecure(t *testing.T) {
 
 		Secure(c)
 
-		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-			t.Errorf("Access-Control-Allow-Origin = %q", got)
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
 		}
 		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 			t.Errorf("X-Content-Type-Options = %q", got)

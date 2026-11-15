@@ -30,6 +30,10 @@ settings:
   extend:
     rateLimit:
       inboundQPS: 200
+    # cors: 允许跨域调用接口的前端源。界面与接口同源部署时删掉这一节。
+    cors:
+      origins:
+        - http://localhost:9527
     shutdown:
       drain: 0
       server: 5
