@@ -54,7 +54,7 @@ func (s *DeviceGroup) Create(ctx context.Context, r *dto.DeviceGroupReq, actor i
 		if count > 0 {
 			return inventory.GroupDuplicateErr
 		}
-		row := inventory.DeviceGroup{Code: r.Code, Name: r.Name, ParentID: r.ParentID, Description: r.Description, Enabled: r.Enabled, Position: r.Position, Version: 1}
+		row := inventory.DeviceGroup{Code: r.Code, Name: r.Name, ParentID: r.ParentID, Description: r.Description, Marker: r.Marker, Enabled: r.Enabled, Position: r.Position, Version: 1}
 		row.SetCreateBy(actor)
 		row.SetUpdateBy(actor)
 		if err := tx.Create(&row).Error; err != nil {
@@ -92,7 +92,7 @@ func (s *DeviceGroup) Update(ctx context.Context, id int, r *dto.DeviceGroupReq,
 		if err := validateGroupParent(tx, id, r.ParentID); err != nil {
 			return err
 		}
-		if err := tx.Model(&row).Updates(map[string]any{"name": r.Name, "parent_id": r.ParentID, "description": r.Description, "enabled": r.Enabled, "position": r.Position, "version": gorm.Expr("version + 1"), "update_by": actor}).Error; err != nil {
+		if err := tx.Model(&row).Updates(map[string]any{"name": r.Name, "parent_id": r.ParentID, "description": r.Description, "marker": r.Marker, "enabled": r.Enabled, "position": r.Position, "version": gorm.Expr("version + 1"), "update_by": actor}).Error; err != nil {
 			return err
 		}
 		row, err = loadGroup(tx, id)

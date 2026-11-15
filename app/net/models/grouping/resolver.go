@@ -1,42 +1,37 @@
-// Package grouping owns the deterministic name rules shared by migration and sync.
+// Package grouping assigns devices to groups and classifies them from their
+// names, the same way in the inventory migration and in every sync.
 package grouping
 
 import (
 	"regexp"
-	"strings"
 )
 
-// RegionRule describes region rule for network operations.
-type RegionRule struct{ Match, Code, Name string }
+// FallbackCode is the group a device joins when no group's marker matches it.
+const FallbackCode = "site.other"
 
-// Regions is ordered: when multiple markers occur, the first rule wins.
-var Regions = []RegionRule{
+// standardSite is a site group the inventory migration seeds, with the marker
+// it seeds it with. Sync matches the markers stored on the groups, so editing
+// a group changes assignment without a release; this list only seeds.
+type standardSite struct{ Marker, Code, Name string }
+
+// standardSites is in seeding order, which becomes the groups' positions.
+var standardSites = []standardSite{
 	{"szx9", "site.transsion-tower", "传音大厦"},
 	{"szx10", "site.shenzhen-yun-tech", "深圳云科技"},
 	{"szx8", "site.shenzhen-baiwangxin", "深圳百旺信"},
 	{"szx11", "site.shenzhen-chuanyiyuan", "深圳传意园"},
 	{"sha", "site.shanghai", "上海职场"},
 	{"ckg", "site.chongqing", "重庆职场"},
-	{"", "site.other", "其他区域"},
+	{"", FallbackCode, "其他区域"},
 }
 
+// identity is what markers and classification rules match: the device name,
+// or its serial when the source has no name.
 func identity(name, serial string) string {
-	// The source normalizes absent/null names to empty, so both use serial.
 	if name == "" {
 		return serial
 	}
 	return name
-}
-
-// Region provides the region operation within the caller's authorized network scope.
-func Region(name, serial string) RegionRule {
-	value := strings.ToLower(identity(name, serial))
-	for _, rule := range Regions {
-		if strings.Contains(value, rule.Match) {
-			return rule
-		}
-	}
-	return Regions[len(Regions)-1]
 }
 
 type classificationRule struct {

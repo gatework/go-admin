@@ -12,15 +12,19 @@ import (
 type DeviceGroup struct {
 	common.ControlBy
 	common.Model
-	ParentID    *int      `json:"parentId" gorm:"column:parent_id;index"`
-	Code        string    `json:"code" gorm:"size:100;not null;uniqueIndex:ux_network_device_group_code"`
-	Name        string    `json:"name" gorm:"size:128;not null"`
-	Description string    `json:"description" gorm:"type:text"`
-	Enabled     bool      `json:"enabled" gorm:"not null"`
-	Position    int       `json:"position" gorm:"not null;default:0"`
-	Version     int64     `json:"version" gorm:"not null;default:1"`
-	CreatedAt   time.Time `json:"-"`
-	UpdatedAt   time.Time `json:"-"`
+	ParentID    *int   `json:"parentId" gorm:"column:parent_id;index"`
+	Code        string `json:"code" gorm:"size:100;not null;uniqueIndex:ux_network_device_group_code"`
+	Name        string `json:"name" gorm:"size:128;not null"`
+	Description string `json:"description" gorm:"type:text"`
+	// Marker auto-assigns devices: one whose name (or serial, when it has no
+	// name) contains it, case-insensitively, joins the first such group by
+	// position. Empty means the group is assigned only by hand.
+	Marker    string    `json:"marker" gorm:"size:32;not null;default:''"`
+	Enabled   bool      `json:"enabled" gorm:"not null"`
+	Position  int       `json:"position" gorm:"not null;default:0"`
+	Version   int64     `json:"version" gorm:"not null;default:1"`
+	CreatedAt time.Time `json:"-"`
+	UpdatedAt time.Time `json:"-"`
 }
 
 // TableName returns the stable database table for DeviceGroup.

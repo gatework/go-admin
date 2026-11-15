@@ -218,7 +218,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 	gs := &DeviceGroup{Service: s.Service}
 	var target inventory.DeviceGroup
 	s.DB.First(&target, *after.GroupID)
-	if _, err := gs.Update(ctx, target.ID, &dto.DeviceGroupReq{Code: target.Code, Name: target.Name, Enabled: false, Version: target.Version}, 7); err != nil {
+	if _, err := gs.Update(ctx, target.ID, &dto.DeviceGroupReq{Code: target.Code, Name: target.Name, Marker: target.Marker, Enabled: false, Version: target.Version}, 7); err != nil {
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SHA-SW1"), fact("192.0.2.3", "SHA-SW2"))
@@ -251,7 +251,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 	}
 }
 
-func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.T) {
+func TestAutomaticMembershipFollowsGroupMarkersAfterDeletion(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	groups := &DeviceGroup{Service: s.Service}
@@ -269,6 +269,13 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Deleting the group deleted its marker, so its devices match no group and
+	// fall back; a same-named group without a marker attracts nothing.
+	var fallback inventory.DeviceGroup
+	if err := s.DB.Where("code = ?", grouping.FallbackCode).First(&fallback).Error; err != nil {
+		t.Fatal(err)
+	}
+	isFallback := func(id *int) bool { return id != nil && *id == fallback.ID }
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SHA-SW1"))
 	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
@@ -277,8 +284,8 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("inventory: %+v %v", rows, err)
 	}
-	if rows[0].GroupID != nil {
-		t.Errorf("sync assigned a same-named custom group: %+v", rows[0])
+	if !isFallback(rows[0].GroupID) {
+		t.Errorf("sync did not fall back once the marker was deleted: %+v", rows[0])
 	}
 	if _, err := s.AssignGroup(ctx, assignment(rows, &custom.ID, "manual"), 7, fullScope()); err != nil {
 		t.Fatal(err)
@@ -291,8 +298,8 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if automatic.GroupID != nil || automatic.GroupSource != "auto" {
-		t.Errorf("editor return-to-auto assigned a same-named custom group: %+v", automatic)
+	if !isFallback(automatic.GroupID) || automatic.GroupSource != "auto" {
+		t.Errorf("editor return-to-auto did not fall back: %+v", automatic)
 	}
 	if _, err := s.AssignGroup(ctx, assignment([]inventory.Device{automatic}, &custom.ID, "manual"), 7, fullScope()); err != nil {
 		t.Fatal(err)
@@ -305,10 +312,10 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 		t.Fatal(err)
 	}
 	automatic, err = s.Get(ctx, rows[0].ID, fullScope())
-	if err != nil || automatic.GroupID != nil || automatic.GroupSource != "auto" {
-		t.Errorf("batch return-to-auto assigned a same-named custom group: %+v %v", automatic, err)
+	if err != nil || !isFallback(automatic.GroupID) || automatic.GroupSource != "auto" {
+		t.Errorf("batch return-to-auto did not fall back: %+v %v", automatic, err)
 	}
-	recreated, err := groups.Create(ctx, &dto.DeviceGroupReq{Code: standard.Code, Name: "Renamed region", Enabled: true}, 7)
+	recreated, err := groups.Create(ctx, &dto.DeviceGroupReq{Code: standard.Code, Name: "Renamed region", Marker: standard.Marker, Enabled: true}, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,6 +324,6 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 	}
 	restored, err := s.Get(ctx, rows[0].ID, fullScope())
 	if err != nil || restored.GroupID == nil || *restored.GroupID != recreated.ID {
-		t.Fatalf("stable-code recreation did not restore automatic membership: %+v %v", restored, err)
+		t.Fatalf("recreating the group with its marker did not restore automatic membership: %+v %v", restored, err)
 	}
 }

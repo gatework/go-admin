@@ -3,6 +3,7 @@ package inventory
 import (
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/gatework/motor/app/net/models/inventory"
@@ -29,6 +30,7 @@ type DeviceGroupReq struct {
 	Name        string `json:"name"`
 	ParentID    *int   `json:"parentId"`
 	Description string `json:"description"`
+	Marker      string `json:"marker"`
 	Enabled     bool   `json:"enabled"`
 	Position    int    `json:"position"`
 	Version     int64  `json:"version"`
@@ -41,6 +43,10 @@ func (r *DeviceGroupReq) Validate(update bool) error {
 	r.Code = strings.ToLower(strings.TrimSpace(r.Code))
 	r.Name = strings.TrimSpace(r.Name)
 	r.Description = strings.TrimSpace(r.Description)
+	r.Marker = strings.ToLower(strings.TrimSpace(r.Marker))
+	if utf8.RuneCountInString(r.Marker) > 32 || strings.ContainsFunc(r.Marker, unicode.IsSpace) || strings.ContainsRune(r.Marker, 0) {
+		return inventory.InvalidErr
+	}
 	if (update && r.Version <= 0) || r.Position < 0 || (r.ParentID != nil && *r.ParentID <= 0) || len(r.Code) > 100 || !groupCode.MatchString(r.Code) || r.Name == "" {
 		return inventory.InvalidErr
 	}

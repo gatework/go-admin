@@ -1,17 +1,36 @@
 package grouping
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestRegionRulesUseOrderedNameThenAbsentNameSerial(t *testing.T) {
-	for _, test := range []struct{ name, serial, code string }{
-		{"SZX9-SW01", "", "site.transsion-tower"}, {"szx10-FW1", "", "site.shenzhen-yun-tech"},
-		{"SZX8", "", "site.shenzhen-baiwangxin"}, {"szx11", "", "site.shenzhen-chuanyiyuan"},
-		{"SHA-AP1", "", "site.shanghai"}, {"ckg", "", "site.chongqing"},
-		{"sha-szx9", "", "site.transsion-tower"}, {"ordinary", "SZX9", "site.other"},
-		{"", "SZX9-SW1", "site.transsion-tower"}, {"", "", "site.other"},
+func TestResolveMatchesGroupMarkersInPositionOrder(t *testing.T) {
+	groups := Directory{
+		{ID: 1, Code: "site.transsion-tower", Marker: "szx9", Enabled: true},
+		{ID: 2, Code: "site.shanghai", Marker: "sha", Enabled: true},
+		{ID: 3, Code: "site.lab", Marker: "LAB", Enabled: true},
+		{ID: 4, Code: "site.closed", Marker: "old", Enabled: false},
+		{ID: 5, Code: FallbackCode, Enabled: true},
+	}
+	five := 4
+	for _, test := range []struct {
+		name, serial string
+		current      *int
+		want         int // 0: no group
+	}{
+		{"SZX9-SW01", "", nil, 1},
+		{"sha-szx9", "", nil, 1}, // the earlier group wins
+		{"SHA-AP1", "", nil, 2},
+		{"x-lab-fw1", "", nil, 3},    // a custom group attracts devices by its marker
+		{"ordinary", "SZX9", nil, 5}, // a named device is matched by name only
+		{"", "SZX9-SW1", nil, 1},     // a nameless one by serial
+		{"", "", nil, 5},
+		{"old-sw1", "", nil, 0},   // a disabled group takes no new members
+		{"old-sw1", "", &five, 4}, // but keeps the ones it has
 	} {
-		if got := Region(test.name, test.serial).Code; got != test.code {
-			t.Errorf("Region(%q,%q)=%q want %q", test.name, test.serial, got, test.code)
+		got := groups.Resolve(test.name, test.serial, test.current)
+		if (got == nil) != (test.want == 0) || got != nil && *got != test.want {
+			t.Errorf("Resolve(%q, %q) = %v, want %d", test.name, test.serial, got, test.want)
 		}
 	}
 }

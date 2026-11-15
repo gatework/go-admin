@@ -30,16 +30,26 @@ func Load(tx *gorm.DB) (Directory, error) {
 	return groups, err
 }
 
-// Resolve provides the resolve operation within the caller's authorized network scope.
+// Resolve returns the group a device is assigned to automatically: the first
+// group, in the directory's position order, whose marker the device's name
+// (or serial, when nameless) contains; else the FallbackCode group. A
+// disabled group takes no new members but keeps current, the device's group
+// now. Nil means ungrouped.
 func (groups Directory) Resolve(name, serial string, current *int) *int {
-	rule := Region(name, serial)
+	value := strings.ToLower(identity(name, serial))
 	var matched *models.DeviceGroup
-	// Runtime rules bind only to stable codes. A custom group's display name
-	// cannot restore a deleted standard target or attract automatic members.
 	for i := range groups {
-		if groups[i].Code == rule.Code {
+		if marker := strings.ToLower(groups[i].Marker); marker != "" && strings.Contains(value, marker) {
 			matched = &groups[i]
 			break
+		}
+	}
+	if matched == nil {
+		for i := range groups {
+			if groups[i].Code == FallbackCode {
+				matched = &groups[i]
+				break
+			}
 		}
 	}
 	if matched == nil || (!matched.Enabled && (current == nil || *current != matched.ID)) {
@@ -74,7 +84,7 @@ func SeedAndBackfill(db *gorm.DB) error {
 		if err != nil {
 			return err
 		}
-		for position, rule := range Regions {
+		for position, rule := range standardSites {
 			exists := false
 			for _, g := range groups {
 				if g.Code == rule.Code || strings.EqualFold(g.Name, rule.Name) {
@@ -85,7 +95,7 @@ func SeedAndBackfill(db *gorm.DB) error {
 			if exists {
 				continue
 			}
-			group := models.DeviceGroup{Code: rule.Code, Name: rule.Name, Description: "Netdisco 自动关联区域", Enabled: true, Position: position, Version: 1}
+			group := models.DeviceGroup{Code: rule.Code, Name: rule.Name, Description: "Netdisco 自动关联区域", Marker: rule.Marker, Enabled: true, Position: position, Version: 1}
 			if err := tx.Create(&group).Error; err != nil {
 				return err
 			}
@@ -105,7 +115,7 @@ func legacyGroupCode(name string, groups Directory) string {
 	}
 	// A historical standard label remains a manual assignment, but the group
 	// receives its stable rule identity so future renames do not break inference.
-	for _, rule := range Regions {
+	for _, rule := range standardSites {
 		if strings.EqualFold(name, rule.Name) && !used[rule.Code] {
 			return rule.Code
 		}
@@ -119,6 +129,16 @@ func legacyGroupCode(name string, groups Directory) string {
 	return code
 }
 
+// standardMarker is the seeded marker of a standard site code, or "".
+func standardMarker(code string) string {
+	for _, site := range standardSites {
+		if site.Code == code {
+			return site.Marker
+		}
+	}
+	return ""
+}
+
 func seedLegacyGroups(tx *gorm.DB, rows []models.Device, groups Directory, legacy map[string]int) (Directory, error) {
 	for _, row := range rows {
 		if row.GroupSource != "" || row.LegacyGroup == "" {
@@ -128,7 +148,7 @@ func seedLegacyGroups(tx *gorm.DB, rows []models.Device, groups Directory, legac
 			continue
 		}
 		code := legacyGroupCode(row.LegacyGroup, groups)
-		group := models.DeviceGroup{Code: code, Name: row.LegacyGroup, Enabled: true, Version: 1}
+		group := models.DeviceGroup{Code: code, Name: row.LegacyGroup, Marker: standardMarker(code), Enabled: true, Version: 1}
 		if err := tx.Create(&group).Error; err != nil {
 			return groups, err
 		}
