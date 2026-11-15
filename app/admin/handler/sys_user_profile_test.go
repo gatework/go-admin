@@ -3,12 +3,15 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/gatework/motor/common/account"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -133,7 +136,7 @@ func TestSelfPasswordIgnoresCreatorScope(t *testing.T) {
 	s := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
-	err := s.ChangePassword(t.Context(), u.UserID, "old-password", "new-password", &actions.DataPermission{UserID: u.UserID, DataScope: actions.DataScopeSelf})
+	err := s.ChangePassword(t.Context(), u.UserID, "old-password", "new-password-long-enough", &actions.DataPermission{UserID: u.UserID, DataScope: actions.DataScopeSelf})
 	if err != nil {
 		t.Fatalf("user created by admin cannot change own password: %v", err)
 	}
@@ -201,9 +204,10 @@ func TestSelfPasswordRequestUsesTokenIdentity(t *testing.T) {
 		name, oldPassword, newPassword string
 		want                           int
 	}{
-		{"valid change", "old-password", "new-password", 200},
-		{"wrong old password", "wrong-password", "new-password", 403},
-		{"bcrypt length rejected", "old-password", strings.Repeat("x", 73), 403},
+		{"valid change", "old-password", "new-password-long-enough", 200},
+		{"wrong old password", "wrong-password", "new-password-long-enough", 403},
+		{"too long for bcrypt", "old-password", strings.Repeat("x", 73), 400},
+		{"too short", "old-password", "short", 400},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _ := setupPrivescDB(t)
@@ -254,5 +258,18 @@ func assertProfileCode(t *testing.T, rec *httptest.ResponseRecorder, want int) {
 	}
 	if result.Code != want {
 		t.Fatalf("response=%s want code %d", rec.Body.String(), want)
+	}
+}
+
+// A password the user chooses is at least 12 bytes, as at registration.
+func TestChangePasswordRefusesShortPasswords(t *testing.T) {
+	db, _ := setupPrivescDB(t)
+	u := models.SysUser{UserID: 43, Username: "short-user", Password: "old-password", Status: "2"}
+	if err := db.Create(&u).Error; err != nil {
+		t.Fatal(err)
+	}
+	s := service.User{DB: db, Logger: logger.NewHelper(logger.Default())}
+	if err := s.ChangePassword(t.Context(), u.UserID, "old-password", "short", nil); !errors.Is(err, account.PasswordErr) {
+		t.Fatalf("short password accepted: %v", err)
 	}
 }

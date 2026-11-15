@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
 
@@ -254,6 +256,12 @@ func (e *User) ChangePassword(ctx context.Context, id int, oldPassword, newPassw
 
 	if id <= 0 || oldPassword == "" || newPassword == "" {
 		return errors.New("user identity and passwords are required")
+	}
+	// A password the user chooses follows the same rule as account
+	// registration and reset. Administrator-set passwords are not checked yet:
+	// the user page pre-fills them from sys_user_initPassword.
+	if err := account.Password(newPassword); err != nil {
+		return err
 	}
 	c := &models.SysUser{}
 

@@ -395,9 +395,13 @@ func (e User) ChangePassword(c *gin.Context) {
 	}
 
 	err = s.ChangePassword(c.Request.Context(), user.ID(c), req.OldPassword, req.NewPassword, nil)
+	if errors.Is(err, account.PasswordErr) {
+		e.Error(http.StatusBadRequest, nil, "新密码需为 12–72 字节")
+		return
+	}
 	if err != nil {
 		e.Logger.Error(err)
-		e.Error(http.StatusForbidden, err, "密码修改失败")
+		e.Error(http.StatusForbidden, nil, "密码修改失败")
 		return
 	}
 
