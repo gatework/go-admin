@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -20,6 +22,38 @@ import (
 // Wireless handles the wireless HTTP operations for each request.
 type Wireless struct{ api.API }
 
+// wirelessCall is what every wireless operation needs from its request: the
+// scoped service, the caller's data permission, and the controller and item
+// IDs from the path (zero when the route has none).
+type wirelessCall struct {
+	s          *service.Wireless
+	p          *actions.DataPermission
+	controller int
+	item       int
+	c          *gin.Context
+}
+
+func (w wirelessCall) ctx() context.Context { return w.c.Request.Context() }
+
+// withWirelessBody decodes the request body into T before running op.
+func withWirelessBody[T any](op func(wirelessCall, T) (any, error)) func(wirelessCall) (any, error) {
+	return func(call wirelessCall) (any, error) {
+		var r T
+		if !decodeWirelessRequest(call.c, &r) {
+			return nil, service.InvalidErr
+		}
+		return op(call, r)
+	}
+}
+
+func decodeWirelessRequest(c *gin.Context, v any) bool {
+	limit := int64(128 << 10)
+	if strings.Contains(c.FullPath(), "/imports/") {
+		limit = 64 << 20
+	}
+	return decodeStrictJSON(c, v, limit)
+}
+
 // Controllers returns scoped wireless data.
 // @Summary Wireless Controllers
 // @Tags Wireless
@@ -27,57 +61,7 @@ type Wireless struct{ api.API }
 // @Router /api/v1/network-wireless/controllers [get]
 // @Security Bearer
 func (e Wireless) Controllers(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_ = id
-	r := dto.PageReq{}
-	if c.ShouldBindQuery(&r) != nil {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	rows, n, err := s.Controllers(ctx, &r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
-}
-
-// Resources returns scoped wireless data.
-// @Summary Wireless Resources
-// @Tags Wireless
-// @Success 200 {object} response.Response
-// @Router /api/v1/network-wireless/controllers/{controllerId}/access-points [get]
-// @Security Bearer
-func (e Wireless) Resources(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_ = id
-	r := dto.PageReq{}
-	if c.ShouldBindQuery(&r) != nil {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	rows, n, err := s.ResourcePage(ctx, id, c.GetString("wirelessKind"), &r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
+	e.servePage(c, func(w wirelessCall, r *dto.PageReq) (any, int64, error) { return w.s.Controllers(w.ctx(), r, w.p) })
 }
 
 // Clients returns scoped wireless data.
@@ -87,34 +71,7 @@ func (e Wireless) Resources(c *gin.Context) {
 // @Router /api/v1/network-wireless/clients [get]
 // @Security Bearer
 func (e Wireless) Clients(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_ = id
-	r := dto.PageReq{}
-	if c.ShouldBindQuery(&r) != nil {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	rows, n, err := s.Clients(ctx, &r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
-}
-func decodeWirelessRequest(c *gin.Context, v any) bool {
-	limit := int64(128 << 10)
-	if strings.Contains(c.FullPath(), "/imports/") {
-		limit = 64 << 20
-	}
-	return decodeStrictJSON(c, v, limit)
+	e.servePage(c, func(w wirelessCall, r *dto.PageReq) (any, int64, error) { return w.s.Clients(w.ctx(), r, w.p) })
 }
 
 // Switches returns scoped wireless data.
@@ -124,27 +81,7 @@ func decodeWirelessRequest(c *gin.Context, v any) bool {
 // @Router /api/v1/network-wireless/switches [get]
 // @Security Bearer
 func (e Wireless) Switches(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_ = id
-	r := dto.PageReq{}
-	if c.ShouldBindQuery(&r) != nil {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	rows, n, err := s.Switches(ctx, &r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
+	e.servePage(c, func(w wirelessCall, r *dto.PageReq) (any, int64, error) { return w.s.Switches(w.ctx(), r, w.p) })
 }
 
 // Collections returns scoped wireless data.
@@ -154,28 +91,42 @@ func (e Wireless) Switches(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/collections [get]
 // @Security Bearer
 func (e Wireless) Collections(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_ = id
-	r := dto.PageReq{}
-	if c.ShouldBindQuery(&r) != nil {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	rows, n, err := s.Collections(ctx, id, &r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
+	e.servePage(c, func(w wirelessCall, r *dto.PageReq) (any, int64, error) {
+		return w.s.Collections(w.ctx(), w.controller, r, w.p)
+	})
 }
+
+// AccessPoints lists a controller's access points.
+// @Summary Wireless access points
+// @Tags Wireless
+// @Success 200 {object} response.Response
+// @Router /api/v1/network-wireless/controllers/{controllerId}/access-points [get]
+// @Security Bearer
+func (e Wireless) AccessPoints(c *gin.Context) { e.resources(c, "access_points") }
+
+// Radios lists a controller's radios.
+// @Summary Wireless radios
+// @Tags Wireless
+// @Success 200 {object} response.Response
+// @Router /api/v1/network-wireless/controllers/{controllerId}/radios [get]
+// @Security Bearer
+func (e Wireless) Radios(c *gin.Context) { e.resources(c, "radios") }
+
+// BSSes lists a controller's BSSes.
+// @Summary Wireless BSSes
+// @Tags Wireless
+// @Success 200 {object} response.Response
+// @Router /api/v1/network-wireless/controllers/{controllerId}/bsses [get]
+// @Security Bearer
+func (e Wireless) BSSes(c *gin.Context) { e.resources(c, "bsses") }
+
+// ClientResources lists a controller's clients.
+// @Summary Wireless controller clients
+// @Tags Wireless
+// @Success 200 {object} response.Response
+// @Router /api/v1/network-wireless/controllers/{controllerId}/clients [get]
+// @Security Bearer
+func (e Wireless) ClientResources(c *gin.Context) { e.resources(c, "clients") }
 
 // Controller reads an authorized wireless resource.
 // @Summary Wireless Controller
@@ -184,22 +135,7 @@ func (e Wireless) Collections(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId} [get]
 // @Security Bearer
 func (e Wireless) Controller(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Controller(ctx, id, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.Controller(w.ctx(), w.controller, w.p) })
 }
 
 // Analysis reads an authorized wireless resource.
@@ -209,22 +145,7 @@ func (e Wireless) Controller(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/analysis [get]
 // @Security Bearer
 func (e Wireless) Analysis(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Analysis(ctx, id, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.Analysis(w.ctx(), w.controller, w.p) })
 }
 
 // APDetail reads an authorized wireless resource.
@@ -234,22 +155,17 @@ func (e Wireless) Analysis(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/access-points/{id} [get]
 // @Security Bearer
 func (e Wireless) APDetail(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.APDetail(ctx, id, sub, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.APDetail(w.ctx(), w.controller, w.item, w.p) })
+}
+
+// Client reads one of a controller's clients.
+// @Summary Wireless client
+// @Tags Wireless
+// @Success 200 {object} response.Response
+// @Router /api/v1/network-wireless/controllers/{controllerId}/clients/{id} [get]
+// @Security Bearer
+func (e Wireless) Client(c *gin.Context) {
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.Client(w.ctx(), w.controller, w.item, w.p) })
 }
 
 // Collection reads an authorized wireless resource.
@@ -259,22 +175,7 @@ func (e Wireless) APDetail(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/collections/{id} [get]
 // @Security Bearer
 func (e Wireless) Collection(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Collection(ctx, id, sub, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.Collection(w.ctx(), w.controller, w.item, w.p) })
 }
 
 // Groups reads an authorized wireless resource.
@@ -284,22 +185,7 @@ func (e Wireless) Collection(c *gin.Context) {
 // @Router /api/v1/network-wireless/groups [get]
 // @Security Bearer
 func (e Wireless) Groups(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Groups(ctx, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, func(w wirelessCall) (any, error) { return w.s.Groups(w.ctx(), w.p) })
 }
 
 // Collect validates scope and versions before mutation.
@@ -309,27 +195,9 @@ func (e Wireless) Groups(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/collections [post]
 // @Security Bearer
 func (e Wireless) Collect(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	var r dto.CollectionReq
-	if !decodeWirelessRequest(c, &r) {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.CreateCollection(ctx, id, r, user.ID(c), p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.CollectionReq) (any, error) {
+		return w.s.CreateCollection(w.ctx(), w.controller, r, user.ID(w.c), w.p)
+	}))
 }
 
 // Management validates scope and versions before mutation.
@@ -339,27 +207,9 @@ func (e Wireless) Collect(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/access-points/{id}/management [put]
 // @Security Bearer
 func (e Wireless) Management(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	var r dto.ManagementReq
-	if !decodeWirelessRequest(c, &r) {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Management(ctx, id, sub, r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.ManagementReq) (any, error) {
+		return w.s.Management(w.ctx(), w.controller, w.item, r, w.p)
+	}))
 }
 
 // Associate validates scope and versions before mutation.
@@ -369,27 +219,9 @@ func (e Wireless) Management(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/access-points/{id}/neighbor [put]
 // @Security Bearer
 func (e Wireless) Associate(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	var r dto.NeighborReq
-	if !decodeWirelessRequest(c, &r) {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Associate(ctx, id, sub, r, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.NeighborReq) (any, error) {
+		return w.s.Associate(w.ctx(), w.controller, w.item, r, w.p)
+	}))
 }
 
 // PreviewImport validates scope and versions before mutation.
@@ -399,27 +231,9 @@ func (e Wireless) Associate(c *gin.Context) {
 // @Router /api/v1/network-wireless/imports/preview [post]
 // @Security Bearer
 func (e Wireless) PreviewImport(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	var r dto.ImportReq
-	if !decodeWirelessRequest(c, &r) {
-		e.respond(service.InvalidErr)
-		return
-	}
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.PreviewImport(ctx, r.Content, p)
-	if err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(row, "OK")
+	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.ImportReq) (any, error) {
+		return w.s.PreviewImport(w.ctx(), r.Content, w.p)
+	}))
 }
 
 // CommitImport applies a digest-bound CSV atomically.
@@ -429,20 +243,9 @@ func (e Wireless) PreviewImport(c *gin.Context) {
 // @Router /api/v1/network-wireless/imports/commit [post]
 // @Security Bearer
 func (e Wireless) CommitImport(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	var r dto.ImportReq
-	if !decodeWirelessRequest(c, &r) {
-		e.respond(service.InvalidErr)
-		return
-	}
-	if err := s.CommitImport(c.Request.Context(), r, actions.GetPermissionFromContext(c)); err != nil {
-		e.respond(err)
-		return
-	}
-	e.OK(nil, "OK")
+	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.ImportReq) (any, error) {
+		return nil, w.s.CommitImport(w.ctx(), r, w.p)
+	}))
 }
 
 // Export returns scoped UTF-8 CSV.
@@ -453,11 +256,7 @@ func (e Wireless) CommitImport(c *gin.Context) {
 // @Router /api/v1/network-wireless/controllers/{controllerId}/exports/{kind} [get]
 // @Security Bearer
 func (e Wireless) Export(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
-	if !ok {
-		return
-	}
-	id, _, ok := e.ids(c)
+	w, ok := prepareWireless(&e, c)
 	if !ok {
 		return
 	}
@@ -466,61 +265,85 @@ func (e Wireless) Export(c *gin.Context) {
 		e.respond(service.InvalidErr)
 		return
 	}
-	body, err := s.Export(c.Request.Context(), id, strings.ReplaceAll(c.Param("kind"), "-", "_"), &r, actions.GetPermissionFromContext(c))
+	kind := strings.ReplaceAll(c.Param("kind"), "-", "_")
+	body, err := w.s.Export(w.ctx(), w.controller, kind, &r, w.p)
 	if err != nil {
 		e.respond(err)
 		return
 	}
 	c.Header("Content-Disposition", "attachment; filename=wireless.csv")
-	c.Data(200, "text/csv; charset=utf-8", []byte(body))
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(body))
 }
 
-// AccessPoints provides the access points operation within the caller's authorized wireless scope.
-func (e Wireless) AccessPoints(c *gin.Context) {
-	c.Set("wirelessKind", "access_points")
-	e.Resources(c)
-}
-
-// Radios provides the radios operation within the caller's authorized wireless scope.
-func (e Wireless) Radios(c *gin.Context) { c.Set("wirelessKind", "radios"); e.Resources(c) }
-
-// BSSes provides the b s ses operation within the caller's authorized wireless scope.
-func (e Wireless) BSSes(c *gin.Context) { c.Set("wirelessKind", "bsses"); e.Resources(c) }
-
-// ClientResources provides the client resources operation within the caller's authorized wireless scope.
-func (e Wireless) ClientResources(c *gin.Context) { c.Set("wirelessKind", "clients"); e.Resources(c) }
-
-// Client provides the client operation within the caller's authorized wireless scope.
-func (e Wireless) Client(c *gin.Context) {
-	s, ok := prepareWireless(&e, c)
+// serve prepares the call, runs op and answers its result.
+func (e Wireless) serve(c *gin.Context, op func(wirelessCall) (any, error)) {
+	call, ok := prepareWireless(&e, c)
 	if !ok {
 		return
 	}
-	id, sub, ok := e.ids(c)
-	if !ok {
-		return
-	}
-	_, _ = id, sub
-	ctx, p := c.Request.Context(), actions.GetPermissionFromContext(c)
-	row, err := s.Client(ctx, id, sub, p)
+	out, err := op(call)
 	if err != nil {
 		e.respond(err)
 		return
 	}
-	e.OK(row, "OK")
+	e.OK(out, "OK")
 }
-func prepareWireless(e *Wireless, c *gin.Context) (*service.Wireless, bool) {
-	s := &service.Wireless{Actor: user.ID(c)}
+
+// servePage binds the page query and answers op's rows as a page.
+func (e Wireless) servePage(c *gin.Context, op func(wirelessCall, *dto.PageReq) (any, int64, error)) {
+	call, ok := prepareWireless(&e, c)
+	if !ok {
+		return
+	}
+	r := dto.PageReq{}
+	if c.ShouldBindQuery(&r) != nil {
+		e.respond(service.InvalidErr)
+		return
+	}
+	rows, n, err := op(call, &r)
+	if err != nil {
+		e.respond(err)
+		return
+	}
+	e.PageOK(rows, int(n), r.PageIndex, r.PageSize, "OK")
+}
+
+func (e Wireless) resources(c *gin.Context, kind string) {
+	e.servePage(c, func(w wirelessCall, r *dto.PageReq) (any, int64, error) {
+		return w.s.ResourcePage(w.ctx(), w.controller, kind, r, w.p)
+	})
+}
+
+// prepareWireless binds the request to e and builds the call: the scoped service and
+// the positive controller and item IDs the route carries.
+func prepareWireless(e *Wireless, c *gin.Context) (wirelessCall, bool) {
 	var err error
 	e.API, err = request.New(c)
-	s.Service = e.Service()
 	if err != nil {
 		e.respond(err)
-		return nil, false
+		return wirelessCall{}, false
 	}
 	c.Header("Cache-Control", "no-store")
-	return s, true
+	call := wirelessCall{
+		s: &service.Wireless{Service: e.Service(), Actor: user.ID(c)},
+		p: actions.GetPermissionFromContext(c),
+		c: c,
+	}
+	for key, dst := range map[string]*int{"controllerId": &call.controller, "id": &call.item} {
+		raw := c.Param(key)
+		if raw == "" {
+			continue
+		}
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			e.respond(service.InvalidErr)
+			return wirelessCall{}, false
+		}
+		*dst = v
+	}
+	return call, true
 }
+
 func (e Wireless) respond(err error) {
 	code, msg := 500, "wireless.operation_failed"
 	switch {
@@ -532,24 +355,4 @@ func (e Wireless) respond(err error) {
 		code, msg = 404, service.ScopeErr.Error()
 	}
 	e.Error(code, nil, msg)
-}
-
-func (e Wireless) ids(c *gin.Context) (int, int, bool) {
-	id, sub := 0, 0
-	for _, k := range []string{"controllerId", "id"} {
-		if c.Param(k) == "" {
-			continue
-		}
-		v, err := strconv.Atoi(c.Param(k))
-		if err != nil || v <= 0 {
-			e.respond(service.InvalidErr)
-			return 0, 0, false
-		}
-		if k == "id" {
-			sub = v
-		} else {
-			id = v
-		}
-	}
-	return id, sub, true
 }
