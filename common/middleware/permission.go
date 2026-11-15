@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -13,6 +14,15 @@ import (
 	"github.com/gatework/motor-core/sdk/api"
 )
 
+// NoEnforcerErr reports a request for a tenant that has no authorization
+// enforcer, such as an unknown host.
+//
+//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+var NoEnforcerErr = errors.New("permission: no enforcer for tenant")
+
+//revive:enable:error-naming
+
 // AuthCheckRole 权限检查中间件
 func AuthCheckRole() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -23,7 +33,6 @@ func AuthCheckRole() gin.HandlerFunc {
 			response.Error(c, 401, fmt.Errorf("permission: missing claims"), "")
 			return
 		}
-		e := sdk.Runtime.Casbin(c.Request.Host)
 		var res, casbinExclude bool
 		var err error
 		//检查权限
@@ -38,6 +47,12 @@ func AuthCheckRole() gin.HandlerFunc {
 		if casbinExclude {
 			log.Infof("Casbin exclusion, no validation method:%s path:%s", c.Request.Method, c.Request.URL.Path)
 			c.Next()
+			return
+		}
+		e := sdk.Runtime.Casbin(c.Request.Host)
+		if e == nil {
+			log.Errorf("AuthCheckRole: no enforcer for tenant: method=%s path=%s", c.Request.Method, c.Request.URL.Path)
+			response.Error(c, http.StatusServiceUnavailable, nil, "tenant unavailable")
 			return
 		}
 		res, err = e.Enforce(v["rolekey"], c.Request.URL.Path, c.Request.Method)
@@ -82,6 +97,9 @@ func EnforceRoleFor(c *gin.Context, path, method string) (bool, error) {
 		return true, nil
 	}
 	e := sdk.Runtime.Casbin(c.Request.Host)
+	if e == nil {
+		return false, NoEnforcerErr
+	}
 	return e.Enforce(v["rolekey"], path, method)
 }
 
