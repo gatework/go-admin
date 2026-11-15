@@ -31,21 +31,27 @@ func TestDiagnosticsRejectsMalformedBodyAndUnknownJob(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		engine.ServeHTTP(response, req)
-		var result struct{ Code int }
+		var result struct {
+			Code int
+			Msg  string
+		}
 		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.Code != 400 {
+		if result.Code != 400 || result.Msg != "diagnostics.invalid_input" {
 			t.Fatalf("body %s: %s", body, response.Body.String())
 		}
 	}
 	response := httptest.NewRecorder()
 	engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/jobs/missing", nil))
-	var result struct{ Code int }
+	var result struct {
+		Code int
+		Msg  string
+	}
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Code != 404 {
+	if result.Code != 404 || result.Msg != "diagnostics.not_found" {
 		t.Fatalf("unknown job: %s", response.Body.String())
 	}
 	response = httptest.NewRecorder()

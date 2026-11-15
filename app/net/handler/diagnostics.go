@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"net"
 	"net/http"
 
@@ -11,6 +10,7 @@ import (
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/api"
 	service "github.com/gatework/motor/app/net/service/diagnostics"
+	"github.com/gatework/motor/common/request"
 )
 
 // Diagnostics adapts network diagnostic HTTP routes. It holds only the shared,
@@ -58,12 +58,12 @@ func (e Diagnostics) Start(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var request service.Request
-	if !decodeStrictJSON(c, &request, 4096) {
+	var req service.Request
+	if !decodeStrictJSON(c, &req, 4096) {
 		respondDiagnostics(a, service.InvalidErr)
 		return
 	}
-	job, err := e.Manager.Start(c.Request.Context(), owner(c), request)
+	job, err := e.Manager.Start(c.Request.Context(), owner(c), req)
 	if err != nil {
 		respondDiagnostics(a, err)
 		return
@@ -125,17 +125,4 @@ func (e Diagnostics) prepare(c *gin.Context) (*api.API, bool) {
 	return a, true
 }
 
-func respondDiagnostics(a *api.API, err error) {
-	code, message := 500, "Network diagnostic request failed"
-	switch {
-	case errors.Is(err, service.InvalidErr):
-		code, message = 400, "Invalid target or diagnostic parameters"
-	case errors.Is(err, service.BusyErr):
-		code, message = 429, "A diagnostic is already running or the server is busy"
-	case errors.Is(err, service.UnavailableErr):
-		code, message = 503, "The selected diagnostic tool is unavailable on this server"
-	case errors.Is(err, service.NotFoundErr):
-		code, message = 404, "The diagnostic job was not found or has expired"
-	}
-	a.Error(code, nil, message)
-}
+func respondDiagnostics(a *api.API, err error) { request.Fail(a, err) }

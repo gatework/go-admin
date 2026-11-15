@@ -1,28 +1,29 @@
 package diagnostics
 
 import (
-	"errors"
 	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gatework/motor/common/errkind"
 )
 
 const maxDuration = 60 * time.Second
 const serverDuration = 120 * time.Second
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// InvalidErr reports invalid.
-	InvalidErr = errors.New("invalid diagnostic parameters")
-	// UnavailableErr describes the err unavailable used by this module.
-	UnavailableErr = errors.New("diagnostic tool is not installed")
-	// BusyErr reports that diagnostic capacity is occupied.
-	BusyErr = errors.New("diagnostic capacity is busy")
-	// NotFoundErr reports a missing or expired diagnostic job.
-	NotFoundErr     = errors.New("diagnostic job not found or expired")
+	// InvalidErr is a target or parameter the service will not run.
+	InvalidErr = errkind.New(errkind.Invalid, "diagnostics.invalid_input")
+	// UnavailableErr is a tool that is not installed on this server.
+	UnavailableErr = errkind.New(errkind.Unavailable, "diagnostics.tool_unavailable")
+	// BusyErr is a caller already running a diagnostic, or a server at capacity.
+	BusyErr = errkind.New(errkind.Busy, "diagnostics.busy")
+	// NotFoundErr is a job that does not exist, has expired, or is someone else's.
+	NotFoundErr     = errkind.New(errkind.NotFound, "diagnostics.not_found")
 	hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 )
 
