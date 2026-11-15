@@ -2,7 +2,6 @@ package delivery
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -14,25 +13,29 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	network "github.com/gatework/motor/app/net/service/inventory"
+	"github.com/gatework/motor/common/errkind"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// InvalidErr identifies invalid failures.
-	InvalidErr = errors.New("delivery.invalid_input")
-	// ConflictErr identifies conflict failures.
-	ConflictErr = errors.New("delivery.version_conflict")
-	// NotFoundErr identifies not found failures.
-	NotFoundErr = errors.New("delivery.not_found")
-	// DisabledErr identifies disabled failures.
-	DisabledErr = errors.New("delivery.disabled")
-	// ConnectionErr identifies connection failures.
-	ConnectionErr = errors.New("delivery.connection_not_ready")
-	// CancelledErr identifies cancelled failures.
-	CancelledErr = errors.New("delivery.cancelled")
-	// IdentityErr identifies identity failures.
-	IdentityErr = errors.New("delivery.device_changed")
+	// InvalidErr is a request the service refuses as malformed.
+	InvalidErr = errkind.New(errkind.Invalid, "delivery.invalid_input")
+	// ConflictErr is a write against a version that has since changed.
+	ConflictErr = errkind.New(errkind.Conflict, "delivery.version_conflict")
+	// NotFoundErr is an order or target that does not exist or is out of scope.
+	NotFoundErr = errkind.New(errkind.NotFound, "delivery.not_found")
+	// DisabledErr is any delivery request while NETWORK_DELIVERY_ENABLED is off.
+	DisabledErr = errkind.New(errkind.Unavailable, "delivery.disabled")
+	// ConnectionErr is a device whose connection profile cannot be used yet:
+	// no profile, an unknown platform, or credentials that are not configured.
+	ConnectionErr = errkind.New(errkind.Invalid, "delivery.connection_not_ready")
+	// CancelledErr is a target whose order was cancelled or whose lease was lost
+	// while it ran.
+	CancelledErr = errkind.New(errkind.Conflict, "delivery.cancelled")
+	// IdentityErr is a device whose identity changed between planning and
+	// execution, so the planned script may no longer apply to it.
+	IdentityErr = errkind.New(errkind.Conflict, "delivery.device_changed")
 )
 
 //revive:enable:error-naming

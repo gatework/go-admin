@@ -217,3 +217,19 @@ func TestOptionsReusesScopedDeviceGroupTree(t *testing.T) {
 		t.Fatalf("child scope: %+v", child)
 	}
 }
+
+// Delivery's failures answer with their kind's status and stable code: a
+// switched-off feature is unavailable, an unknown order is not found.
+func TestAPIAnswersFailuresByKind(t *testing.T) {
+	r := deliveryTestEngine(t)
+	out := callDelivery(t, r, "GET", "/orders/999", "")
+	if out["code"] != float64(404) || out["msg"] != "delivery.not_found" {
+		t.Fatalf("unknown order answered %+v", out)
+	}
+	t.Setenv("NETWORK_DELIVERY_ENABLED", "false")
+	body := `{"requestKey":"request-00002","title":"fixture","targets":[{"deviceId":1,"script":"display version"}]}`
+	out = callDelivery(t, r, "POST", "/orders", body)
+	if out["code"] != float64(503) || out["msg"] != "delivery.disabled" {
+		t.Fatalf("disabled delivery answered %+v", out)
+	}
+}

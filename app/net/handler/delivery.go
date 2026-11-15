@@ -2,9 +2,11 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/gatework/motor-core/jwtauth/user"
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
@@ -306,19 +308,12 @@ func prepareDelivery(e *Delivery, c *gin.Context) (*service.Workflow, bool) {
 	return s, true
 }
 
+// respond answers err by its kind; a missing row is NotFoundErr.
 func (e Delivery) respond(err error) {
-	code, message := 500, "delivery.operation_failed"
-	switch {
-	case errors.Is(err, service.InvalidErr):
-		code, message = 400, err.Error()
-	case errors.Is(err, service.NotFoundErr):
-		code, message = 404, err.Error()
-	case errors.Is(err, service.ConflictErr):
-		code, message = 409, err.Error()
-	case errors.Is(err, service.DisabledErr), errors.Is(err, service.ConnectionErr):
-		code, message = 422, err.Error()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = fmt.Errorf("%w: %w", service.NotFoundErr, err)
 	}
-	e.Error(code, nil, message)
+	request.Fail(&e.API, err)
 }
 
 func (e Delivery) id(c *gin.Context, key string) (int, bool) {
