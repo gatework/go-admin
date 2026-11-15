@@ -31,8 +31,9 @@ func TestEveryKindHasAStatus(t *testing.T) {
 		Unauthorized: http.StatusUnauthorized, Forbidden: http.StatusForbidden,
 		NotFound: http.StatusNotFound, Conflict: http.StatusConflict,
 		Busy: http.StatusTooManyRequests, Unavailable: http.StatusServiceUnavailable,
+		Upstream: http.StatusBadGateway, Timeout: http.StatusGatewayTimeout,
 	}
-	for kind := range Unavailable + 1 {
+	for kind := range Timeout + 1 {
 		if got := kind.Status(); got != want[kind] {
 			t.Errorf("%d.Status() = %d, want %d", kind, got, want[kind])
 		}

@@ -32,6 +32,11 @@ const (
 	Conflict
 	Busy
 	Unavailable
+	// Upstream is an external system that answered, but not usefully:
+	// refused our credentials, failed, or returned data we cannot accept.
+	Upstream
+	// Timeout is an external system that did not answer in time.
+	Timeout
 )
 
 // Status is the HTTP status that reports this kind.
@@ -51,6 +56,10 @@ func (k Kind) Status() int {
 		return http.StatusTooManyRequests
 	case Unavailable:
 		return http.StatusServiceUnavailable
+	case Upstream:
+		return http.StatusBadGateway
+	case Timeout:
+		return http.StatusGatewayTimeout
 	default:
 		return http.StatusInternalServerError
 	}
