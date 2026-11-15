@@ -28,7 +28,7 @@ func (e *User) List(ctx context.Context, c *dto.UserSearch, p *actions.DataPermi
 	var err error
 	var data models.SysUser
 
-	err = e.DB.WithContext(ctx).Debug().Preload("Dept").
+	err = e.DB.WithContext(ctx).Preload("Dept").
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -71,7 +71,7 @@ func (e *User) Self(ctx context.Context, d *dto.UserByID, model *models.SysUser)
 func (e *User) Get(ctx context.Context, d *dto.UserByID, p *actions.DataPermission, model *models.SysUser) error {
 	var data models.SysUser
 
-	err := e.DB.WithContext(ctx).Model(&data).Debug().
+	err := e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).

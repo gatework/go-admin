@@ -25,7 +25,7 @@ func (e *Route) List(ctx context.Context, c *dto.RouteSearch, p *actions.DataPer
 	var err error
 	var data models.SysAPI
 
-	orm := e.DB.WithContext(ctx).Debug().Model(&data).
+	orm := e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
