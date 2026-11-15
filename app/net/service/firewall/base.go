@@ -25,6 +25,7 @@ import (
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/database"
+	"github.com/gatework/motor/common/paging"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
@@ -189,13 +190,7 @@ type Page struct {
 
 // Validate provides validate for this module.
 func (p *Page) Validate() error {
-	if p.PageIndex == 0 {
-		p.PageIndex = 1
-	}
-	if p.PageSize == 0 {
-		p.PageSize = 20
-	}
-	if p.PageIndex < 1 || p.PageSize < 1 || p.PageSize > 200 || p.PageIndex > 100000 || len(p.Keyword) > 512 || p.DomainID < 0 || p.GroupID != nil && *p.GroupID < 0 {
+	if !paging.Normalize(&p.PageIndex, &p.PageSize) || len(p.Keyword) > 512 || p.DomainID < 0 || p.GroupID != nil && *p.GroupID < 0 {
 		return InvalidErr
 	}
 	return nil

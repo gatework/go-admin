@@ -8,6 +8,7 @@ import (
 
 	common "github.com/gatework/motor-core/sdk/contract/dto"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/common/paging"
 )
 
 // DevicePageReq carries the device page req fields exchanged by network operations.
@@ -29,7 +30,7 @@ type DevicePageReq struct {
 
 // Validate normalizes the request and rejects invalid or conflicting fields.
 func (r *DevicePageReq) Validate() error {
-	if r.PageIndex < 0 || r.PageIndex > 1000000 || r.PageSize < 0 || r.PageSize > 200 || (r.GroupID != nil && *r.GroupID < 0) {
+	if !paging.Normalize(&r.PageIndex, &r.PageSize) || (r.GroupID != nil && *r.GroupID < 0) {
 		return inventory.InvalidErr
 	}
 	for _, value := range []string{r.Keyword, r.Vendor, r.Model, r.Status, r.DeviceType, r.DeviceRole, r.Tag} {
@@ -37,8 +38,6 @@ func (r *DevicePageReq) Validate() error {
 			return inventory.InvalidErr
 		}
 	}
-	r.GetPageIndex()
-	r.GetPageSize()
 	return nil
 }
 

@@ -23,6 +23,7 @@ import (
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/paging"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
@@ -174,13 +175,7 @@ func page(r *dto.PageReq) error {
 	if r == nil {
 		return InvalidErr
 	}
-	if r.PageIndex == 0 {
-		r.PageIndex = 1
-	}
-	if r.PageSize == 0 {
-		r.PageSize = 20
-	}
-	if r.PageIndex < 1 || r.PageSize < 1 || r.PageSize > 200 || r.GroupID != nil && *r.GroupID < 0 || len(r.Keyword) > 512 {
+	if !paging.Normalize(&r.PageIndex, &r.PageSize) || r.GroupID != nil && *r.GroupID < 0 || len(r.Keyword) > 512 {
 		return InvalidErr
 	}
 	if r.Direction != "" && r.Direction != "asc" && r.Direction != "desc" {

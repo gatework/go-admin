@@ -22,6 +22,7 @@ import (
 	dto "github.com/gatework/motor/app/net/service/dto/delivery"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/database"
+	"github.com/gatework/motor/common/paging"
 )
 
 // Workflow coordinates authorized delivery changes and their durable state.
@@ -230,7 +231,7 @@ func (s *Workflow) Retry(ctx context.Context, id int, r dto.Action, actor int, n
 
 // Page provides the page operation within the caller's authorized delivery scope.
 func (s *Workflow) Page(ctx context.Context, r dto.Page, p *actions.DataPermission) ([]models.Order, int64, error) {
-	if r.PageIndex < 1 || r.PageSize < 1 || r.PageSize > 200 {
+	if !paging.Normalize(&r.PageIndex, &r.PageSize) {
 		return nil, 0, InvalidErr
 	}
 	q := s.scoped(ctx, p)

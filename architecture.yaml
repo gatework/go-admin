@@ -70,6 +70,7 @@ declared:
   - ./common/middleware
   - ./common/middleware/auth
   - ./common/models
+  - ./common/paging
   - ./common/request
   - ./common/secret
   - ./common/settings

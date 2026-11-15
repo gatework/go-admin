@@ -10,6 +10,7 @@ import (
 
 	common "github.com/gatework/motor-core/sdk/contract/dto"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/common/paging"
 )
 
 // CircuitControlReq carries the circuit control req fields exchanged by network operations.
@@ -140,7 +141,7 @@ type CircuitPageReq struct {
 
 // Validate normalizes the request and rejects invalid or conflicting fields.
 func (r *CircuitPageReq) Validate() error {
-	if r.PageIndex < 0 || r.PageIndex > 1000000 || r.PageSize < 0 || r.PageSize > 200 {
+	if !paging.Normalize(&r.PageIndex, &r.PageSize) {
 		return inventory.InvalidErr
 	}
 	for _, field := range []struct {
@@ -154,8 +155,6 @@ func (r *CircuitPageReq) Validate() error {
 	if (r.Status != "" && !slices.Contains(circuitStatuses, r.Status)) || (r.Category != "" && !slices.Contains(circuitCategories, r.Category)) || !slices.Contains([]string{"", "true", "false"}, r.Monitored) {
 		return inventory.InvalidErr
 	}
-	r.GetPageIndex()
-	r.GetPageSize()
 	return nil
 }
 
