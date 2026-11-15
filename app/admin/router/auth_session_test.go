@@ -25,11 +25,11 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	accountsecurity "github.com/gatework/motor/common/account"
 	"github.com/gatework/motor/common/middleware"
-	"github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/common/middleware/auth"
 )
 
 func TestJWTConfigurationReloadKeepsOneKeySnapshot(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "snapshot.test", "snapshot-admin")
 	token := tokenFor(t, mw, db, "snapshot-admin", "snapshot.test")
 	testconfig.Apply(t, func(settings *config.Config) {
@@ -53,13 +53,13 @@ func TestJWTConfigurationReloadKeepsOneKeySnapshot(t *testing.T) {
 }
 
 func TestLogoutRevokesAllUserSessionsDurably(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "logout.test", "logout-admin")
 	first := tokenFor(t, mw, db, "logout-admin", "logout.test")
 	second := tokenFor(t, mw, db, "logout-admin", "logout.test")
 	r := gin.New()
 	r.Use(middleware.WithContextDB)
-	r.POST("/logout", mw.MiddlewareFunc(), handler.LogOut)
+	r.POST("/logout", mw.MiddlewareFunc(), auth.LogOut)
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.Host = "logout.test"
 	req.Header.Set("Authorization", "Bearer "+first)
@@ -86,7 +86,7 @@ func TestLogoutRevokesAllUserSessionsDurably(t *testing.T) {
 func TestDisableEnableDoesNotReviveTokens(t *testing.T) {
 	for _, kind := range []string{"user status", "user update", "role status", "role update"} {
 		t.Run(kind, func(t *testing.T) {
-			mw := auth(t)
+			mw := authMiddleware(t)
 			db := dbFor(t, "lifecycle.test", "lifecycle-admin")
 			token := tokenFor(t, mw, db, "lifecycle-admin", "lifecycle.test")
 			users := service.SysUser{
@@ -133,7 +133,7 @@ func TestDisableEnableDoesNotReviveTokens(t *testing.T) {
 }
 
 func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "profile-session.test", "profile-admin")
 	if err := db.Table("sys_user").Where("user_id=1").UpdateColumn("auth_version", 7).Error; err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 }
 
 func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
-	auth(t)
+	authMiddleware(t)
 	db := dbFor(t, "reset-delete.test", "deleted-during-reset")
 	users := service.SysUser{
 		DB:     db,
@@ -200,7 +200,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 	if dsn == "" {
 		t.Skip("MOTOR_TEST_POSTGRES_DSN is required")
 	}
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +258,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 	}
 	r := gin.New()
 	r.Use(middleware.WithContextDB)
-	r.POST("/logout", mw.MiddlewareFunc(), handler.LogOut)
+	r.POST("/logout", mw.MiddlewareFunc(), auth.LogOut)
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.Host = "postgres.test"
 	req.Header.Set("Authorization", "Bearer "+fresh)
@@ -273,7 +273,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 }
 
 func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
-	auth(t)
+	authMiddleware(t)
 	db := dbFor(t, "reset-positive.test", "reset-admin")
 	if err := db.Table("sys_user").Where("user_id=1").UpdateColumn("auth_version", 7).Error; err != nil {
 		t.Fatal(err)
@@ -297,7 +297,7 @@ func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
 }
 
 func TestRoleReassignmentDoesNotReviveOldToken(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "reassign.test", "reassign-admin")
 	if err := db.Create(&models.SysRole{RoleID: 2, RoleKey: "temporary", RoleName: "temporary", Status: "2", DataScope: "1"}).Error; err != nil {
 		t.Fatal(err)
@@ -317,7 +317,7 @@ func TestRoleReassignmentDoesNotReviveOldToken(t *testing.T) {
 }
 
 func TestUserUpdateRechecksPermissionAtWrite(t *testing.T) {
-	auth(t)
+	authMiddleware(t)
 	db := dbFor(t, "scope.test", "scope-user")
 	if err := db.Model(&models.SysUser{}).Where("user_id=1").Update("create_by", 10).Error; err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ func TestUserUpdateRechecksPermissionAtWrite(t *testing.T) {
 func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 	for _, kind := range []string{"username", "department", "role key", "role scope", "scope endpoint", "custom departments"} {
 		t.Run(kind, func(t *testing.T) {
-			mw := auth(t)
+			mw := authMiddleware(t)
 			db := dbFor(t, "identity.test", "identity-admin")
 			if err := db.AutoMigrate(&models.SysAPI{}, &models.SysMenu{}, &models.SysDept{}, &gormadapter.CasbinRule{}); err != nil {
 				t.Fatal(err)

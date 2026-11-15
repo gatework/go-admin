@@ -15,7 +15,7 @@ import (
 	swaggerfiles "github.com/swaggo/files"
 
 	"github.com/gatework/motor/common/middleware"
-	authhandler "github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/common/middleware/auth"
 	_ "github.com/gatework/motor/docs/admin" // Registers generated Swagger documentation. // Registers the documentation or route assets used by this package.
 )
 
@@ -39,7 +39,7 @@ func sysBaseRouter(r *gin.RouterGroup) {
 	if config.Current().Settings.Application.Mode != "prod" {
 		r.GET("/", handler.Motor)
 	}
-	r.GET("/info", authhandler.Ping)
+	r.GET("/info", auth.Ping)
 }
 
 func sysStaticFileRouter(r *gin.RouterGroup) {
@@ -60,7 +60,7 @@ func sysSwaggerRouter(r *gin.RouterGroup) {
 func sysCheckRoleRouterInit(r *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	wss := r.Group("").Use(middleware.WebsocketToken).Use(authMiddleware.MiddlewareFunc())
 	{
-		connect, disconnect := authhandler.WebsocketHandlers(authMiddleware)
+		connect, disconnect := auth.WebsocketHandlers(authMiddleware)
 		wss.GET("/ws/:id/:channel", connect)
 		wss.GET("/wslogout/:id/:channel", disconnect)
 	}
@@ -89,6 +89,6 @@ func registerBaseRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlewar
 		v1auth.GET("/roleMenuTreeselect/:roleId", h.Tree)
 		//v1.GET("/menuTreeselect", api.GetMenuTreeSelect)
 		v1auth.GET("/roleDeptTreeselect/:roleId", departments.RoleTree)
-		v1auth.POST("/logout", authhandler.LogOut)
+		v1auth.POST("/logout", auth.LogOut)
 	}
 }

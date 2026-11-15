@@ -25,7 +25,7 @@ import (
 )
 
 func TestWebsocketRejectsForeignOrigin(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "*", "websocket-admin")
 	token := tokenFor(t, mw, db, "websocket-admin", "*")
 	t.Chdir(t.TempDir())
@@ -54,7 +54,7 @@ func TestWebsocketRejectsForeignOrigin(t *testing.T) {
 }
 
 func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "*", "stream-admin")
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -183,7 +183,7 @@ func TestWebsocketRejectsNamedTenantAndUnsupportedChannel(t *testing.T) {
 		{"unsupported channel", "*", "private-channel"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mw := auth(t)
+			mw := authMiddleware(t)
 			db := dbFor(t, tc.tenant, "denied-admin")
 			token := tokenFor(t, mw, db, "denied-admin", tc.tenant)
 			r := gin.New()
@@ -202,7 +202,7 @@ func TestWebsocketRejectsNamedTenantAndUnsupportedChannel(t *testing.T) {
 }
 
 func TestWebsocketRechecksRevokedSessions(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "*", "revocable-stream-admin")
 	pool, err := db.DB()
 	if err != nil {
@@ -275,7 +275,7 @@ func TestWebsocketDevelopmentLoopbackOrigins(t *testing.T) {
 		{"development foreign host", "dev", "http://foreign.example:9527", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mw := auth(t)
+			mw := authMiddleware(t)
 			testconfig.Apply(t, func(settings *config.Config) {
 				settings.
 					Application.Mode = tc.mode

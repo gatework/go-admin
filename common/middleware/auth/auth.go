@@ -1,4 +1,4 @@
-package handler
+package auth
 
 import (
 	"context"
@@ -28,9 +28,9 @@ import (
 	"github.com/gatework/motor/common/auditlog"
 )
 
-// AuthCallbacks keeps the credential MAC on the same immutable startup key as
+// Callbacks keeps the credential MAC on the same immutable startup key as
 // the JWT signer. Rotating the configured key takes effect after restart.
-func AuthCallbacks(secret string) (func(any) jwt.MapClaims, func(any, *gin.Context) bool) {
+func Callbacks(secret string) (func(any) jwt.MapClaims, func(any, *gin.Context) bool) {
 	key := []byte(secret)
 	return func(data any) jwt.MapClaims { return payloadFunc(data, key) },
 		func(data any, c *gin.Context) bool { return authorize(data, c, key) }

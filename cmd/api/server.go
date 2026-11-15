@@ -37,7 +37,6 @@ import (
 	"github.com/gatework/motor/common/database"
 	"github.com/gatework/motor/common/health"
 	common "github.com/gatework/motor/common/middleware"
-	"github.com/gatework/motor/common/middleware/handler"
 	"github.com/gatework/motor/common/storage"
 	ext "github.com/gatework/motor/config"
 )
@@ -623,7 +622,7 @@ func initRouter() error {
 	// successors, middleware and handlers alike - carries its real HTTP status.
 	r.Use(common.ErrorStatus)
 	if config.Current().Settings.SSL.Enable {
-		r.Use(handler.TLSHandler())
+		r.Use(common.TLSRedirect())
 	}
 	limiter, err := common.Sentinel()
 	if err != nil {

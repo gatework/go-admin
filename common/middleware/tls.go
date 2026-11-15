@@ -1,4 +1,4 @@
-package handler
+package middleware
 
 import (
 	"github.com/gin-gonic/gin"
@@ -7,13 +7,13 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 )
 
-// TLSHandler redirects plain-HTTP requests to HTTPS on ssl.domain.
+// TLSRedirect redirects plain-HTTP requests to HTTPS on ssl.domain.
 //
 // The redirect is decided once per process: the options come from the
 // configuration read at start-up, as the listener's TLS setting does. When it
 // redirects, the chain stops. Returning without Abort let gin run every later
 // handler after the redirect had already been written.
-func TLSHandler() gin.HandlerFunc {
+func TLSRedirect() gin.HandlerFunc {
 	redirect := secure.New(secure.Options{
 		SSLRedirect: true,
 		SSLHost:     config.Current().Settings.SSL.Domain,

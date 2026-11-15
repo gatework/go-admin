@@ -1,4 +1,4 @@
-package handler
+package middleware
 
 import (
 	"net/http"
@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestTLSHandlerStopsTheChainWhenItRedirects(t *testing.T) {
+func TestTLSRedirectStopsTheChainWhenItRedirects(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	reached := false
-	engine.GET("/api", TLSHandler(), func(c *gin.Context) {
+	engine.GET("/api", TLSRedirect(), func(c *gin.Context) {
 		reached = true
 		c.String(http.StatusOK, "handled")
 	})

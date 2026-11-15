@@ -26,11 +26,11 @@ import (
 	accountsecurity "github.com/gatework/motor/common/account"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
-	"github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/common/middleware/auth"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
-func auth(t *testing.T) *jwt.GinJWTMiddleware {
+func authMiddleware(t *testing.T) *jwt.GinJWTMiddleware {
 	t.Helper()
 	previousRuntime := sdk.Runtime
 	previousMode, previousDP, previousSecret, previousTimeout := config.Current().Settings.Application.Mode, config.Current().Settings.Application.EnableDP, config.Current().Settings.JWT.Secret, config.Current().Settings.JWT.Timeout
@@ -102,7 +102,7 @@ func dbFor(t *testing.T, host, userName string) *gorm.DB {
 
 func tokenFor(t *testing.T, mw *jwt.GinJWTMiddleware, db *gorm.DB, username, tenant string) string {
 	t.Helper()
-	login := handler.Login{Username: username, Password: "Audit-password-1"}
+	login := auth.Login{Username: username, Password: "Audit-password-1"}
 	u, r, err := login.GetUser(db)
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func request(r http.Handler, host, token string) *httptest.ResponseRecorder {
 }
 
 func TestCrossTenantTokenRejected(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	a := dbFor(t, "tenant-a.test", "tenant-a-admin")
 	dbFor(t, "tenant-b.test", "tenant-b-sensitive-user")
 	token := tokenFor(t, mw, a, "tenant-a-admin", "tenant-a.test")
@@ -142,7 +142,7 @@ func TestCrossTenantTokenRejected(t *testing.T) {
 }
 
 func TestDisabledAndDeletedUserTokenRejected(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "revocation.test", "revoked-admin")
 	token := tokenFor(t, mw, db, "revoked-admin", "revocation.test")
 	if err := db.Create(&models.SysUser{UserID: 2, Username: "protected-other-user", RoleID: 1, Status: "2"}).Error; err != nil {
@@ -155,7 +155,7 @@ func TestDisabledAndDeletedUserTokenRejected(t *testing.T) {
 	if err := db.Model(&models.SysUser{}).Where("user_id = ?", 1).Update("status", "1").Error; err != nil {
 		t.Fatal(err)
 	}
-	login := handler.Login{Username: "revoked-admin", Password: "Audit-password-1"}
+	login := auth.Login{Username: "revoked-admin", Password: "Audit-password-1"}
 	if _, _, err := login.GetUser(db); err == nil {
 		t.Fatal("disabled login unexpectedly allowed")
 	}
@@ -173,7 +173,7 @@ func TestDisabledAndDeletedUserTokenRejected(t *testing.T) {
 }
 
 func TestUploadedHTMLServedAsSandboxedAttachment(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "upload.test", "upload-user")
 	token := tokenFor(t, mw, db, "upload-user", "upload.test")
 	t.Chdir(t.TempDir())
@@ -233,7 +233,7 @@ func TestAuthorizationChangesInvalidateExistingToken(t *testing.T) {
 		{"disabled role", "sys_role", "status", "1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mw := auth(t)
+			mw := authMiddleware(t)
 			db := dbFor(t, "changed.test", "change-admin")
 			token := tokenFor(t, mw, db, "change-admin", "changed.test")
 			r := userRouter(mw)
@@ -258,7 +258,7 @@ func TestAuthorizationChangesInvalidateExistingToken(t *testing.T) {
 }
 
 func TestWildcardTenantAcceptsItsHostAliases(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "*", "shared-admin")
 	token := tokenFor(t, mw, db, "shared-admin", "*")
 	for _, host := range []string{"admin.example", "admin.example:8000"} {
@@ -270,7 +270,7 @@ func TestWildcardTenantAcceptsItsHostAliases(t *testing.T) {
 }
 
 func TestLegacyUnboundTokenRequiresLogin(t *testing.T) {
-	mw := auth(t)
+	mw := authMiddleware(t)
 	db := dbFor(t, "legacy.test", "legacy-admin")
 	token := tokenFor(t, mw, db, "legacy-admin", "")
 	w := request(userRouter(mw), "legacy.test", token)

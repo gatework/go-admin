@@ -11,7 +11,7 @@ import (
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/pkg"
-	"github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/common/middleware/auth"
 )
 
 // authMiddleware is the single JWT middleware instance the whole process
@@ -46,17 +46,17 @@ func AuthInit() (*jwt.GinJWTMiddleware, error) {
 	if settings.JWT.Timeout > 0 {
 		timeout = time.Duration(settings.JWT.Timeout) * time.Second
 	}
-	payload, authorize := handler.AuthCallbacks(secret)
+	payload, authorize := auth.Callbacks(secret)
 	return jwt.New(&jwt.GinJWTMiddleware{
 		Realm:           "motor",
 		Key:             []byte(secret),
 		Timeout:         timeout,
 		MaxRefresh:      time.Hour,
 		PayloadFunc:     payload,
-		IdentityHandler: handler.IdentityHandler,
-		Authenticator:   handler.Authenticator,
+		IdentityHandler: auth.IdentityHandler,
+		Authenticator:   auth.Authenticator,
 		Authorizator:    authorize,
-		Unauthorized:    handler.Unauthorized,
+		Unauthorized:    auth.Unauthorized,
 		// No query parameter: a token in a URL lands in access logs, proxy
 		// logs and browser history. The log websocket, which a browser cannot
 		// give headers, goes through WebsocketToken instead.
