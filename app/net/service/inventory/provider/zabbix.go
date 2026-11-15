@@ -11,12 +11,17 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gatework/motor/common/secret"
+
 	"github.com/gatework/go-zabbix"
 	"github.com/gatework/motor/app/net/models/inventory"
 )
 
 // ZabbixConfig describes zabbix config for network operations.
-type ZabbixConfig struct{ URL, Token string }
+type ZabbixConfig struct {
+	URL   string
+	Token secret.Secret
+}
 
 // Zabbix describes zabbix for network operations.
 type Zabbix struct {
@@ -39,7 +44,7 @@ func cloneHTTPTransport() *http.Transport {
 
 // ZabbixFromEnvironment provides the zabbix from environment operation within the caller's authorized network scope.
 func ZabbixFromEnvironment() *Zabbix {
-	return NewZabbix(ZabbixConfig{URL: os.Getenv("ZABBIX_API_URL"), Token: os.Getenv("ZABBIX_API_TOKEN")})
+	return NewZabbix(ZabbixConfig{URL: os.Getenv("ZABBIX_API_URL"), Token: secret.Secret(os.Getenv("ZABBIX_API_TOKEN"))})
 }
 
 // NewZabbix provides the new zabbix operation within the caller's authorized network scope.
@@ -50,7 +55,7 @@ func NewZabbix(config ZabbixConfig) *Zabbix {
 		httpClient := &http.Client{Transport: zabbixHTTPTransport, Timeout: 20 * time.Second}
 		client, err := zabbix.New(config.URL,
 			zabbix.WithHTTPClient(httpClient),
-			zabbix.WithAPIToken(config.Token),
+			zabbix.WithAPIToken(config.Token.Reveal()),
 			zabbix.WithMaxResponseBytes(4<<20),
 		)
 		if err != nil {
@@ -65,7 +70,7 @@ func NewZabbix(config ZabbixConfig) *Zabbix {
 // Configured provides the configured operation within the caller's authorized network scope.
 func (p *Zabbix) Configured() bool {
 	u, err := url.Parse(p.config.URL)
-	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && strings.TrimSpace(p.config.Token) != ""
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && strings.TrimSpace(p.config.Token.Reveal()) != ""
 }
 func queryZabbix[T any](ctx context.Context, p *Zabbix, query func(context.Context) ([]T, error)) ([]T, error) {
 	if !p.Configured() {

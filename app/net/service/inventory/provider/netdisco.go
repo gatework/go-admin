@@ -12,17 +12,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gatework/motor/common/secret"
+
 	sdk "github.com/orange-cloudfoundry/go-netdisco"
 
 	"github.com/gatework/motor/app/net/models/inventory"
 )
 
 // Config is server-owned; requests cannot override the upstream endpoint.
-type Config struct{ URL, Username, Password, APIKey string }
+type Config struct {
+	URL, Username    string
+	Password, APIKey secret.Secret
+}
 
 // FromEnvironment loads the server-owned device transport configuration.
 func FromEnvironment() *Netdisco {
-	return New(Config{URL: os.Getenv("NETDISCO_URL"), Username: os.Getenv("NETDISCO_USERNAME"), Password: os.Getenv("NETDISCO_PASSWORD"), APIKey: os.Getenv("NETDISCO_API_KEY")})
+	return New(Config{URL: os.Getenv("NETDISCO_URL"), Username: os.Getenv("NETDISCO_USERNAME"), Password: secret.Secret(os.Getenv("NETDISCO_PASSWORD")), APIKey: secret.Secret(os.Getenv("NETDISCO_API_KEY"))})
 }
 
 // Netdisco describes netdisco for network operations.
@@ -41,7 +46,7 @@ func New(config Config) *Netdisco {
 // Configured provides the configured operation within the caller's authorized network scope.
 func (p *Netdisco) Configured() bool {
 	u, err := url.Parse(p.config.URL)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && (p.config.APIKey != "" || (p.config.Username != "" && p.config.Password != ""))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && (p.config.APIKey.IsSet() || (p.config.Username != "" && p.config.Password.IsSet()))
 }
 
 // Fetch provides the fetch operation within the caller's authorized network scope.
@@ -52,17 +57,17 @@ func (p *Netdisco) Fetch(ctx context.Context) ([]inventory.SourceFacts, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 	// Each fetch owns its transport/token; no mutable SDK Client state or retries.
-	transport := sdk.NewTransport(p.config.APIKey, false)
+	transport := sdk.NewTransport(p.config.APIKey.Reveal(), false)
 	if owned, ok := transport.WrapTransport.(*http.Transport); ok {
 		defer owned.CloseIdleConnections()
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	if p.config.APIKey == "" {
+	if !p.config.APIKey.IsSet() {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.config.URL+"/login", nil)
 		if err != nil {
 			return nil, inventory.NotConfiguredErr
 		}
-		req.SetBasicAuth(p.config.Username, p.config.Password)
+		req.SetBasicAuth(p.config.Username, p.config.Password.Reveal())
 		body, err := readResponse(client, req, 64<<10)
 		if err != nil {
 			return nil, err

@@ -22,6 +22,6 @@ func (c Config) ConnectionConfig(d models.DeviceSnapshot, connection models.Conn
 	if !c.configured(connection.Profile) {
 		return connector.ConnectionConfig{}, ConnectionErr
 	}
-	u, p, e := c.credentials(connection.Profile)
-	return connector.ConnectionConfig{Host: d.IP, Protocol: connector.Protocol(connection.Protocol), Port: connection.Port, Username: u, Password: p, EnablePassword: e, HostKeyPolicy: connector.HostKeyPolicy(c.HostKeyPolicy), KnownHosts: c.KnownHosts, LoginTimeout: 30 * time.Second, CommandTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, MaxOutputBytes: MaxOutputBytes, MaxScriptOutputBytes: MaxOutputBytes}, nil
+	creds := c.credentials(connection.Profile)
+	return connector.ConnectionConfig{Host: d.IP, Protocol: connector.Protocol(connection.Protocol), Port: connection.Port, Username: creds.Username, Password: creds.Password.Reveal(), EnablePassword: creds.EnablePassword.Reveal(), HostKeyPolicy: connector.HostKeyPolicy(c.HostKeyPolicy), KnownHosts: c.KnownHosts, LoginTimeout: 30 * time.Second, CommandTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, MaxOutputBytes: MaxOutputBytes, MaxScriptOutputBytes: MaxOutputBytes}, nil
 }

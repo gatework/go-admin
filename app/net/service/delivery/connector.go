@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gatework/go-net-connector/connector"
 	models "github.com/gatework/motor/app/net/models/delivery"
@@ -126,7 +125,10 @@ func ConnectorFactory(c Config) Factory {
 		if e != nil {
 			return nil, e
 		}
-		username, password, enable := c.credentials(t.Connection.Profile)
-		return newDeviceSession(p, connector.ConnectionConfig{Host: t.Device.IP, Protocol: connector.Protocol(t.Connection.Protocol), Port: t.Connection.Port, Username: username, Password: password, EnablePassword: enable, HostKeyPolicy: connector.HostKeyPolicy(c.HostKeyPolicy), KnownHosts: c.KnownHosts, LoginTimeout: 30 * time.Second, CommandTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, MaxOutputBytes: MaxOutputBytes, MaxScriptOutputBytes: MaxOutputBytes})
+		config, e := c.ConnectionConfig(t.Device, t.Connection)
+		if e != nil {
+			return nil, e
+		}
+		return newDeviceSession(p, config)
 	}
 }
