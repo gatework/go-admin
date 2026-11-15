@@ -1,9 +1,10 @@
 package database
 
 import (
-	"github.com/go-sql-driver/mysql"
 	"net/url"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 // redactDSN logs only parsed connection metadata; unknown formats are omitted.
@@ -14,8 +15,8 @@ func redactDSN(dsn string) string {
 
 	// A MySQL password may itself contain a URL scheme. Recognize its network
 	// suffix first rather than treating password bytes as URL user information.
-	if at := strings.LastIndex(dsn, "@"); at >= 0 {
-		network := dsn[at+1:]
+	if _, after, ok := strings.CutLast(dsn, "@"); ok {
+		network := after
 		if strings.HasPrefix(network, "tcp(") || strings.HasPrefix(network, "unix(") {
 			if c, err := mysql.ParseDSN(dsn); err == nil {
 				return c.User + ":***@" + c.Net + "(" + c.Addr + ")/" + c.DBName

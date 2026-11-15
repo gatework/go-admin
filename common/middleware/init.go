@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
-	"go-admin/common/actions"
+
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/runtime"
+	"github.com/gatework/motor/common/actions"
 )
 
 // These alias core's own constants (see sdk/runtime.GetHandlerFunc's contract
@@ -18,8 +19,9 @@ const (
 	PermissionCheck = runtime.PermissionCheck
 )
 
+// InitMiddleware handles the initmiddleware operation.
 func InitMiddleware(r *gin.Engine) {
-	InitMiddlewareWithDatabase(r, WithContextDb)
+	InitMiddlewareWithDatabase(r, WithContextDB)
 }
 
 // InitMiddlewareWithDatabase lets the host exempt process-level probes from
@@ -55,7 +57,7 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
 	authMiddleware, err = AuthInit()
 	if err != nil {
 		// A process with no JWT middleware must not start serving requests.
-		log.Fatalf("JWT Init Error, %s", err.Error())
+		log.NewHelper(log.Default()).Fatalf("JWT Init Error, %s", err.Error())
 	}
 	sdk.Runtime.SetMiddleware(JwtTokenCheck, authMiddleware.MiddlewareFunc())
 	sdk.Runtime.SetMiddleware(RoleCheck, AuthCheckRole())

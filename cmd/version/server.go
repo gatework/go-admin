@@ -2,15 +2,18 @@ package version
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
-	"go-admin/common/global"
+
+	"github.com/gatework/motor/common/global"
 )
 
+// StartCmd holds the configured startcmd value.
 var (
 	StartCmd = &cobra.Command{
 		Use:     "version",
 		Short:   "Get version info",
-		Example: "go-admin version",
+		Example: "motor version",
 		PreRun: func(cmd *cobra.Command, args []string) {
 
 		},

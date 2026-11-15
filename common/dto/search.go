@@ -3,29 +3,43 @@ package dto
 import (
 	"gorm.io/gorm"
 
-	contractdto "github.com/go-admin-team/go-admin-core/v2/sdk/contract/dto"
+	contractdto "github.com/gatework/motor-core/sdk/contract/dto"
 )
 
-// GeneralDelDto and GeneralGetDto are thin aliases of go-admin-core's
-// sdk/contract/dto (PRD 006 F2/F5).
-type (
-	GeneralDelDto = contractdto.GeneralDelDto
-	GeneralGetDto = contractdto.GeneralGetDto
-)
+// DeleteRequest selects a URI record or a JSON batch for legacy job operations.
+type DeleteRequest struct {
+	ID  int   `uri:"id" json:"id" validate:"required"`
+	IDs []int `json:"ids"`
+}
 
-// MakeCondition and Paginate forward to go-admin-core's sdk/contract/dto
-// (PRD 006 F2/F5). This file used to read go-admin/common/global.Driver to
-// pick the SQL dialect MakeCondition resolves search tags against; the
-// lowered version instead reads db.Dialector.Name() from inside the closure
-// it returns, which is always the driver the caller's own *gorm.DB is bound
-// to - correct even when a multi-tenant host has more than one database
-// open with different drivers, which a single package-level variable could
-// never be. global.Driver itself is untouched and still readable, but
-// nothing in this package reads it anymore.
-func MakeCondition(q interface{}) func(db *gorm.DB) *gorm.DB {
+// GetIDs returns positive selected IDs, or the historical zero selector when empty.
+func (r DeleteRequest) GetIDs() []int {
+	ids := make([]int, 0, len(r.IDs)+1)
+	if r.ID > 0 {
+		ids = append(ids, r.ID)
+	}
+	for _, id := range r.IDs {
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		ids = append(ids, 0)
+	}
+	return ids
+}
+
+// GetRequest selects a job record by URI or JSON identity.
+type GetRequest struct {
+	ID int `uri:"id" json:"id" validate:"required"`
+}
+
+// MakeCondition resolves search tags against the database bound to each query.
+func MakeCondition(q any) func(db *gorm.DB) *gorm.DB {
 	return contractdto.MakeCondition(q)
 }
 
+// Paginate handles the paginate operation.
 func Paginate(pageSize, pageIndex int) func(db *gorm.DB) *gorm.DB {
 	return contractdto.Paginate(pageSize, pageIndex)
 }

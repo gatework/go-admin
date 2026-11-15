@@ -9,7 +9,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	commonmodels "go-admin/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 func TestPendingVersionsReportsOnlyWhatIsNotApplied(t *testing.T) {
@@ -101,13 +101,13 @@ func TestAppliedVersionsReadsWhatTheTableHolds(t *testing.T) {
 // "nothing pending" for every database forever, and every test above still
 // passes.
 func TestTheServingBinaryLinksTheMigrationRegistry(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "go-admin").Output()
+	out, err := exec.Command("go", "list", "-deps", "motor").Output()
 	if err != nil {
 		t.Skipf("go list unavailable: %v", err)
 	}
 	deps := string(out)
 
-	const versions = "go-admin/cmd/migrate/migration/version"
+	const versions = "motor/cmd/migrate/migration/version"
 	if !strings.Contains(deps, versions+"\n") {
 		t.Errorf("the main package does not link %s, so the schema check would "+
 			"read an empty registry and report every database as current", versions)
@@ -116,7 +116,7 @@ func TestTheServingBinaryLinksTheMigrationRegistry(t *testing.T) {
 	// Negative control: a package the binary genuinely must not link, so that a
 	// `deps` that somehow contained everything would fail here rather than pass
 	// the assertion above for the wrong reason.
-	const notLinked = "go-admin/tools/checksilent"
+	const notLinked = "motor/tools/checksilent"
 	if strings.Contains(deps, notLinked+"\n") {
 		t.Errorf("%s is in the binary's dependency closure, so this test cannot "+
 			"tell a real link from a query that matches anything", notLinked)

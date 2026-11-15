@@ -1,5 +1,7 @@
-package version_local
+// Package versionlocal registers local-only migration extensions.
+package versionlocal
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 }
 

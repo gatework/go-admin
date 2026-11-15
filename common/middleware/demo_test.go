@@ -6,19 +6,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+
+	"github.com/gatework/motor-core/sdk/config"
 )
 
 // demoMode puts the process in demo mode for one test and puts it back.
 func demoMode(t *testing.T, mode, msg string) {
 	t.Helper()
-	previousMode, previousMsg := config.ApplicationConfig.Mode, config.ApplicationConfig.DemoMsg
-	t.Cleanup(func() {
-		config.ApplicationConfig.Mode = previousMode
-		config.ApplicationConfig.DemoMsg = previousMsg
-	})
-	config.ApplicationConfig.Mode, config.ApplicationConfig.DemoMsg = mode, msg
+	testconfig.Apply(t, func(s *config.Config) { s.Application.Mode, s.Application.DemoMsg = mode, msg })
 }
 
 // The method is not enough on its own. Three of the generator's routes are

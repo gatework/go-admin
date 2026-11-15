@@ -22,9 +22,9 @@ Focused tests cover DB reload, safe public evidence, duplicate requests, mixed s
 
 Verified locally:
 
-- `go test ./app/fabric/... ./app/delivery/... -count=1` passed.
-- `go test -race ./app/fabric/service ./app/delivery/service -count=1` passed.
-- `go vet ./app/fabric/... ./app/delivery/...` passed.
+- `go test ./app/net/... -count=1` passed.
+- `go test -race ./app/net/service/fabric ./app/net/service/delivery -count=1` passed.
+- `go vet ./app/net/...` passed.
 
 Operations include 17 integration/regression tests plus 2 observation/dimension unit tests. Full repository gates, browser validation, migration/startup integration and dependency provenance are owned by the coordinating agent. No production device, remote deployment, commit or push was performed.
 

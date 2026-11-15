@@ -11,11 +11,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	mycasbin "github.com/go-admin-team/go-admin-core/v2/casbin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
+
+	mycasbin "github.com/gatework/motor-core/casbin"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // Every route the code generator registers, as a request and as the policy
@@ -42,9 +44,10 @@ func genAuthzEngine(t *testing.T, host string, grant func(add func(role, path, m
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	previousMode := config.ApplicationConfig.Mode
-	config.ApplicationConfig.Mode = "dev" // the writing routes exist only here
-	t.Cleanup(func() { config.ApplicationConfig.Mode = previousMode })
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = "dev"
+	}) // the writing routes exist only here
 
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -59,15 +62,15 @@ func genAuthzEngine(t *testing.T, host string, grant func(add func(role, path, m
 			t.Fatal(err)
 		}
 	})
-	previous := sdk.Runtime.GetCasbinByTenant(host)
-	sdk.Runtime.SetCasbinByTenant(host, e)
-	t.Cleanup(func() { sdk.Runtime.SetCasbinByTenant(host, previous) })
+	previous := sdk.Runtime.Casbin(host)
+	sdk.Runtime.SetCasbin(host, e)
+	t.Cleanup(func() { sdk.Runtime.SetCasbin(host, previous) })
 
 	mw, err := jwt.New(&jwt.GinJWTMiddleware{
 		Realm:         "test",
 		Key:           []byte("test-key"),
 		Timeout:       time.Hour,
-		PayloadFunc:   func(data interface{}) jwt.MapClaims { return data.(jwt.MapClaims) },
+		PayloadFunc:   func(data any) jwt.MapClaims { return data.(jwt.MapClaims) },
 		TokenLookup:   "header: Authorization",
 		TokenHeadName: "Bearer",
 		TimeFunc:      time.Now,

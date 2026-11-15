@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	admin "go-admin/app/admin/models"
-	"go-admin/app/firewall"
-	"go-admin/app/firewall/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	admin "github.com/gatework/motor/app/admin/models"
+	models "github.com/gatework/motor/app/net/models/firewall"
+	firewall "github.com/gatework/motor/app/net/router"
 )
 
 func TestFirewallMigrationCreatesOfflineCapabilitiesIdempotently(t *testing.T) {
@@ -17,7 +18,7 @@ func TestFirewallMigrationCreatesOfflineCapabilitiesIdempotently(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = db.AutoMigrate(&admin.SysMenu{}, &admin.SysApi{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); e != nil {
+	if e = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); e != nil {
 		t.Fatal(e)
 	}
 	if e = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; e != nil {
@@ -26,7 +27,7 @@ func TestFirewallMigrationCreatesOfflineCapabilitiesIdempotently(t *testing.T) {
 	if e = db.Create(&admin.SysRole{RoleName: "Admin", RoleKey: "admin"}).Error; e != nil {
 		t.Fatal(e)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if e = seedNetworkFirewall(db); e != nil {
 			t.Fatal(e)
 		}
@@ -36,17 +37,17 @@ func TestFirewallMigrationCreatesOfflineCapabilitiesIdempotently(t *testing.T) {
 			t.Fatalf("missing %T", m)
 		}
 	}
-	for _, route := range firewall.Routes {
+	for _, route := range firewall.FirewallRoutes {
 		var count int64
-		if e = db.Model(&admin.SysApi{}).Where("path = ? AND action = ?", "/api/v1/network-firewall"+route.Path, route.Method).Count(&count).Error; e != nil || count != 1 {
+		if e = db.Model(&admin.SysAPI{}).Where("path = ? AND action = ?", "/api/v1/network-firewall"+route.Path, route.Method).Count(&count).Error; e != nil || count != 1 {
 			t.Fatalf("route not seeded once: %+v count=%d %v", route, count, e)
 		}
 	}
 	var menu admin.SysMenu
-	if e = db.Where("permission = ?", "network:firewall:list").Preload("SysApi").First(&menu).Error; e != nil {
+	if e = db.Where("permission = ?", "network:firewall:list").Preload("SysAPI").First(&menu).Error; e != nil {
 		t.Fatal(e)
 	}
-	for _, a := range menu.SysApi {
+	for _, a := range menu.SysAPI {
 		if a.Action != "GET" {
 			t.Fatalf("list capability grants mutation: %+v", a)
 		}

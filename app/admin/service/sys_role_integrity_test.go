@@ -13,24 +13,31 @@ import (
 	"github.com/casbin/casbin/v3/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 func integrityDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	var dial gorm.Dialector = sqlite.Open(":memory:")
-	previousDriver := config.DatabaseConfig.Driver
-	t.Cleanup(func() { config.DatabaseConfig.Driver = previousDriver })
-	config.DatabaseConfig.Driver = "sqlite3"
-	if dsn := os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN"); dsn != "" {
+	var dial = sqlite.Open(":memory:")
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Database.Driver = "sqlite3"
+	})
+	if dsn := os.Getenv("MOTOR_TEST_POSTGRES_DSN"); dsn != "" {
 		dial = postgres.Open(dsn)
-		config.DatabaseConfig.Driver = "postgres"
+		testconfig.Apply(t, func(settings *config.Config) {
+			settings.
+				Database.Driver = "postgres"
+		})
 	}
 	db, err := gorm.Open(dial, &gorm.Config{})
 	if err != nil {
@@ -41,14 +48,14 @@ func integrityDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if config.DatabaseConfig.Driver == "postgres" {
+	if config.Current().Settings.Database.Driver == "postgres" {
 		schema := fmt.Sprintf("integrity_%d", time.Now().UnixNano())
 		if err := db.Exec("CREATE SCHEMA " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 		adminDB := db
 		t.Cleanup(func() { adminDB.Exec("DROP SCHEMA " + schema + " CASCADE"); sqlDB.Close() })
-		scoped, err := gorm.Open(postgres.Open(os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN")+" search_path="+schema), &gorm.Config{})
+		scoped, err := gorm.Open(postgres.Open(os.Getenv("MOTOR_TEST_POSTGRES_DSN")+" search_path="+schema), &gorm.Config{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +68,7 @@ func integrityDB(t *testing.T) *gorm.DB {
 	} else {
 		t.Cleanup(func() { sqlDB.Close() })
 	}
-	if err := db.AutoMigrate(&gormadapter.CasbinRule{}, &models.SysApi{}, &models.SysMenu{}, &models.SysRole{}, &models.SysDept{}, &models.SysPost{}, &models.SysDictType{}, &models.SysUser{}); err != nil {
+	if err := db.AutoMigrate(&gormadapter.CasbinRule{}, &models.SysAPI{}, &models.SysMenu{}, &models.SysRole{}, &models.SysDept{}, &models.SysPost{}, &models.SysDictType{}, &models.SysUser{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{"CREATE UNIQUE INDEX uk_sys_role_role_key ON sys_role(role_key,deleted_at)", "CREATE UNIQUE INDEX uk_sys_dict_type_dict_type ON sys_dict_type(dict_type,deleted_at)"} {
@@ -103,13 +110,13 @@ m = r.sub == p.sub && r.obj == p.obj && r.act == p.act`)
 
 func TestRoleBatchDelete(t *testing.T) {
 	db := integrityDB(t)
-	roles := []models.SysRole{{RoleId: 101, RoleKey: "r1"}, {RoleId: 102, RoleKey: "r2"}}
+	roles := []models.SysRole{{RoleID: 101, RoleKey: "r1"}, {RoleID: 102, RoleKey: "r2"}}
 	if err := db.Create(&roles).Error; err != nil {
 		t.Fatal(err)
 	}
 	s := &SysRole{}
-	s.Orm = db
-	if err := s.Remove(&dto.SysRoleDeleteReq{Ids: []int{101, 102}}, integrityEnforcer(t)); err != nil {
+	s.DB = db
+	if err := s.Remove(&dto.SysRoleDeleteReq{IDs: []int{101, 102}}, integrityEnforcer(t)); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
@@ -121,7 +128,7 @@ func TestRoleBatchDelete(t *testing.T) {
 
 func TestRoleRenameRevokesOldKey(t *testing.T) {
 	db := integrityDB(t)
-	role := models.SysRole{RoleId: 103, RoleKey: "old-role", RoleName: "role", DataScope: "1", Status: "2"}
+	role := models.SysRole{RoleID: 103, RoleKey: "old-role", RoleName: "role", DataScope: "1", Status: "2"}
 	if err := db.Create(&role).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -130,8 +137,8 @@ func TestRoleRenameRevokesOldKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &SysRole{}
-	s.Orm = db
-	if err := s.Update(&dto.SysRoleUpdateReq{RoleId: 103, RoleKey: "new-role", RoleName: "role", DataScope: "1", Status: "2"}, cb); err != nil {
+	s.DB = db
+	if err := s.Update(&dto.SysRoleUpdateReq{RoleID: 103, RoleKey: "new-role", RoleName: "role", DataScope: "1", Status: "2"}, cb); err != nil {
 		t.Fatal(err)
 	}
 	if err := cb.LoadPolicy(); err != nil {
@@ -147,19 +154,19 @@ func TestRoleRenameRevokesOldKey(t *testing.T) {
 }
 
 func TestRoleRollbackKeepsOldPolicies(t *testing.T) {
-	if os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN") == "" {
+	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
 		t.Skip("PostgreSQL transaction required")
 	}
 	db := integrityDB(t)
-	oldMenu := models.SysMenu{MenuId: 301, MenuName: "old", SysApi: []models.SysApi{{Id: 401, Path: "/old", Action: "GET"}}}
-	newMenu := models.SysMenu{MenuId: 302, MenuName: "new", SysApi: []models.SysApi{{Id: 402, Path: "/new", Action: "GET"}}}
+	oldMenu := models.SysMenu{MenuID: 301, MenuName: "old", SysAPI: []models.SysAPI{{ID: 401, Path: "/old", Action: "GET"}}}
+	newMenu := models.SysMenu{MenuID: 302, MenuName: "new", SysAPI: []models.SysAPI{{ID: 402, Path: "/new", Action: "GET"}}}
 	if err := db.Create(&oldMenu).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&newMenu).Error; err != nil {
 		t.Fatal(err)
 	}
-	role := models.SysRole{RoleId: 501, RoleKey: "rollback-role", RoleName: "original", DataScope: "1", Status: "2", SysMenu: &[]models.SysMenu{oldMenu}}
+	role := models.SysRole{RoleID: 501, RoleKey: "rollback-role", RoleName: "original", DataScope: "1", Status: "2", SysMenu: &[]models.SysMenu{oldMenu}}
 	if err := db.Create(&role).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -171,9 +178,9 @@ func TestRoleRollbackKeepsOldPolicies(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &SysRole{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
-	err := s.Update(&dto.SysRoleUpdateReq{RoleId: 501, RoleKey: "rollback-role", RoleName: "changed", DataScope: "1", Status: "2", MenuIds: []int{302}}, cb)
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
+	err := s.Update(&dto.SysRoleUpdateReq{RoleID: 501, RoleKey: "rollback-role", RoleName: "changed", DataScope: "1", Status: "2", MenuIDs: []int{302}}, cb)
 	if err == nil {
 		t.Fatal("expected injected policy insertion failure")
 	}
@@ -189,15 +196,15 @@ func TestRoleRollbackKeepsOldPolicies(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !allowed {
-		t.Fatalf("role transaction rolled back (name=%s menu=%d) but durable old policy was deleted", got.RoleName, (*got.SysMenu)[0].MenuId)
+		t.Fatalf("role transaction rolled back (name=%s menu=%d) but durable old policy was deleted", got.RoleName, (*got.SysMenu)[0].MenuID)
 	}
 }
 
 func TestRoleBatchDeleteRemovesAllAssociationsAndPolicies(t *testing.T) {
 	db := integrityDB(t)
-	menus := []models.SysMenu{{MenuId: 1, Paths: "/0/1"}}
-	depts := []models.SysDept{{DeptId: 1, DeptPath: "/0/1/"}}
-	roles := []models.SysRole{{RoleId: 1, RoleKey: "one", SysMenu: &menus, SysDept: depts}, {RoleId: 2, RoleKey: "two", SysMenu: &menus, SysDept: depts}, {RoleId: 3, RoleKey: "keep"}}
+	menus := []models.SysMenu{{MenuID: 1, Paths: "/0/1"}}
+	depts := []models.SysDept{{DeptID: 1, DeptPath: "/0/1/"}}
+	roles := []models.SysRole{{RoleID: 1, RoleKey: "one", SysMenu: &menus, SysDept: depts}, {RoleID: 2, RoleKey: "two", SysMenu: &menus, SysDept: depts}, {RoleID: 3, RoleKey: "keep"}}
 	if err := db.Create(&roles).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +215,8 @@ func TestRoleBatchDeleteRemovesAllAssociationsAndPolicies(t *testing.T) {
 		}
 	}
 	s := &SysRole{}
-	s.Orm = db
-	if err := s.Remove(&dto.SysRoleDeleteReq{Ids: []int{1, 2, 2, 999}}, cb); err != nil {
+	s.DB = db
+	if err := s.Remove(&dto.SysRoleDeleteReq{IDs: []int{1, 2, 2, 999}}, cb); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"sys_role_menu", "sys_role_dept"} {
@@ -241,16 +248,16 @@ func TestRoleUpdatesDoNotCreateMissingRows(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db := integrityDB(t)
 			s := &SysRole{}
-			s.Orm = db
+			s.DB = db
 			cb := integrityEnforcer(t, db)
 			var err error
 			switch name {
 			case "update":
-				err = s.Update(&dto.SysRoleUpdateReq{RoleId: 999, RoleKey: "missing"}, cb)
+				err = s.Update(&dto.SysRoleUpdateReq{RoleID: 999, RoleKey: "missing"}, cb)
 			case "scope":
-				err = s.UpdateDataScope(&dto.RoleDataScopeReq{RoleId: 999, DataScope: "1"}).Error
+				err = s.UpdateDataScope(&dto.RoleDataScopeReq{RoleID: 999, DataScope: "1"})
 			case "status":
-				err = s.UpdateStatus(&dto.UpdateStatusReq{RoleId: 999, Status: "2"})
+				err = s.UpdateStatus(&dto.UpdateStatusReq{RoleID: 999, Status: "2"})
 			}
 			if err == nil {
 				t.Fatal("missing role mutation succeeded")
@@ -274,7 +281,7 @@ func (f failingPolicyLoader) LoadPolicy(casbinmodel.Model) error {
 
 func TestRolePolicyReloadFailureIsExplicitAndDeniesStalePolicy(t *testing.T) {
 	db := integrityDB(t)
-	if err := db.Create(&models.SysRole{RoleId: 1, RoleKey: "original"}).Error; err != nil {
+	if err := db.Create(&models.SysRole{RoleID: 1, RoleKey: "original"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	cb := integrityEnforcer(t, db)
@@ -283,8 +290,8 @@ func TestRolePolicyReloadFailureIsExplicitAndDeniesStalePolicy(t *testing.T) {
 	}
 	cb.SetAdapter(failingPolicyLoader{cb.GetAdapter()})
 	s := &SysRole{}
-	s.Orm = db
-	err := s.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleKey: "changed"}, cb)
+	s.DB = db
+	err := s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "changed"}, cb)
 	if err == nil || !strings.Contains(err.Error(), "committed but policy reload failed") {
 		t.Fatalf("error = %v, want explicit post-commit failure", err)
 	}
@@ -312,12 +319,12 @@ func TestRolePolicyWriteFailureRollsBackDatabaseAndKeepsCache(t *testing.T) {
 	for _, name := range []string{"insert", "update", "delete"} {
 		t.Run(name, func(t *testing.T) {
 			db := integrityDB(t)
-			menu := models.SysMenu{MenuId: 1, SysApi: []models.SysApi{{Id: 1, Path: "/new", Action: "GET"}}}
+			menu := models.SysMenu{MenuID: 1, SysAPI: []models.SysAPI{{ID: 1, Path: "/new", Action: "GET"}}}
 			if err := db.Create(&menu).Error; err != nil {
 				t.Fatal(err)
 			}
 			if name != "insert" {
-				if err := db.Create(&models.SysRole{RoleId: 1, RoleKey: "existing", RoleName: "original"}).Error; err != nil {
+				if err := db.Create(&models.SysRole{RoleID: 1, RoleKey: "existing", RoleName: "original"}).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -341,15 +348,15 @@ func TestRolePolicyWriteFailureRollsBackDatabaseAndKeepsCache(t *testing.T) {
 				}
 			}
 			s := &SysRole{}
-			s.Orm = db
+			s.DB = db
 			var err error
 			switch name {
 			case "insert":
-				err = s.Insert(&dto.SysRoleInsertReq{RoleId: 1, RoleKey: "existing", MenuIds: []int{1}}, cb)
+				err = s.Insert(&dto.SysRoleInsertReq{RoleID: 1, RoleKey: "existing", MenuIDs: []int{1}}, cb)
 			case "update":
-				err = s.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleKey: "existing", RoleName: "changed", MenuIds: []int{1}}, cb)
+				err = s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "existing", RoleName: "changed", MenuIDs: []int{1}}, cb)
 			case "delete":
-				err = s.Remove(&dto.SysRoleDeleteReq{Ids: []int{1}}, cb)
+				err = s.Remove(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
 			}
 			if !errors.Is(err, injected) {
 				t.Fatalf("error=%v, want policy failure", err)
@@ -400,7 +407,7 @@ func TestRoleRenameCannotTakeAnotherRolesPoliciesWithoutUniqueIndex(t *testing.T
 	if err := db.Exec("DROP INDEX uk_sys_role_role_key").Error; err != nil {
 		t.Fatal(err)
 	}
-	roles := []models.SysRole{{RoleId: 1, RoleKey: "one"}, {RoleId: 2, RoleKey: "two"}}
+	roles := []models.SysRole{{RoleID: 1, RoleKey: "one"}, {RoleID: 2, RoleKey: "two"}}
 	if err := db.Create(&roles).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -411,8 +418,8 @@ func TestRoleRenameCannotTakeAnotherRolesPoliciesWithoutUniqueIndex(t *testing.T
 		}
 	}
 	s := &SysRole{}
-	s.Orm = db
-	if err := s.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleKey: "two"}, cb); err == nil {
+	s.DB = db
+	if err := s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "two"}, cb); err == nil {
 		t.Fatal("rename to another active role key succeeded")
 	}
 	for _, key := range []string{"one", "two"} {
@@ -436,15 +443,15 @@ func TestRoleRejectsBlankKey(t *testing.T) {
 			db := integrityDB(t)
 			cb := integrityEnforcer(t, db)
 			s := &SysRole{}
-			s.Orm = db
-			if err := db.Create(&models.SysRole{RoleId: 1, RoleKey: "existing"}).Error; err != nil {
+			s.DB = db
+			if err := db.Create(&models.SysRole{RoleID: 1, RoleKey: "existing"}).Error; err != nil {
 				t.Fatal(err)
 			}
 			var err error
 			if name == "insert" {
 				err = s.Insert(&dto.SysRoleInsertReq{RoleKey: " "}, cb)
 			} else {
-				err = s.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleKey: " "}, cb)
+				err = s.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: " "}, cb)
 			}
 			if err == nil {
 				t.Fatal("blank role key accepted")

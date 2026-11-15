@@ -2,36 +2,38 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"go-admin/app/admin/apis"
-	"go-admin/common/middleware"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor/app/admin/handler"
+	"github.com/gatework/motor/common/middleware"
 )
 
+//nolint:gochecknoinits // The host seals startup registries after these module declarations are loaded.
 func init() {
 	routerCheckRole = append(routerCheckRole, registerDictRouter)
 }
 
 func registerDictRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	dictApi := apis.SysDictType{}
-	dataApi := apis.SysDictData{}
+	dictAPI := handler.Dictionary{}
+	dataAPI := handler.DictionaryEntry{}
 	dicts := v1.Group("/dict").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
 
-		dicts.GET("/data", dataApi.GetPage)
-		dicts.GET("/data/:dictCode", dataApi.Get)
-		dicts.POST("/data", dataApi.Insert)
-		dicts.PUT("/data/:dictCode", dataApi.Update)
-		dicts.DELETE("/data", dataApi.Delete)
+		dicts.GET("/data", dataAPI.List)
+		dicts.GET("/data/:dictCode", dataAPI.Get)
+		dicts.POST("/data", dataAPI.Create)
+		dicts.PUT("/data/:dictCode", dataAPI.Update)
+		dicts.DELETE("/data", dataAPI.Delete)
 
-		dicts.GET("/type-option-select", dictApi.GetAll)
-		dicts.GET("/type", dictApi.GetPage)
-		dicts.GET("/type/:id", dictApi.Get)
-		dicts.POST("/type", dictApi.Insert)
-		dicts.PUT("/type/:id", dictApi.Update)
-		dicts.DELETE("/type", dictApi.Delete)
+		dicts.GET("/type-option-select", dictAPI.All)
+		dicts.GET("/type", dictAPI.List)
+		dicts.GET("/type/:id", dictAPI.Get)
+		dicts.POST("/type", dictAPI.Create)
+		dicts.PUT("/type/:id", dictAPI.Update)
+		dicts.DELETE("/type", dictAPI.Delete)
 	}
 	opSelect := v1.Group("/dict-data").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
-		opSelect.GET("/option-select", dataApi.GetAll)
+		opSelect.GET("/option-select", dataAPI.All)
 	}
 }

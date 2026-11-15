@@ -2,9 +2,8 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	_ "github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
 )
 
 var (
@@ -12,6 +11,7 @@ var (
 	routerCheckRole   = make([]func(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware), 0)
 )
 
+// InitExamplesRouter mounts the registered example routes.
 func InitExamplesRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *gin.Engine {
 
 	// 无需认证的路由
@@ -32,7 +32,7 @@ func examplesNoCheckRoleRouter(r *gin.Engine) {
 }
 
 // 需要认证的路由示例
-func examplesCheckRoleRouter(r *gin.Engine, authMiddleware *jwtauth.GinJWTMiddleware) {
+func examplesCheckRoleRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) {
 	// 可根据业务需求来设置接口版本
 	v1 := r.Group("/api/v1")
 	for _, f := range routerCheckRole {

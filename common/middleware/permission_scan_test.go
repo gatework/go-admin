@@ -4,11 +4,11 @@ import "testing"
 
 // excluded is excludedFromCasbin with the error dropped: these tests are about
 // the answer and its cost, and CasbinExclude has no malformed entry to report.
-func excluded(t testing.TB, path, method string) bool {
-	t.Helper()
+func excluded(tb testing.TB, path, method string) bool {
+	tb.Helper()
 	ok, err := excludedFromCasbin(method, path)
 	if err != nil {
-		t.Fatalf("CasbinExclude holds a pattern that will not compile: %s", err)
+		tb.Fatalf("CasbinExclude holds a pattern that will not compile: %s", err)
 	}
 	return ok
 }

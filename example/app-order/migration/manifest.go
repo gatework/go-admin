@@ -1,7 +1,7 @@
 package migration
 
 import (
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/app"
+	"github.com/gatework/motor-core/sdk/contract/app"
 )
 
 // Version is what this application calls itself. A host's installer records
@@ -26,7 +26,7 @@ func init() {
 		Name:        "Order example",
 		Version:     Version,
 		Description: "A worked example of an application that ships its own tables, menus and APIs.",
-		Author:      "go-admin",
+		Author:      "motor",
 		// Nothing yet. When an application does declare dependencies, a host
 		// refuses to install it until they are installed - it does not
 		// install them for you, because the blast radius of installing one

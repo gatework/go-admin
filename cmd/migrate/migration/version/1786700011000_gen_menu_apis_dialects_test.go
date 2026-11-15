@@ -7,7 +7,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
 )
 
 // bindGenMenuApis writes casbin_rule with INSERT ... SELECT ... WHERE NOT
@@ -15,7 +15,7 @@ import (
 // dialect-sensitive, and the other tests for it run on SQLite only. This runs
 // the same grant on every database CI has.
 
-const mysqlDSNEnv = "GO_ADMIN_TEST_MYSQL_DSN"
+const mysqlDSNEnv = "MOTOR_TEST_MYSQL_DSN"
 
 func mysqlDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -50,7 +50,7 @@ func (casbinRuleRow) TableName() string { return "casbin_rule" }
 
 func grantOn(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	tables := []any{&casbinRuleRow{}, &adminmodels.SysApi{}, &adminmodels.SysMenu{}, &adminmodels.SysRole{}}
+	tables := []any{&casbinRuleRow{}, &adminmodels.SysAPI{}, &adminmodels.SysMenu{}, &adminmodels.SysRole{}}
 	drop := func() {
 		for _, join := range []string{"sys_menu_api_rule", "sys_role_menu", "sys_role_dept"} {
 			if db.Migrator().HasTable(join) {
@@ -88,12 +88,12 @@ func grantOn(t *testing.T, db *gorm.DB) {
 	if err := db.Create(&role).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", role.RoleId, gen.MenuId).Error; err != nil {
+	if err := db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", role.RoleID, gen.MenuID).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 2; i++ {
-		if err := bindGenMenuApis(db); err != nil {
+	for i := range 2 {
+		if err := bindGenMenuAPIs(db); err != nil {
 			t.Fatalf("run %d: %v", i+1, err)
 		}
 	}
@@ -103,11 +103,11 @@ func grantOn(t *testing.T, db *gorm.DB) {
 	if n != 9 {
 		t.Errorf("developer holds %d policies after two runs, want 9", n)
 	}
-	if bound := db.Model(&gen).Association("SysApi").Count(); bound != 9 {
+	if bound := db.Model(&gen).Association("SysAPI").Count(); bound != 9 {
 		t.Errorf("代码生成 is bound to %d APIs after two runs, want 9", bound)
 	}
 }
 
-func TestGenMenuApisOnMySQL(t *testing.T)     { grantOn(t, mysqlDB(t)) }
-func TestGenMenuApisOnPostgres(t *testing.T)  { grantOn(t, postgresDB(t)) }
-func TestGenMenuApisOnSQLServer(t *testing.T) { grantOn(t, sqlserverDB(t)) }
+func TestGenMenuAPIsOnMySQL(t *testing.T)     { grantOn(t, mysqlDB(t)) }
+func TestGenMenuAPIsOnPostgres(t *testing.T)  { grantOn(t, postgresDB(t)) }
+func TestGenMenuAPIsOnSQLServer(t *testing.T) { grantOn(t, sqlserverDB(t)) }

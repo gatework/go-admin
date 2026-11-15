@@ -3,14 +3,16 @@ package service
 import (
 	"errors"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	cDto "go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	cDto "github.com/gatework/motor/common/dto"
 )
 
+// SysLoginLog coordinates administration queries and mutations.
 type SysLoginLog struct {
 	service.Service
 }
@@ -20,7 +22,7 @@ func (e *SysLoginLog) GetPage(c *dto.SysLoginLogGetPageReq, list *[]models.SysLo
 	var err error
 	var data models.SysLoginLog
 
-	err = e.Orm.Model(&data).
+	err = e.DB.Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -28,7 +30,7 @@ func (e *SysLoginLog) GetPage(c *dto.SysLoginLogGetPageReq, list *[]models.SysLo
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("db error:%s", err)
+		e.Logger.Errorf("db error:%s", err)
 		return err
 	}
 	return nil
@@ -37,15 +39,15 @@ func (e *SysLoginLog) GetPage(c *dto.SysLoginLogGetPageReq, list *[]models.SysLo
 // Get 获取SysLoginLog对象
 func (e *SysLoginLog) Get(d *dto.SysLoginLogGetReq, model *models.SysLoginLog) error {
 	var err error
-	db := e.Orm.First(model, d.GetId())
+	db := e.DB.First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("db error:%s", err)
+		e.Logger.Errorf("db error:%s", err)
 		return err
 	}
 	if err = db.Error; err != nil {
-		e.Log.Errorf("db error:%s", err)
+		e.Logger.Errorf("db error:%s", err)
 		return err
 	}
 	return nil
@@ -56,9 +58,9 @@ func (e *SysLoginLog) Remove(c *dto.SysLoginLogDeleteReq) error {
 	var err error
 	var data models.SysLoginLog
 
-	db := e.Orm.Delete(&data, c.GetId())
+	db := e.DB.Delete(&data, c.GetID())
 	if err = db.Error; err != nil {
-		e.Log.Errorf("Delete error: %s", err)
+		e.Logger.Errorf("Delete error: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {

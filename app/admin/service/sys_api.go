@@ -3,26 +3,28 @@ package service
 import (
 	"errors"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	"go-admin/common/actions"
-	cDto "go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
+	cDto "github.com/gatework/motor/common/dto"
 )
 
-type SysApi struct {
+// SysAPI coordinates administration queries and mutations.
+type SysAPI struct {
 	service.Service
 }
 
-// GetPage 获取SysApi列表
-func (e *SysApi) GetPage(c *dto.SysApiGetPageReq, p *actions.DataPermission, list *[]models.SysApi, count *int64) error {
+// GetPage 获取SysAPI列表
+func (e *SysAPI) GetPage(c *dto.SysAPIGetPageReq, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
 	var err error
-	var data models.SysApi
+	var data models.SysAPI
 
-	orm := e.Orm.Debug().Model(&data).
+	orm := e.DB.Debug().Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -39,40 +41,38 @@ func (e *SysApi) GetPage(c *dto.SysApiGetPageReq, p *actions.DataPermission, lis
 	err = orm.Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("Service GetSysApiPage error:%s", err)
+		e.Logger.Errorf("Service GetSysAPIPage error:%s", err)
 		return err
 	}
 	return nil
 }
 
-// Get 获取SysApi对象with id
-func (e *SysApi) Get(d *dto.SysApiGetReq, p *actions.DataPermission, model *models.SysApi) *SysApi {
-	var data models.SysApi
-	err := e.Orm.Model(&data).
+// Get 获取SysAPI对象with id
+func (e *SysAPI) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *models.SysAPI) error {
+	var data models.SysAPI
+	err := e.DB.Model(&data).
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).
-		FirstOrInit(model, d.GetId()).Error
+		FirstOrInit(model, d.GetID()).Error
 	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
-		return e
+		e.Logger.Errorf("db error:%s", err)
+		return err
 	}
-	if model.Id == 0 {
+	if model.ID == 0 {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("Service GetSysApi error: %s", err)
-		_ = e.AddError(err)
-		return e
+		e.Logger.Errorf("Service GetSysAPI error: %s", err)
+		return err
 	}
-	return e
+	return nil
 }
 
-// Update 修改SysApi对象
-func (e *SysApi) Update(c *dto.SysApiUpdateReq, p *actions.DataPermission) error {
-	var model = models.SysApi{}
-	db := e.Orm.Scopes(
+// Update 修改SysAPI对象
+func (e *SysAPI) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error {
+	var model = models.SysAPI{}
+	db := e.DB.Scopes(
 		actions.Permission(model.TableName(), p),
-	).First(&model, c.GetId())
+	).First(&model, c.GetID())
 	if err := db.Error; err != nil {
 		// First reports a row the data permission excluded exactly as it
 		// reports one that does not exist, and the caller should not be able
@@ -80,15 +80,15 @@ func (e *SysApi) Update(c *dto.SysApiUpdateReq, p *actions.DataPermission) error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("无权更新该数据")
 		}
-		e.Log.Errorf("Service UpdateSysApi error:%s", err)
+		e.Logger.Errorf("Service UpdateSysAPI error:%s", err)
 		return err
 	}
 	c.Generate(&model)
 	model.UpdateBy = c.UpdateBy
-	db = e.Orm.Scopes(actions.Permission(model.TableName(), p)).
+	db = e.DB.Scopes(actions.Permission(model.TableName(), p)).
 		Omit("create_by", "created_at").Select("*").Updates(&model)
 	if err := db.Error; err != nil {
-		e.Log.Errorf("Service UpdateSysApi error:%s", err)
+		e.Logger.Errorf("Service UpdateSysAPI error:%s", err)
 		return err
 	}
 

@@ -1,9 +1,12 @@
 package models
 
-import "go-admin/common/models"
+import "github.com/gatework/motor/common/models"
 
+// SysMenu describes persisted administration data.
 type SysMenu struct {
-	MenuId     int       `json:"menuId" gorm:"primaryKey;autoIncrement"`
+	models.ControlBy
+	models.ModelTime
+	MenuID     int       `json:"menuId" gorm:"primaryKey;autoIncrement"`
 	MenuName   string    `json:"menuName" gorm:"size:128;"`
 	Title      string    `json:"title" gorm:"size:128;"`
 	Icon       string    `json:"icon" gorm:"size:128;"`
@@ -12,18 +15,18 @@ type SysMenu struct {
 	MenuType   string    `json:"menuType" gorm:"size:1;"`
 	Action     string    `json:"action" gorm:"size:16;"`
 	Permission string    `json:"permission" gorm:"size:255;"`
-	ParentId   int       `json:"parentId" gorm:"size:11;"`
+	ParentID   int       `json:"parentId" gorm:"size:11;"`
 	NoCache    bool      `json:"noCache" gorm:"size:8;"`
 	Breadcrumb string    `json:"breadcrumb" gorm:"size:255;"`
 	Component  string    `json:"component" gorm:"size:255;"`
 	Sort       int       `json:"sort" gorm:"size:4;"`
 	Visible    string    `json:"visible" gorm:"size:1;"`
 	IsFrame    string    `json:"isFrame" gorm:"size:1;DEFAULT:0;"`
-	SysApi     []SysApi  `json:"sysApi" gorm:"many2many:sys_menu_api_rule"`
-	Apis       []int     `json:"apis" gorm:"-"`
+	SysAPI     []SysAPI  `json:"sysApi" gorm:"many2many:sys_menu_api_rule"`
+	APIs       []int     `json:"apis" gorm:"-"`
 	DataScope  string    `json:"dataScope" gorm:"-"`
 	Params     string    `json:"params" gorm:"-"`
-	RoleId     int       `gorm:"-"`
+	RoleID     int       `gorm:"-"`
 	Children   []SysMenu `json:"children,omitempty" gorm:"-"`
 	IsSelect   bool      `json:"is_select" gorm:"-"`
 	// AppCode identifies which application's seed.SeedMenus call wrote this
@@ -56,25 +59,32 @@ type SysMenu struct {
 	// HasIndex guard finds the name taken and leaves the wrong index in
 	// place.
 	SeedCode *string `json:"seedCode" gorm:"size:64;comment:raw MenuSpec.Code, null for rows not written through SeedMenus"`
-	models.ControlBy
-	models.ModelTime
 }
 
+// SysMenuSlice describes persisted administration data.
 type SysMenuSlice []SysMenu
 
-func (x SysMenuSlice) Len() int           { return len(x) }
-func (x SysMenuSlice) Less(i, j int) bool { return x[i].Sort < x[j].Sort }
-func (x SysMenuSlice) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
+// Len performs the len administration operation.
+func (x SysMenuSlice) Len() int { return len(x) }
 
+// Less performs the less administration operation.
+func (x SysMenuSlice) Less(i, j int) bool { return x[i].Sort < x[j].Sort }
+
+// Swap performs the swap administration operation.
+func (x SysMenuSlice) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
+
+// TableName returns the explicit persistence table name.
 func (*SysMenu) TableName() string {
 	return "sys_menu"
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (e *SysMenu) Generate() models.ActiveRecord {
 	o := *e
 	return &o
 }
 
-func (e *SysMenu) GetId() interface{} {
-	return e.MenuId
+// GetID returns the selected resource identity.
+func (e *SysMenu) GetID() any {
+	return e.MenuID
 }

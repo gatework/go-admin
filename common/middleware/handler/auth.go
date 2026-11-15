@@ -1,50 +1,55 @@
 package handler
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"go-admin/common"
-	"go-admin/common/account"
-	"gorm.io/gorm"
 	"net/http"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/gatework/motor/common"
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/captcha"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth/user"
-	"github.com/go-admin-team/go-admin-core/v2/response"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"github.com/mssola/user_agent"
-	"go-admin/common/global"
+
+	"github.com/gatework/motor-core/captcha"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/jwtauth/user"
+	"github.com/gatework/motor-core/response"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/storage"
+	"github.com/gatework/motor/common/global"
 )
 
 // AuthCallbacks keeps the credential MAC on the same immutable startup key as
 // the JWT signer. Rotating the configured key takes effect after restart.
-func AuthCallbacks(secret string) (func(interface{}) jwt.MapClaims, func(interface{}, *gin.Context) bool) {
+func AuthCallbacks(secret string) (func(any) jwt.MapClaims, func(any, *gin.Context) bool) {
 	key := []byte(secret)
-	return func(data interface{}) jwt.MapClaims { return payloadFunc(data, key) },
-		func(data interface{}, c *gin.Context) bool { return authorize(data, c, key) }
+	return func(data any) jwt.MapClaims { return payloadFunc(data, key) },
+		func(data any, c *gin.Context) bool { return authorize(data, c, key) }
 }
 
 // PayloadFunc remains available for callers constructing their own middleware.
 // Host middleware uses AuthCallbacks to pin signing and stamp keys together.
-func PayloadFunc(data interface{}) jwt.MapClaims {
-	return payloadFunc(data, []byte(config.JwtConfig.Secret))
+func PayloadFunc(data any) jwt.MapClaims {
+	return payloadFunc(data, []byte(config.Current().Settings.JWT.Secret))
 }
 
-func payloadFunc(data interface{}, key []byte) jwt.MapClaims {
-	if v, ok := data.(map[string]interface{}); ok {
+func payloadFunc(data any, key []byte) jwt.MapClaims {
+	if v, ok := data.(map[string]any); ok {
 		u, _ := v["user"].(SysUser)
 		r, _ := v["role"].(SysRole)
 		return jwt.MapClaims{
-			jwt.IdentityKey:  u.UserId,
-			jwt.RoleIdKey:    r.RoleId,
+			jwt.IdentityKey:  u.UserID,
+			jwt.RoleIDKey:    r.RoleID,
 			jwt.RoleKey:      r.RoleKey,
 			jwt.NiceKey:      u.Username,
 			jwt.DataScopeKey: r.DataScope,
@@ -52,7 +57,7 @@ func payloadFunc(data interface{}, key []byte) jwt.MapClaims {
 			// deptid completes what the data-permission scope is decided by,
 			// so it can be read from the token instead of joined for on every
 			// request. core's user.GetDeptId has always read this claim.
-			"deptid":     u.DeptId,
+			"deptid":     u.DeptID,
 			"tenant":     v["tenant"],
 			"credential": credentialStamp(u, r, key),
 			"auth_stamp": account.Stamp(string(key), u.Password, accountVersion(v)),
@@ -62,14 +67,15 @@ func payloadFunc(data interface{}, key []byte) jwt.MapClaims {
 }
 
 // accountVersion defaults to zero for callers issuing a token before MFA is enabled.
-func accountVersion(values map[string]interface{}) int64 {
+func accountVersion(values map[string]any) int64 {
 	version, _ := values["account_version"].(int64)
 	return version
 }
 
-func IdentityHandler(c *gin.Context) interface{} {
+// IdentityHandler handles the identityhandler operation.
+func IdentityHandler(c *gin.Context) any {
 	claims := jwt.ExtractClaims(c)
-	return map[string]interface{}{
+	return map[string]any{
 		"IdentityKey": claims["identity"],
 		"UserName":    claims["nice"],
 		"RoleKey":     claims["rolekey"],
@@ -93,9 +99,9 @@ func IdentityHandler(c *gin.Context) interface{} {
 // @Param account body Login  true "account"
 // @Success 200 {string} string "{"code": 200, "expire": "2019-08-07T12:45:48+08:00", "token": ".eyJleHAiOjE1NjUxNTMxNDgsImlkIjoiYWRtaW4iLCJvcmlnX2lhdCI6MTU2NTE0OTU0OH0.-zvzHvbg0A" }"
 // @Router /api/v1/login [post]
-func Authenticator(c *gin.Context) (interface{}, error) {
+func Authenticator(c *gin.Context) (any, error) {
 	log := api.GetRequestLogger(c)
-	db, err := pkg.GetOrm(c)
+	db, err := pkg.GetORM(c)
 	if err != nil {
 		log.Errorf("get db error, %s", err.Error())
 		response.Error(c, 500, err, "数据库连接获取失败")
@@ -133,63 +139,30 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 			msg = "MFA 验证失败"
 			return nil, jwt.ErrFailedAuthentication
 		}
-		if err = db.Where("user_id = ? AND status = '2' AND deleted_at = 0", verified.UserId).First(&sysUser).Error; err != nil || sysUser.Password != verified.Password {
+		if err = db.Where("user_id = ? AND status = '2' AND deleted_at = 0", verified.UserID).First(&sysUser).Error; err != nil || sysUser.Password != verified.Password {
 			return nil, jwt.ErrFailedAuthentication
 		}
 		authVersion = verified.SessionVersion
-		if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", sysUser.RoleId).First(&role).Error; err != nil {
+		if err = db.Where("role_id = ? AND status = '2' AND deleted_at = 0", sysUser.RoleID).First(&role).Error; err != nil {
 			return nil, jwt.ErrFailedAuthentication
 		}
 	} else {
-		if loginVals.Username == "" || loginVals.Password == "" || loginVals.Code == "" || loginVals.UUID == "" {
-			status = "1"
-			return nil, jwt.ErrMissingLoginValues
-		}
-		if config.ApplicationConfig.Mode != "dev" && !captcha.Verify(loginVals.UUID, loginVals.Code, true) {
-			status = "1"
-			msg = "验证码错误"
-			return nil, jwt.ErrInvalidVerificationode
-		}
-		// Account quotas are consumed only after required fields and CAPTCHA pass.
-		if err = security.TakeLimit("login-user:"+loginVals.Username, 20, 5*time.Minute); err != nil {
-			status = "1"
-			msg = "登录频率超限"
-			return nil, jwt.ErrFailedAuthentication
-		}
-		var e error
-		sysUser, role, e = loginVals.GetUser(db)
-		if e != nil || role.Status != "2" {
-			status = "1"
-			msg = "登录失败"
-			return nil, jwt.ErrFailedAuthentication
-		}
-		state, e := security.State(sysUser.UserId)
-		if e != nil {
-			return nil, jwt.ErrFailedAuthentication
-		}
-		authVersion = state.Version
-		if state.Enabled {
-			u := account.User{UserId: sysUser.UserId, Username: sysUser.Username, Password: sysUser.Password}
-			token, e := security.LoginChallenge(u, state)
-			if e != nil {
-				return nil, jwt.ErrFailedAuthentication
-			}
-			c.Set("account_mfa_challenge", token)
-			msg = "等待 MFA 验证"
-			return nil, jwt.ErrFailedAuthentication
+		sysUser, role, authVersion, err = authenticatePassword(c, db, security, loginVals, &status, &msg)
+		if err != nil {
+			return nil, err
 		}
 	}
 	username = sysUser.Username
-	return map[string]interface{}{"user": sysUser, "role": role, "account_version": authVersion, "tenant": Tenant(c.Request.Host)}, nil
+	return map[string]any{"user": sysUser, "role": role, "account_version": authVersion, "tenant": Tenant(c.Request.Host)}, nil
 }
 
 // LoginLogToDB Write log to database
 func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
-	if !config.LoggerConfig.EnabledDB {
+	if !config.Current().Settings.Logger.EnabledDB {
 		return
 	}
 	log := api.GetRequestLogger(c)
-	l := make(map[string]interface{})
+	l := make(map[string]any)
 
 	ua := user_agent.New(c.Request.UserAgent())
 	l["ipaddr"] = common.GetClientIP(c)
@@ -204,20 +177,20 @@ func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
 	l["username"] = username
 	l["msg"] = msg
 
-	q := sdk.Runtime.GetQueuePrefix(c.Request.Host)
-	message, err := sdk.Runtime.GetStreamMessage("", global.LoginLog, l)
+	payload, err := json.Marshal(l)
 	if err != nil {
-		log.Errorf("GetStreamMessage error, %s", err.Error())
-		//日志报错错误，不中断请求
-	} else {
-		err = q.Append(message)
-		if err != nil {
-			log.Errorf("Append message error, %s", err.Error())
-		}
+		log.Errorf("encode log message: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
+	defer cancel()
+	message := storage.Message{Topic: global.LoginLog, Values: map[string]any{"payload": string(payload)}}
+	if err := sdk.Runtime.QueueForTenant(c.Request.Host).Publish(ctx, message); err != nil {
+		log.Errorf("publish log message: %v", err)
 	}
 }
 
-// LogOut
+// LogOut closes the authenticated user session.
 // @Summary 退出登录
 // @Description 获取token
 // LoginHandler can be used by clients to get a jwt token.
@@ -228,14 +201,14 @@ func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
 // @Router /logout [post]
 // @Security Bearer
 func LogOut(c *gin.Context) {
-	db, err := pkg.GetOrm(c)
+	db, err := pkg.GetORM(c)
 	if err != nil {
 		response.Error(c, 500, err, "退出失败")
 		return
 	}
 	// Table updates deliberately bypass AuthVersion's create-only model field.
 	result := db.WithContext(c.Request.Context()).Table("sys_user").
-		Where("user_id = ? AND deleted_at = ? AND status = ?", user.GetUserId(c), 0, "2").
+		Where("user_id = ? AND deleted_at = ? AND status = ?", user.ID(c), 0, "2").
 		UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1))
 	if result.Error != nil {
 		response.Error(c, 500, result.Error, "退出失败")
@@ -245,8 +218,8 @@ func LogOut(c *gin.Context) {
 		response.Error(c, 403, nil, "退出失败")
 		return
 	}
-	closeUserWebsockets(Tenant(c.Request.Host), user.GetUserId(c))
-	LoginLogToDB(c, "2", "退出成功", user.GetUserName(c))
+	closeUserWebsockets(Tenant(c.Request.Host), user.ID(c))
+	LoginLogToDB(c, "2", "退出成功", user.Name(c))
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"msg":  "退出成功",
@@ -257,7 +230,7 @@ func LogOut(c *gin.Context) {
 // Tenant resolves the same wildcard precedence as the runtime database registry.
 // Host aliases sharing the wildcard database belong to one tenant.
 func Tenant(host string) string {
-	if sdk.Runtime.GetAllDb()["*"] != nil {
+	if sdk.Runtime.Databases()["*"] != nil {
 		return "*"
 	}
 	return host
@@ -266,7 +239,7 @@ func Tenant(host string) string {
 // credentialStamp revokes old tokens when credentials or authorization identity
 // changes without placing the password hash itself in the readable JWT payload.
 func credentialStamp(u SysUser, r SysRole, key []byte) string {
-	state, _ := json.Marshal([]interface{}{u.UserId, u.CreatedAt.UnixNano(), u.AuthVersion, u.Username, u.Password, u.RoleId, u.DeptId, r.RoleId, r.CreatedAt.UnixNano(), r.RoleKey, r.DataScope, r.Status})
+	state, _ := json.Marshal([]any{u.UserID, u.CreatedAt.UnixNano(), u.AuthVersion, u.Username, u.Password, u.RoleID, u.DeptID, r.RoleID, r.CreatedAt.UnixNano(), r.RoleKey, r.DataScope, r.Status})
 	mac := hmac.New(sha256.New, key)
 	mac.Write(state)
 	return hex.EncodeToString(mac.Sum(nil))
@@ -274,12 +247,12 @@ func credentialStamp(u SysUser, r SysRole, key []byte) string {
 
 // Authorizator verifies tenant binding and current account state on every request.
 // A signed token alone does not prove that the account is still enabled.
-func Authorizator(data interface{}, c *gin.Context) bool {
-	return authorize(data, c, []byte(config.JwtConfig.Secret))
+func Authorizator(data any, c *gin.Context) bool {
+	return authorize(data, c, []byte(config.Current().Settings.JWT.Secret))
 }
 
-func authorize(data interface{}, c *gin.Context, key []byte) bool {
-	if _, ok := data.(map[string]interface{}); !ok {
+func authorize(data any, c *gin.Context, key []byte) bool {
+	if _, ok := data.(map[string]any); !ok {
 		return false
 	}
 	claims := jwt.ExtractClaims(c)
@@ -291,11 +264,11 @@ func authorize(data interface{}, c *gin.Context, key []byte) bool {
 	if !ok || stamp == "" {
 		return false
 	}
-	db, err := pkg.GetOrm(c)
+	db, err := pkg.GetORM(c)
 	if err != nil {
 		return false
 	}
-	id := user.GetUserId(c)
+	id := user.ID(c)
 	if id <= 0 {
 		return false
 	}
@@ -304,7 +277,7 @@ func authorize(data interface{}, c *gin.Context, key []byte) bool {
 		return false
 	}
 	var r SysRole
-	if db.Where("role_id = ? AND status = ?", u.RoleId, "2").First(&r).Error != nil {
+	if db.Where("role_id = ? AND status = ?", u.RoleID, "2").First(&r).Error != nil {
 		return false
 	}
 	state, err := account.New(db.WithContext(c.Request.Context())).State(id)
@@ -318,6 +291,7 @@ func authorize(data interface{}, c *gin.Context, key []byte) bool {
 	return hmac.Equal([]byte(stamp), []byte(credentialStamp(u, r, key)))
 }
 
+// Unauthorized handles the unauthorized operation.
 func Unauthorized(c *gin.Context, code int, message string) {
 	if token, ok := c.Get("account_mfa_challenge"); ok {
 		c.JSON(http.StatusOK, gin.H{"code": 200, "mfaRequired": true, "challengeToken": token, "expiresIn": 300})
@@ -327,4 +301,49 @@ func Unauthorized(c *gin.Context, code int, message string) {
 		"code": code,
 		"msg":  message,
 	})
+}
+
+func authenticatePassword(c *gin.Context, db *gorm.DB, security account.Service, loginVals Login, status, msg *string) (SysUser, SysRole, int64, error) {
+	var sysUser SysUser
+	var role SysRole
+	var authVersion int64
+	var err error
+	if loginVals.Username == "" || loginVals.Password == "" || loginVals.Code == "" || loginVals.UUID == "" {
+		*status = "1"
+		return sysUser, role, authVersion, jwt.ErrMissingLoginValues
+	}
+	if config.Current().Settings.Application.Mode != "dev" && !captcha.Verify(loginVals.UUID, loginVals.Code, true) {
+		*status = "1"
+		*msg = "验证码错误"
+		return sysUser, role, authVersion, jwt.ErrInvalidVerificationode
+	}
+	// Account quotas are consumed only after required fields and CAPTCHA pass.
+	if err = security.TakeLimit("login-user:"+loginVals.Username, 20, 5*time.Minute); err != nil {
+		*status = "1"
+		*msg = "登录频率超限"
+		return sysUser, role, authVersion, jwt.ErrFailedAuthentication
+	}
+	var e error
+	sysUser, role, e = loginVals.GetUser(db)
+	if e != nil || role.Status != "2" {
+		*status = "1"
+		*msg = "登录失败"
+		return sysUser, role, authVersion, jwt.ErrFailedAuthentication
+	}
+	state, e := security.State(sysUser.UserID)
+	if e != nil {
+		return sysUser, role, authVersion, jwt.ErrFailedAuthentication
+	}
+	authVersion = state.Version
+	if state.Enabled {
+		u := account.User{UserID: sysUser.UserID, Username: sysUser.Username, Password: sysUser.Password}
+		token, e := security.LoginChallenge(u, state)
+		if e != nil {
+			return sysUser, role, authVersion, jwt.ErrFailedAuthentication
+		}
+		c.Set("account_mfa_challenge", token)
+		*msg = "等待 MFA 验证"
+		return sysUser, role, authVersion, jwt.ErrFailedAuthentication
+	}
+	return sysUser, role, authVersion, nil
 }

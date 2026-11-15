@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,6 +53,7 @@ func runChecks(s *snapshot, opt options) ([]Finding, error) {
 	out = append(out, checkContractShimAlias(s)...)
 	out = append(out, checkDataScopeRoutes(s)...)
 	out = append(out, checkDiscardedGORMResults(s)...)
+	out = append(out, checkErrorNames(s)...)
 
 	for _, run := range []func(*snapshot) ([]Finding, error){
 		checkShutdownBudgetFitsGrace,
@@ -74,21 +76,6 @@ func runChecks(s *snapshot, opt options) ([]Finding, error) {
 
 	sortFindings(out)
 	return out, nil
-}
-
-func (s *snapshot) pkg(rel string) string { return s.ModulePath + "/" + rel }
-
-func (s *snapshot) finding(sev Severity, check string, sf *sourceFile, pos posLike, format string, args ...interface{}) Finding {
-	file, line, col := s.Pos(sf, pos.Pos())
-	return Finding{
-		Check:    check,
-		Severity: sev.String(),
-		File:     file,
-		Line:     line,
-		Col:      col,
-		Message:  fmt.Sprintf(format, args...),
-		severity: sev,
-	}
 }
 
 type posLike interface{ Pos() token.Pos }
@@ -183,8 +170,8 @@ const softDeleteConversion = 1786700003000
 // conversion and left nobody able to log in.
 func checkMenuSortOverflow(s *snapshot) []Finding {
 	const (
-		min = -128
-		max = 127
+		minSort = -128
+		maxSort = 127
 	)
 	var out []Finding
 	for _, sf := range s.Files {
@@ -200,13 +187,13 @@ func checkMenuSortOverflow(s *snapshot) []Finding {
 				return
 			}
 			v, ok := intValue(sf, expr)
-			if !ok || (v >= min && v <= max) {
+			if !ok || (v >= minSort && v <= maxSort) {
 				return
 			}
 			out = append(out, s.finding(Error, checkMenuSort, sf, expr,
 				"menu sort %d does not fit a tinyint (%d..%d);\n"+
 					"    MySQL rejects it with Error 1264 and the migration stops there, leaving later migrations unapplied.",
-				v, min, max))
+				v, minSort, maxSort))
 		})
 	}
 	return out
@@ -303,7 +290,7 @@ func checkMenuIDCollisions(s *snapshot) []Finding {
 	for id := range sites {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	var out []Finding
 	for _, id := range ids {
@@ -419,7 +406,7 @@ func checkContractImportBoundary(s *snapshot) []Finding {
 // literal path so that a major-version bump of core - which rewrites the
 // /v2 in every import - does not quietly turn this check off.
 const (
-	coreModulePrefix    = "github.com/go-admin-team/go-admin-core/"
+	coreModulePrefix    = "github.com/gatework/motor-core/"
 	coreContractSegment = "/sdk/contract/"
 )
 
@@ -556,6 +543,21 @@ func migrationVersion(rel string) (int64, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+func (s *snapshot) pkg(rel string) string { return s.ModulePath + "/" + rel }
+
+func (s *snapshot) finding(sev Severity, check string, sf *sourceFile, pos posLike, format string, args ...any) Finding {
+	file, line, col := s.Pos(sf, pos.Pos())
+	return Finding{
+		Check:    check,
+		Severity: sev.String(),
+		File:     file,
+		Line:     line,
+		Col:      col,
+		Message:  fmt.Sprintf(format, args...),
+		severity: sev,
+	}
 }
 
 // isMenuModel reports whether a literal describes a menu row, whichever of

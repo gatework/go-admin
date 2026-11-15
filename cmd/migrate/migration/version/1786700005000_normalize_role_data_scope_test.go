@@ -8,7 +8,7 @@ import (
 )
 
 type roleDataScopeRow struct {
-	RoleId    int    `gorm:"column:role_id;primaryKey;autoIncrement"`
+	RoleID    int    `gorm:"column:role_id;primaryKey;autoIncrement"`
 	DataScope string `gorm:"column:data_scope"`
 }
 
@@ -32,7 +32,7 @@ func openRoleTable(t *testing.T) *gorm.DB {
 // data literally rather than a made-up example.
 func TestNormalizesTheEmptyDataScopeTheSeedDataShips(t *testing.T) {
 	db := openRoleTable(t)
-	if err := db.Create(&roleDataScopeRow{RoleId: 1, DataScope: ""}).Error; err != nil {
+	if err := db.Create(&roleDataScopeRow{RoleID: 1, DataScope: ""}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestLeavesRecognizedScopesAlone(t *testing.T) {
 	db := openRoleTable(t)
 	valid := []string{"1", "2", "3", "4", "5"}
 	for i, scope := range valid {
-		if err := db.Create(&roleDataScopeRow{RoleId: i + 1, DataScope: scope}).Error; err != nil {
+		if err := db.Create(&roleDataScopeRow{RoleID: i + 1, DataScope: scope}).Error; err != nil {
 			t.Fatalf("seed %d: %v", i, err)
 		}
 	}
@@ -70,7 +70,7 @@ func TestLeavesRecognizedScopesAlone(t *testing.T) {
 	}
 	for i, row := range rows {
 		if row.DataScope != valid[i] {
-			t.Errorf("role %d: data_scope = %q, want %q (untouched)", row.RoleId, row.DataScope, valid[i])
+			t.Errorf("role %d: data_scope = %q, want %q (untouched)", row.RoleID, row.DataScope, valid[i])
 		}
 	}
 }
@@ -80,7 +80,7 @@ func TestLeavesRecognizedScopesAlone(t *testing.T) {
 // catch both.
 func TestNormalizesGarbageScopesToo(t *testing.T) {
 	db := openRoleTable(t)
-	if err := db.Create(&roleDataScopeRow{RoleId: 1, DataScope: "6"}).Error; err != nil {
+	if err := db.Create(&roleDataScopeRow{RoleID: 1, DataScope: "6"}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
@@ -126,11 +126,11 @@ func TestNormalizesNullDataScope(t *testing.T) {
 // `migrate` on a partially-applied database has to be able to trust that.
 func TestNormalizeRoleDataScopeIsRepeatable(t *testing.T) {
 	db := openRoleTable(t)
-	if err := db.Create(&roleDataScopeRow{RoleId: 1, DataScope: ""}).Error; err != nil {
+	if err := db.Create(&roleDataScopeRow{RoleID: 1, DataScope: ""}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := normalizeRoleDataScope(db); err != nil {
 			t.Fatalf("migrate %d: %v", i, err)
 		}

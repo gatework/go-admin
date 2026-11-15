@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // Severity decides whether a finding stops CI.
@@ -19,6 +20,7 @@ const (
 	Error
 )
 
+// String handles the string operation.
 func (s Severity) String() string {
 	if s == Error {
 		return "ERROR"
@@ -39,12 +41,14 @@ type Finding struct {
 	severity Severity
 }
 
+// String handles the string operation.
 func (f Finding) String() string {
-	s := fmt.Sprintf("%s:%d:%d: [%s] %s: %s", f.File, f.Line, f.Col, f.Severity, f.Check, f.Message)
+	var s strings.Builder
+	fmt.Fprintf(&s, "%s:%d:%d: [%s] %s: %s", f.File, f.Line, f.Col, f.Severity, f.Check, f.Message)
 	for _, r := range f.Related {
-		s += "\n    " + r
+		s.WriteString("\n    " + r)
 	}
-	return s
+	return s.String()
 }
 
 // sortFindings orders by file, then position, then check, so two runs over the

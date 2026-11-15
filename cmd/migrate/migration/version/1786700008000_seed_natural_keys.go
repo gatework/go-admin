@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Give seed.SeedMenus's two write paths (seedApis, seedMenuTree in
@@ -18,6 +18,8 @@ import (
 // docs-prd/008-应用清单与安装器/数据库变更.md §1.5/§1.6) does not insert the
 // same row twice. This has already happened in production once (duplicate
 // sys_menu/casbin_rule rows on the demo site), not a theoretical risk.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700008000SeedNaturalKeys)
@@ -61,10 +63,10 @@ func seedNaturalKeys(db *gorm.DB) error {
 	// CREATE UNIQUE INDEX fail on an operator with no idea which rows to
 	// reconcile - same shape as 1786700003000_soft_delete_marker.go's
 	// refuseOnDuplicates.
-	if err := refuseOnDuplicateApis(db); err != nil {
+	if err := refuseOnDuplicateAPIs(db); err != nil {
 		return err
 	}
-	if !m.HasIndex(&adminmodels.SysApi{}, "uk_sys_api_app_path_action_del") {
+	if !m.HasIndex(&adminmodels.SysAPI{}, "uk_sys_api_app_path_action_del") {
 		if err := db.Exec(uniqueIndexOverNullable(db.Dialector.Name(),
 			"uk_sys_api_app_path_action_del", "sys_api",
 			"app_code, path, action, deleted_at", "path", "action"),
@@ -140,7 +142,7 @@ func uniqueIndexOverNullable(dialect, name, table, columns string, nullable ...s
 // (1786700008000_seed_natural_keys_postgres_test.go) rules out one more
 // dialect, but MySQL specifically has to be checked by hand, since this
 // repository's test suite has no MySQL service to run against in CI.
-func refuseOnDuplicateApis(db *gorm.DB) error {
+func refuseOnDuplicateAPIs(db *gorm.DB) error {
 	var dupes []string
 	if err := db.Raw(
 		// This has to agree with what the unique index it guards actually

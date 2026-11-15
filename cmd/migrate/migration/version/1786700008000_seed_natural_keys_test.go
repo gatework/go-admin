@@ -7,8 +7,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 // oldSeedMenu/oldSeedApi are the shape of sys_menu/sys_api immediately
@@ -19,22 +19,22 @@ import (
 // this migration adds - the same relationship oldUser bears to sys_user in
 // 1786700003000_soft_delete_marker_test.go.
 type oldSeedMenu struct {
-	MenuId    int    `gorm:"column:menu_id;primaryKey;autoIncrement"`
+	MenuID    int    `gorm:"column:menu_id;primaryKey;autoIncrement"`
 	AppCode   string `gorm:"column:app_code;type:varchar(64);not null;default:''"`
 	DeletedAt int64  `gorm:"column:deleted_at;not null;default:0"`
 }
 
 func (oldSeedMenu) TableName() string { return "sys_menu" }
 
-type oldSeedApi struct {
-	Id        int    `gorm:"column:id;primaryKey;autoIncrement"`
+type oldSeedAPI struct {
+	ID        int    `gorm:"column:id;primaryKey;autoIncrement"`
 	AppCode   string `gorm:"column:app_code;type:varchar(64);not null;default:''"`
 	Path      string `gorm:"column:path;type:varchar(128)"`
 	Action    string `gorm:"column:action;type:varchar(16)"`
 	DeletedAt int64  `gorm:"column:deleted_at;not null;default:0"`
 }
 
-func (oldSeedApi) TableName() string { return "sys_api" }
+func (oldSeedAPI) TableName() string { return "sys_api" }
 
 func openSeedNaturalKeysDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -43,7 +43,7 @@ func openSeedNaturalKeysDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedApi{}, &common.Migration{}); err != nil {
+	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedAPI{}, &common.Migration{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db
@@ -56,7 +56,7 @@ func openSeedNaturalKeysDB(t *testing.T) *gorm.DB {
 // NULL").
 func TestSeedNaturalKeysToleratesManyPreExistingMenusWithNoSeedCode(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := db.Create(&oldSeedMenu{AppCode: ""}).Error; err != nil {
 			t.Fatalf("seed pre-existing menu %d: %v", i, err)
 		}
@@ -111,10 +111,10 @@ func TestSeedNaturalKeysMenuUniqueIndexBindsLiveRowsOnly(t *testing.T) {
 // The demo site has already proven sys_api can hold historical duplicates;
 // the migration has to name them and refuse, not let CREATE UNIQUE INDEX
 // fail on an operator with no idea which rows to reconcile.
-func TestSeedNaturalKeysRefusesDuplicateApis(t *testing.T) {
+func TestSeedNaturalKeysRefusesDuplicateAPIs(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	for i := 0; i < 2; i++ {
-		if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	for i := range 2 {
+		if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 			t.Fatalf("seed duplicate %d: %v", i, err)
 		}
 	}
@@ -126,7 +126,7 @@ func TestSeedNaturalKeysRefusesDuplicateApis(t *testing.T) {
 	if !contains(err.Error(), "order") || !contains(err.Error(), "/api/v1/order") {
 		t.Errorf("the error does not name the offending row: %v", err)
 	}
-	if db.Migrator().HasIndex(&adminmodels.SysApi{}, "uk_sys_api_app_path_action_del") {
+	if db.Migrator().HasIndex(&adminmodels.SysAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the unique index was built despite the migration refusing")
 	}
 	// sys_menu's column and index are independent of sys_api's outcome and
@@ -141,19 +141,19 @@ func TestSeedNaturalKeysRefusesDuplicateApis(t *testing.T) {
 // Only live rows count towards the duplicate check: a row a prior,
 // unrelated soft-delete already retired does not block the index it will
 // never occupy a slot in.
-func TestSeedNaturalKeysIgnoresSoftDeletedApiDuplicates(t *testing.T) {
+func TestSeedNaturalKeysIgnoresSoftDeletedAPIDuplicates(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 		t.Fatalf("seed live row: %v", err)
 	}
-	if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET", DeletedAt: time.Now().UnixMilli()}).Error; err != nil {
+	if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET", DeletedAt: time.Now().UnixMilli()}).Error; err != nil {
 		t.Fatalf("seed soft-deleted row: %v", err)
 	}
 
 	if err := seedNaturalKeys(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if !db.Migrator().HasIndex(&adminmodels.SysApi{}, "uk_sys_api_app_path_action_del") {
+	if !db.Migrator().HasIndex(&adminmodels.SysAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the unique index was not built")
 	}
 }
@@ -162,9 +162,9 @@ func TestSeedNaturalKeysIgnoresSoftDeletedApiDuplicates(t *testing.T) {
 // TestSeedNaturalKeysMenuUniqueIndexBindsLiveRowsOnly above: a second live
 // row is rejected, and the key is free again once the row is
 // soft-deleted.
-func TestSeedNaturalKeysApiUniqueIndexBindsLiveRowsOnly(t *testing.T) {
+func TestSeedNaturalKeysAPIUniqueIndexBindsLiveRowsOnly(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := seedNaturalKeys(db); err != nil {
@@ -200,11 +200,11 @@ func TestSeedNaturalKeysApiUniqueIndexBindsLiveRowsOnly(t *testing.T) {
 // migration again once the duplicates are reconciled.
 func TestSeedNaturalKeysIsRepeatable(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := seedNaturalKeys(db); err != nil {
 			t.Fatalf("migrate %d: %v", i, err)
 		}
@@ -244,7 +244,7 @@ func TestSeedNaturalKeysWrapperRecordsTheVersion(t *testing.T) {
 // cannot represent NULL through a normal Create call.
 func TestSeedNaturalKeysDoesNotFlagWhatTheIndexWouldAccept(t *testing.T) {
 	db := openSeedNaturalKeysDB(t)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := db.Exec(
 			"INSERT INTO sys_api (app_code, path, action, deleted_at) VALUES ('order', NULL, NULL, 0)",
 		).Error; err != nil {
@@ -255,7 +255,7 @@ func TestSeedNaturalKeysDoesNotFlagWhatTheIndexWouldAccept(t *testing.T) {
 	if err := seedNaturalKeys(db); err != nil {
 		t.Fatalf("seedNaturalKeys refused a library the unique index itself accepts: %v", err)
 	}
-	if !db.Migrator().HasIndex(&adminmodels.SysApi{}, "uk_sys_api_app_path_action_del") {
+	if !db.Migrator().HasIndex(&adminmodels.SysAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the unique index was not built even though seedNaturalKeys reported success")
 	}
 }
@@ -288,7 +288,7 @@ func TestSeedNaturalKeysDoesNotFlagPartiallyNullRows(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := openSeedNaturalKeysDB(t)
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				if err := db.Exec(tc.insert).Error; err != nil {
 					t.Fatalf("seed row %d: %v", i, err)
 				}
@@ -297,7 +297,7 @@ func TestSeedNaturalKeysDoesNotFlagPartiallyNullRows(t *testing.T) {
 			if err := seedNaturalKeys(db); err != nil {
 				t.Fatalf("seedNaturalKeys refused a library the unique index itself accepts: %v", err)
 			}
-			if !db.Migrator().HasIndex(&adminmodels.SysApi{}, "uk_sys_api_app_path_action_del") {
+			if !db.Migrator().HasIndex(&adminmodels.SysAPI{}, "uk_sys_api_app_path_action_del") {
 				t.Error("the unique index was not built even though seedNaturalKeys reported success")
 			}
 		})

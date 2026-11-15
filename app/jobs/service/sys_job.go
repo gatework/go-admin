@@ -5,16 +5,18 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 
-	"go-admin/app/jobs"
-	"go-admin/app/jobs/models"
-	"go-admin/common/actions"
-	"go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/app/jobs"
+	"github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/dto"
 )
 
+// SysJob carries sys job state for this module.
 type SysJob struct {
 	service.Service
 	Cron       *cron.Cron
@@ -24,19 +26,19 @@ type SysJob struct {
 
 // RemoveJob persists stopped intent so a restart or lease takeover cannot
 // resurrect it. Running invocations are allowed to finish.
-func (e *SysJob) RemoveJob(c *dto.GeneralDelDto) error {
-	return e.setStatus(c.Id, 1)
+func (e *SysJob) RemoveJob(c *dto.DeleteRequest) error {
+	return e.setStatus(c.ID, 1)
 }
 
 // StartJob is idempotent and enables the persisted job. Standby requests
 // persist intent; only the lease holder dispatches it after reconciliation.
-func (e *SysJob) StartJob(c *dto.GeneralGetDto) error {
-	return e.setStatus(c.Id, 2)
+func (e *SysJob) StartJob(c *dto.GetRequest) error {
+	return e.setStatus(c.ID, 2)
 }
 
 func (e *SysJob) setStatus(id int, status int) error {
 	var job models.SysJob
-	db := e.Orm.Scopes(actions.Permission(job.TableName(), e.Permission))
+	db := e.DB.Scopes(actions.Permission(job.TableName(), e.Permission))
 	if err := db.First(&job, id).Error; err != nil {
 		return err
 	}
@@ -49,7 +51,7 @@ func (e *SysJob) setStatus(id int, status int) error {
 			return err
 		}
 	}
-	result := e.Orm.Model(&models.SysJob{}).Scopes(actions.Permission(job.TableName(), e.Permission)).
+	result := e.DB.Model(&models.SysJob{}).Scopes(actions.Permission(job.TableName(), e.Permission)).
 		Where("job_id = ?", id).Updates(map[string]any{"status": status})
 	if result.Error != nil {
 		return result.Error
@@ -57,7 +59,7 @@ func (e *SysJob) setStatus(id int, status int) error {
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	ctx := e.Orm.Statement.Context
+	ctx := e.DB.Statement.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -65,11 +67,10 @@ func (e *SysJob) setStatus(id int, status int) error {
 	if e.Tenant != "" {
 		err = jobs.Reconcile(ctx, e.Tenant)
 	} else {
-		err = jobs.ReconcileCron(ctx, e.Orm, e.Cron)
+		err = jobs.ReconcileCron(ctx, e.DB, e.Cron)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		e.Msg = "操作超时！"
-		return errors.New(e.Msg)
+		return errors.New("操作超时！")
 	}
 	return err
 }

@@ -4,12 +4,12 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/gin-gonic/gin"
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	// "github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	common "go-admin/common/middleware"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	// "github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/jwtauth"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	common "github.com/gatework/motor/common/middleware"
 	"os"
 )
 

@@ -9,13 +9,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
 
-	demo "go-admin/app/demo/models"
-	demodto "go-admin/app/demo/service/dto"
-	"go-admin/common/actions"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk/config"
+
+	demo "github.com/gatework/motor/app/demo/models"
+	demodto "github.com/gatework/motor/app/demo/service/dto"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 func probeDB(t *testing.T, _ string, _ any) *gorm.DB {
@@ -55,9 +57,12 @@ func serve(r *gin.Engine, method, path, body string) (int, string) {
 }
 
 func TestDemoProductUpdateExplicitZero(t *testing.T) {
-	old := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = false
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = old })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = false
+	})
+
 	db := probeDB(t, t.Name(), nil)
 	if err := db.AutoMigrate(&demo.DemoProduct{}); err != nil {
 		t.Fatal(err)
@@ -72,7 +77,7 @@ func TestDemoProductUpdateExplicitZero(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	var after demo.DemoProduct
-	if err := db.First(&after, product.Id).Error; err != nil {
+	if err := db.First(&after, product.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if after.Price != 0 || after.Remark != "" {
@@ -81,9 +86,12 @@ func TestDemoProductUpdateExplicitZero(t *testing.T) {
 }
 
 func TestDemoProductCreateValidation(t *testing.T) {
-	old := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = false
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = old })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = false
+	})
+
 	db := probeDB(t, t.Name(), nil)
 	if err := db.AutoMigrate(&demo.DemoProduct{}); err != nil {
 		t.Fatal(err)
@@ -106,15 +114,18 @@ func TestDemoProductCreateValidation(t *testing.T) {
 
 // The URI selects the row; omitted business fields and creator metadata survive.
 func TestGenericUpdatePreservesOmittedFields(t *testing.T) {
-	old := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = false
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = old })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = false
+	})
+
 	db := probeDB(t, t.Name(), nil)
 	if err := db.AutoMigrate(&demo.DemoProduct{}); err != nil {
 		t.Fatal(err)
 	}
-	product := demo.DemoProduct{Name: "widget", Code: "w", Price: 99, Status: "1", Remark: "keep"}
-	product.CreateBy = 42
+	product := demo.DemoProduct{Name: "widget", Code: "w", Price: 99, Status: "1", Remark: "keep",
+		CreateBy: 42}
 	if err := db.Create(&product).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -130,10 +141,10 @@ func TestGenericUpdatePreservesOmittedFields(t *testing.T) {
 		t.Fatalf("update failed: %s", body)
 	}
 	var after demo.DemoProduct
-	if err := db.First(&after, product.Id).Error; err != nil {
+	if err := db.First(&after, product.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if after.Id != product.Id || after.Name != "widget" || after.Code != "w" || after.Price != 0 || after.Status != "1" || after.Remark != "keep" || after.CreateBy != 42 || after.UpdateBy != 7 {
+	if after.ID != product.ID || after.Name != "widget" || after.Code != "w" || after.Price != 0 || after.Status != "1" || after.Remark != "keep" || after.CreateBy != 42 || after.UpdateBy != 7 {
 		t.Fatalf("partial update lost data or attribution: %+v", after)
 	}
 }

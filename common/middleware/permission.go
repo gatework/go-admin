@@ -5,11 +5,12 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	mycasbin "github.com/go-admin-team/go-admin-core/v2/casbin"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/response"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
+
+	mycasbin "github.com/gatework/motor-core/casbin"
+	"github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/response"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/api"
 )
 
 // AuthCheckRole 权限检查中间件
@@ -17,13 +18,16 @@ func AuthCheckRole() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := api.GetRequestLogger(c)
 		data, _ := c.Get(jwtauth.JwtPayloadKey)
-		v := data.(jwtauth.MapClaims)
-		e := sdk.Runtime.GetCasbinByTenant(c.Request.Host)
+		v, ok := data.(jwtauth.MapClaims)
+		if !ok {
+			response.Error(c, 401, fmt.Errorf("permission: missing claims"), "")
+			return
+		}
+		e := sdk.Runtime.Casbin(c.Request.Host)
 		var res, casbinExclude bool
 		var err error
 		//检查权限
 		if v["rolekey"] == "admin" {
-			res = true
 			c.Next()
 			return
 		}
@@ -43,19 +47,14 @@ func AuthCheckRole() gin.HandlerFunc {
 			return
 		}
 
-		if res {
-			log.Infof("isTrue: %v role: %s method: %s path: %s", res, v["rolekey"], c.Request.Method, c.Request.URL.Path)
-			c.Next()
-		} else {
-			log.Warnf("isTrue: %v role: %s method: %s path: %s message: %s", res, v["rolekey"], c.Request.Method, c.Request.URL.Path, "当前request无权限，请管理员确认！")
-			c.JSON(http.StatusOK, gin.H{
-				"code": 403,
-				"msg":  "对不起，您没有该接口访问权限，请联系管理员",
-			})
+		if !res {
+			log.Warnf("permission denied: role=%v method=%s path=%s", v["rolekey"], c.Request.Method, c.Request.URL.Path)
+			c.JSON(http.StatusOK, gin.H{"code": 403, "msg": "对不起，您没有该接口访问权限，请联系管理员"})
 			c.Abort()
 			return
 		}
-
+		log.Infof("permission accepted: role=%v method=%s path=%s", v["rolekey"], c.Request.Method, c.Request.URL.Path)
+		c.Next()
 	}
 }
 
@@ -82,7 +81,7 @@ func EnforceRoleFor(c *gin.Context, path, method string) (bool, error) {
 	if v["rolekey"] == "admin" {
 		return true, nil
 	}
-	e := sdk.Runtime.GetCasbinByTenant(c.Request.Host)
+	e := sdk.Runtime.Casbin(c.Request.Host)
 	return e.Enforce(v["rolekey"], path, method)
 }
 
@@ -103,9 +102,9 @@ func excludedFromCasbin(method, path string) (bool, error) {
 		if method != i.Method {
 			continue
 		}
-		ok, err := mycasbin.KeyMatch2(path, i.Url)
+		ok, err := mycasbin.KeyMatch2(path, i.URL)
 		if err != nil {
-			bad = fmt.Errorf("CasbinExclude entry %q is not a valid pattern: %w", i.Url, err)
+			bad = fmt.Errorf("CasbinExclude entry %q is not a valid pattern: %w", i.URL, err)
 			continue
 		}
 		if ok {

@@ -39,7 +39,7 @@ func TestAnyErrorExitsNonZero(t *testing.T) {
 		"app/admin/models/user.go": "package models\n\ntype SysUser struct{}\n",
 		"common/middleware/auth.go": `package middleware
 
-import "go-admin/app/admin/models"
+import "motor/app/admin/models"
 
 var _ = models.SysUser{}
 `,
@@ -82,7 +82,7 @@ func TestTextOutputLocatesEveryFinding(t *testing.T) {
 		"app/admin/models/user.go": "package models\n\ntype SysUser struct{}\n",
 		"common/middleware/auth.go": `package middleware
 
-import "go-admin/app/admin/models"
+import "motor/app/admin/models"
 
 var _ = models.SysUser{}
 `,
@@ -91,7 +91,7 @@ var _ = models.SysUser{}
 	if _, err := run(&buf, root, options{}, false); err != nil {
 		t.Fatal(err)
 	}
-	line := strings.SplitN(buf.String(), "\n", 2)[0]
+	line, _, _ := strings.Cut(buf.String(), "\n")
 	if !strings.HasPrefix(line, "common/middleware/auth.go:3:") {
 		t.Errorf("first line does not locate the finding: %q", line)
 	}
@@ -102,7 +102,7 @@ func TestJSONOutput(t *testing.T) {
 		"app/admin/models/user.go": "package models\n\ntype SysUser struct{}\n",
 		"common/middleware/auth.go": `package middleware
 
-import "go-admin/app/admin/models"
+import "motor/app/admin/models"
 
 var _ = models.SysUser{}
 `,

@@ -3,28 +3,32 @@ package dto
 import (
 	"time"
 
-	"go-admin/common/dto"
+	"github.com/gatework/motor/common/dto"
 )
 
+// SysLoginLogGetPageReq carries validated administration request parameters.
 type SysLoginLogGetPageReq struct {
 	dto.Pagination `search:"-"`
-	Username       string `form:"username" search:"type:exact;column:username;table:sys_login_log" comment:"用户名"`
-	Status         string `form:"status" search:"type:exact;column:status;table:sys_login_log" comment:"状态"`
-	Ipaddr         string `form:"ipaddr" search:"type:exact;column:ipaddr;table:sys_login_log" comment:"ip地址"`
-	LoginLocation  string `form:"loginLocation" search:"type:exact;column:login_location;table:sys_login_log" comment:"归属地"`
-	BeginTime      string `form:"beginTime" search:"type:gte;column:ctime;table:sys_login_log" comment:"创建时间"`
-	EndTime        string `form:"endTime" search:"type:lte;column:ctime;table:sys_login_log" comment:"创建时间"`
 	SysLoginLogOrder
+	Username      string `form:"username" search:"type:exact;column:username;table:sys_login_log" comment:"用户名"`
+	Status        string `form:"status" search:"type:exact;column:status;table:sys_login_log" comment:"状态"`
+	Ipaddr        string `form:"ipaddr" search:"type:exact;column:ipaddr;table:sys_login_log" comment:"ip地址"`
+	LoginLocation string `form:"loginLocation" search:"type:exact;column:login_location;table:sys_login_log" comment:"归属地"`
+	BeginTime     string `form:"beginTime" search:"type:gte;column:ctime;table:sys_login_log" comment:"创建时间"`
+	EndTime       string `form:"endTime" search:"type:lte;column:ctime;table:sys_login_log" comment:"创建时间"`
 }
 
+// SysLoginLogOrder carries validated administration request parameters.
 type SysLoginLogOrder struct {
 	CreatedAtOrder string `search:"type:order;column:created_at;table:sys_login_log" form:"createdAtOrder"`
 }
 
-func (m *SysLoginLogGetPageReq) GetNeedSearch() interface{} {
+// GetNeedSearch returns the tagged query parameters.
+func (m *SysLoginLogGetPageReq) GetNeedSearch() any {
 	return *m
 }
 
+// SysLoginLogControl carries validated administration request parameters.
 type SysLoginLogControl struct {
 	ID            int       `uri:"Id" comment:"主键"` // 主键
 	Username      string    `json:"username" comment:"用户名"`
@@ -39,19 +43,22 @@ type SysLoginLogControl struct {
 	Msg           string    `json:"msg" comment:"信息"`
 }
 
+// SysLoginLogGetReq carries validated administration request parameters.
 type SysLoginLogGetReq struct {
-	Id int `uri:"id"`
+	ID int `uri:"id"`
 }
 
-func (s *SysLoginLogGetReq) GetId() interface{} {
-	return s.Id
+// GetID returns the selected resource identity.
+func (s *SysLoginLogGetReq) GetID() any {
+	return s.ID
 }
 
 // SysLoginLogDeleteReq 功能删除请求参数
 type SysLoginLogDeleteReq struct {
-	Ids []int `json:"ids"`
+	IDs []int `json:"ids"`
 }
 
-func (s *SysLoginLogDeleteReq) GetId() interface{} {
-	return s.Ids
+// GetID returns the selected resource identity.
+func (s *SysLoginLogDeleteReq) GetID() any {
+	return s.IDs
 }

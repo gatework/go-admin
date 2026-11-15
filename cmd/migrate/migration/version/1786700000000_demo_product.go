@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/app/demo/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/demo/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // 示例模块的建表迁移。
@@ -22,6 +22,8 @@ import (
 //
 // 注意：已执行过的迁移文件不可再修改——版本号已入表，改动不会重跑。
 // 需要调整时新建一个迁移。
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700000000DemoProduct)

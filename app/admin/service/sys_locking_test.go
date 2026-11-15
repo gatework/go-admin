@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/service/dto"
+	"github.com/gatework/motor/app/admin/service/dto"
 )
 
 // Generate SQL with each registered dialect. SQLite supplies only the transaction
@@ -24,18 +24,18 @@ func TestAdminMutationLockSQL(t *testing.T) {
 		}{
 			{"role update", "sys_role", func(db *gorm.DB) error {
 				s := &SysRole{}
-				s.Orm = db
-				return s.Update(&dto.SysRoleUpdateReq{RoleId: 7, RoleKey: "operator"}, nil)
+				s.DB = db
+				return s.Update(&dto.SysRoleUpdateReq{RoleID: 7, RoleKey: "operator"}, nil)
 			}},
 			{"role remove", "sys_role", func(db *gorm.DB) error {
 				s := &SysRole{}
-				s.Orm = db
-				return s.Remove(&dto.SysRoleDeleteReq{Ids: []int{7, 8}}, nil)
+				s.DB = db
+				return s.Remove(&dto.SysRoleDeleteReq{IDs: []int{7, 8}}, nil)
 			}},
 			{"role scope", "sys_role", func(db *gorm.DB) error {
 				s := &SysRole{}
-				s.Orm = db
-				return s.UpdateDataScope(&dto.RoleDataScopeReq{RoleId: 7, DataScope: "2"}).Error
+				s.DB = db
+				return s.UpdateDataScope(&dto.RoleDataScopeReq{RoleID: 7, DataScope: "2"})
 			}},
 			{"dept tree", "sys_dept", lockDeptTree},
 			{"menu tree", "sys_menu", lockMenuTree},

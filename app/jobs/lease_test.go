@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 
-	models2 "go-admin/app/jobs/models"
+	models2 "github.com/gatework/motor/app/jobs/models"
 )
 
 // The lease is the one thing in this package whose correctness is a property
@@ -21,9 +21,9 @@ import (
 // report success for a lease that cannot be taken at all on the dialect most
 // installations actually run.
 const (
-	mysqlDSNEnv     = "GO_ADMIN_TEST_MYSQL_DSN"
-	postgresDSNEnv  = "GO_ADMIN_TEST_POSTGRES_DSN"
-	sqlserverDSNEnv = "GO_ADMIN_TEST_SQLSERVER_DSN"
+	mysqlDSNEnv     = "MOTOR_TEST_MYSQL_DSN"
+	postgresDSNEnv  = "MOTOR_TEST_POSTGRES_DSN"
+	sqlserverDSNEnv = "MOTOR_TEST_SQLSERVER_DSN"
 )
 
 type dialectDB struct {
@@ -44,6 +44,7 @@ func eachDialect(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 	t.Helper()
 
 	t.Run("sqlite", func(t *testing.T) {
+		t.Helper()
 		db, err := gorm.Open(glebarez.Open(":memory:"), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("opening sqlite: %v", err)
@@ -53,6 +54,7 @@ func eachDialect(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 
 	for _, d := range optionalDialects {
 		t.Run(d.name, func(t *testing.T) {
+			t.Helper()
 			dsn := os.Getenv(d.env)
 			if dsn == "" {
 				if os.Getenv("CI") != "" {
@@ -94,6 +96,7 @@ func seedLeaseTable(t *testing.T, db *gorm.DB) *gorm.DB {
 
 func TestTheDatabaseClockIsReadableAndIsNotTheZeroTime(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		nowMs, err := dbNowMs(db)
 		if err != nil {
 			t.Fatalf("dbNowMs: %v", err)
@@ -116,6 +119,7 @@ func TestTheDatabaseClockIsReadableAndIsNotTheZeroTime(t *testing.T) {
 
 func TestOnlyOneOfTwoInstancesTakesTheLease(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		a := &lease{db: db, owner: "instance-a", ttl: time.Minute}
 		b := &lease{db: db, owner: "instance-b", ttl: time.Minute}
 
@@ -139,6 +143,7 @@ func TestOnlyOneOfTwoInstancesTakesTheLease(t *testing.T) {
 
 func TestTheHolderRenewsAndTheOtherStillCannotTakeIt(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		a := &lease{db: db, owner: "instance-a", ttl: time.Minute}
 		b := &lease{db: db, owner: "instance-b", ttl: time.Minute}
 
@@ -167,6 +172,7 @@ func TestTheHolderRenewsAndTheOtherStillCannotTakeIt(t *testing.T) {
 
 func TestAnExpiredLeaseIsTakenOver(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		a := &lease{db: db, owner: "instance-a", ttl: time.Minute}
 		b := &lease{db: db, owner: "instance-b", ttl: time.Minute}
 
@@ -196,6 +202,7 @@ func TestAnExpiredLeaseIsTakenOver(t *testing.T) {
 
 func TestReleaseHandsTheLeaseOnWithoutWaitingOutTheTTL(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		a := &lease{db: db, owner: "instance-a", ttl: time.Hour}
 		b := &lease{db: db, owner: "instance-b", ttl: time.Minute}
 
@@ -217,6 +224,7 @@ func TestReleaseHandsTheLeaseOnWithoutWaitingOutTheTTL(t *testing.T) {
 
 func TestReleasingALeaseSomebodyElseHoldsDoesNothing(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		a := &lease{db: db, owner: "instance-a", ttl: time.Minute}
 		stale := &lease{db: db, owner: "instance-gone", ttl: time.Minute}
 
@@ -234,6 +242,7 @@ func TestReleasingALeaseSomebodyElseHoldsDoesNothing(t *testing.T) {
 
 func TestAMissingLeaseRowIsReportedRatherThanSilentlyNeverScheduling(t *testing.T) {
 	eachDialect(t, func(t *testing.T, db *gorm.DB) {
+		t.Helper()
 		if err := db.Where("name = ?", models2.SchedulerLeaseName).
 			Delete(&models2.SysJobLease{}).Error; err != nil {
 			t.Fatalf("deleting the lease row: %v", err)

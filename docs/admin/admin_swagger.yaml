@@ -39,7 +39,7 @@ definitions:
     - dataScope
     - roleId
     type: object
-  dto.SysApiUpdateReq:
+  dto.SysAPIUpdateReq:
     properties:
       action:
         type: string
@@ -350,7 +350,7 @@ definitions:
         type: integer
       sysApi:
         items:
-          $ref: '#/definitions/models.SysApi'
+          $ref: '#/definitions/models.SysAPI'
         type: array
       title:
         description: 显示名称
@@ -413,7 +413,7 @@ definitions:
         type: integer
       sysApi:
         items:
-          $ref: '#/definitions/models.SysApi'
+          $ref: '#/definitions/models.SysAPI'
         type: array
       title:
         description: 显示名称
@@ -692,7 +692,7 @@ definitions:
     - username
     - uuid
     type: object
-  models.SysApi:
+  models.SysAPI:
     properties:
       action:
         type: string
@@ -837,7 +837,7 @@ definitions:
         type: integer
       sysApi:
         items:
-          $ref: '#/definitions/models.SysApi'
+          $ref: '#/definitions/models.SysAPI'
         type: array
       title:
         type: string
@@ -1054,8 +1054,8 @@ info:
     添加qq群: 521386980 进入技术交流群 请先star，谢谢！
   license:
     name: MIT
-    url: https://github.com/go-admin-team/go-admin/blob/master/LICENSE.md
-  title: go-admin API
+    url: https://github.com/gatework/motor/blob/master/LICENSE.md
+  title: motor API
   version: 2.0.0
 paths:
   /api/v1/app-config:
@@ -2081,7 +2081,7 @@ paths:
                   - properties:
                       list:
                         items:
-                          $ref: '#/definitions/models.SysApi'
+                          $ref: '#/definitions/models.SysAPI'
                         type: array
                     type: object
               type: object
@@ -2106,7 +2106,7 @@ paths:
             - $ref: '#/definitions/response.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/models.SysApi'
+                  $ref: '#/definitions/models.SysAPI'
               type: object
       security:
       - Bearer: []
@@ -2123,7 +2123,7 @@ paths:
         name: data
         required: true
         schema:
-          $ref: '#/definitions/dto.SysApiUpdateReq'
+          $ref: '#/definitions/dto.SysAPIUpdateReq'
       responses:
         "200":
           description: '{"code": 200, "message": "修改成功"}'
@@ -2195,7 +2195,7 @@ paths:
                   - properties:
                       list:
                         items:
-                          $ref: '#/definitions/models.SysApi'
+                          $ref: '#/definitions/models.SysAPI'
                         type: array
                     type: object
               type: object

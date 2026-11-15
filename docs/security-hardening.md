@@ -42,7 +42,7 @@
 
 ## 开发验证
 
-最低工具链为 Go 1.27.3。CI 覆盖 `gatework` 和功能、修复、同步分支，并运行 `govulncheck`。数据库回归测试沿用 `GO_ADMIN_TEST_POSTGRES_DSN`，只能指向专用测试数据库。
+最低工具链为 Go 1.27.4。CI 覆盖 `gatework` 和功能、修复、同步分支，并运行 `govulncheck`。数据库回归测试沿用 `MOTOR_TEST_POSTGRES_DSN`，只能指向专用测试数据库。
 
 通用 Action 的可选 `UpdateFields() []string` 契约用于更新字段存在性：显式零值会写入，遗漏字段保留原值，主键、创建人及创建/删除时间不能通过它覆盖。现有第三方 DTO 不实现该方法仍保留旧的非零值更新语义。示例模块和定时任务 DTO 已接入，可作为迁移参照。
 

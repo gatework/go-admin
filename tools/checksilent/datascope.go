@@ -108,95 +108,6 @@ func permissionReadingHandlers(s *snapshot) map[handlerKey]bool {
 	return out
 }
 
-// routeFindings walks one function looking for group definitions and the routes
-// registered on them.
-func (s *snapshot) routeFindings(sf *sourceFile, fn *ast.FuncDecl, handlers map[handlerKey]bool) []Finding {
-	// Local variable bindings for the whole function. The first pass below
-	// fills these and the second reads them, so a registration sees every
-	// binding in the function rather than only the ones written above it -
-	// deliberately, because a `.Use` can be written below a route and still be
-	// part of the chain. The cost is that a name reused for two different
-	// things in one function resolves to whichever assignment came last.
-	apiVars := map[string]handlerKey{} // var -> the type it holds
-	guarded := map[string]bool{}       // group var -> middleware installed
-	known := map[string]bool{}         // group var -> is a router group at all
-	prefix := map[string]string{}      // group var -> the path it was declared with
-
-	var out []Finding
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		switch stmt := n.(type) {
-		case *ast.AssignStmt:
-			for i, lhs := range stmt.Lhs {
-				id, ok := lhs.(*ast.Ident)
-				if !ok || i >= len(stmt.Rhs) {
-					continue
-				}
-				rhs := stmt.Rhs[i]
-				if key, ok := apiTypeOf(sf, rhs); ok {
-					apiVars[id.Name] = key
-					continue
-				}
-				if parent, isGroup := groupSource(rhs); isGroup {
-					known[id.Name] = true
-					prefix[id.Name] = prefix[parent] + groupPath(rhs)
-					// A subgroup inherits whatever its parent already had:
-					// gin copies the parent's handler chain into the child.
-					guarded[id.Name] = guarded[parent] || containsCallNamed(rhs, permissionMiddleware)
-				}
-			}
-		case *ast.ExprStmt:
-			// A separate `g.Use(...)` after the group was defined.
-			call, ok := stmt.X.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			if target, ok := receiverIdentOf(call, "Use"); ok && known[target] {
-				if containsCallNamed(call, permissionMiddleware) {
-					guarded[target] = true
-				}
-			}
-		}
-		return true
-	})
-
-	// Second pass for the registrations, so that a `.Use` written below a route
-	// still counts - the middleware chain is assembled before any request is
-	// served, not in source order.
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		gvar, method, ok := routeRegistration(call)
-		if !ok || !known[gvar] || guarded[gvar] {
-			return true
-		}
-		route, handlerVar, handlerName, ok := routeArgs(call)
-		if !ok {
-			return true
-		}
-		key, ok := apiVars[handlerVar]
-		if !ok {
-			return true
-		}
-		key.Func = handlerName
-		if !handlers[key] {
-			return true
-		}
-		out = append(out, s.finding(Error, checkDataScopeRoute, sf, call,
-			"%s %q is handled by %s.%s, which reads the caller's data permission,\n"+
-				"    but the group it is registered on never installs %s.\n"+
-				"    GetPermissionFromContext then returns the zero value, whose empty DataScope is not a\n"+
-				"    recognised scope, so Permission fails closed and the query matches nothing - on any\n"+
-				"    deployment with enabledp: true. With data permissions off the route works, which is\n"+
-				"    why this does not show up in the default configuration or in CI.\n"+
-				"    Add %s() to the group, or stop scoping a query that is already limited to the caller.",
-			method, prefix[gvar]+route, key.Type, handlerName, permissionMiddleware, permissionMiddleware))
-		return true
-	})
-	return out
-}
-
 // receiverTypeName returns the bare type name of a method receiver, for both
 // `(e SysUser)` and `(e *SysUser)`.
 func receiverTypeName(expr ast.Expr) string {
@@ -238,7 +149,7 @@ func callsPackageFunc(sf *sourceFile, body ast.Node, name string) bool {
 	return found
 }
 
-// apiTypeOf recognises `apis.SysUser{}` and returns the package path and type.
+// apiTypeOf recognises `handler.SysUser{}` and returns the package path and type.
 func apiTypeOf(sf *sourceFile, expr ast.Expr) (handlerKey, bool) {
 	lit, ok := expr.(*ast.CompositeLit)
 	if !ok {
@@ -387,4 +298,109 @@ func routeArgs(call *ast.CallExpr) (route, handlerVar, handlerName string, ok bo
 		return "", "", "", false
 	}
 	return route, id.Name, sel.Sel.Name, true
+}
+
+type routeBindings struct {
+	apiVars map[string]handlerKey
+	guarded map[string]bool
+	known   map[string]bool
+	prefix  map[string]string
+}
+
+// routeFindings walks one function looking for group definitions and the routes
+// registered on them.
+func (s *snapshot) routeFindings(sf *sourceFile, fn *ast.FuncDecl, handlers map[handlerKey]bool) []Finding {
+	// Local variable bindings for the whole function. The first pass below
+	// fills these and the second reads them, so a registration sees every
+	// binding in the function rather than only the ones written above it -
+	// deliberately, because a `.Use` can be written below a route and still be
+	// part of the chain. The cost is that a name reused for two different
+	// things in one function resolves to whichever assignment came last.
+	apiVars := map[string]handlerKey{} // var -> the type it holds
+	guarded := map[string]bool{}       // group var -> middleware installed
+	known := map[string]bool{}         // group var -> is a router group at all
+	prefix := map[string]string{}      // group var -> the path it was declared with
+
+	var out []Finding
+	bindings := routeBindings{apiVars: apiVars, guarded: guarded, known: known, prefix: prefix}
+	bindings.collect(sf, fn)
+	// Second pass for the registrations, so that a `.Use` written below a route
+	// still counts - the middleware chain is assembled before any request is
+	// served, not in source order.
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		gvar, method, ok := routeRegistration(call)
+		if !ok || !known[gvar] || guarded[gvar] || containsCallNamed(call, permissionMiddleware) {
+			return true
+		}
+		route, handlerVar, handlerName, ok := routeArgs(call)
+		if !ok {
+			return true
+		}
+		key, ok := apiVars[handlerVar]
+		if !ok {
+			return true
+		}
+		key.Func = handlerName
+		if !handlers[key] {
+			return true
+		}
+		out = append(out, s.finding(Error, checkDataScopeRoute, sf, call,
+			"%s %q is handled by %s.%s, which reads the caller's data permission,\n"+
+				"    but the group it is registered on never installs %s.\n"+
+				"    GetPermissionFromContext then returns the zero value, whose empty DataScope is not a\n"+
+				"    recognised scope, so Permission fails closed and the query matches nothing - on any\n"+
+				"    deployment with enabledp: true. With data permissions off the route works, which is\n"+
+				"    why this does not show up in the default configuration or in CI.\n"+
+				"    Add %s() to the group, or stop scoping a query that is already limited to the caller.",
+			method, prefix[gvar]+route, key.Type, handlerName, permissionMiddleware, permissionMiddleware))
+		return true
+	})
+	return out
+}
+
+func (b routeBindings) collect(sf *sourceFile, fn *ast.FuncDecl) {
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.AssignStmt:
+			b.assignment(sf, stmt)
+		case *ast.ExprStmt:
+			// A separate `g.Use(...)` after the group was defined.
+			call, ok := stmt.X.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if target, ok := receiverIdentOf(call, "Use"); ok && b.known[target] {
+				if containsCallNamed(call, permissionMiddleware) {
+					b.guarded[target] = true
+				}
+			}
+		}
+		return true
+	})
+
+}
+
+func (b routeBindings) assignment(sf *sourceFile, stmt *ast.AssignStmt) {
+	for i, lhs := range stmt.Lhs {
+		id, ok := lhs.(*ast.Ident)
+		if !ok || i >= len(stmt.Rhs) {
+			continue
+		}
+		rhs := stmt.Rhs[i]
+		if key, ok := apiTypeOf(sf, rhs); ok {
+			b.apiVars[id.Name] = key
+			continue
+		}
+		if parent, isGroup := groupSource(rhs); isGroup {
+			b.known[id.Name] = true
+			b.prefix[id.Name] = b.prefix[parent] + groupPath(rhs)
+			// A subgroup inherits whatever its parent already had:
+			// gin copies the parent's handler chain into the child.
+			b.guarded[id.Name] = b.guarded[parent] || containsCallNamed(rhs, permissionMiddleware)
+		}
+	}
 }

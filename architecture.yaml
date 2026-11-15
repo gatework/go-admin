@@ -1,0 +1,97 @@
+# Production package inventory and enforced host dependency boundaries.
+declared:
+  - .
+  - ./app/admin/handler
+  - ./app/admin/models
+  - ./app/admin/router
+  - ./app/admin/service
+  - ./app/admin/service/dto
+  - ./app/demo/models
+  - ./app/demo/router
+  - ./app/demo/service/dto
+  - ./app/jobs
+  - ./app/jobs/handler
+  - ./app/jobs/models
+  - ./app/jobs/router
+  - ./app/jobs/service
+  - ./app/jobs/service/dto
+  - ./app/net/handler
+  - ./app/net/models/connection
+  - ./app/net/models/delivery
+  - ./app/net/models/fabric
+  - ./app/net/models/firewall
+  - ./app/net/models/firewall/storage
+  - ./app/net/models/firewall/types
+  - ./app/net/models/grouping
+  - ./app/net/models/inventory
+  - ./app/net/models/lease
+  - ./app/net/models/wireless
+  - ./app/net/router
+  - ./app/net/service
+  - ./app/net/service/delivery
+  - ./app/net/service/diagnostics
+  - ./app/net/service/dto/delivery
+  - ./app/net/service/dto/fabric
+  - ./app/net/service/dto/inventory
+  - ./app/net/service/dto/wireless
+  - ./app/net/service/fabric
+  - ./app/net/service/firewall
+  - ./app/net/service/firewall/engine
+  - ./app/net/service/inventory
+  - ./app/net/service/inventory/provider
+  - ./app/net/service/wireless
+  - ./app/other/handler
+  - ./app/other/handler/tools
+  - ./app/other/models/tools
+  - ./app/other/router
+  - ./app/other/service/dto
+  - ./cmd
+  - ./cmd/api
+  - ./cmd/app
+  - ./cmd/config
+  - ./cmd/migrate
+  - ./cmd/migrate/migration
+  - ./cmd/migrate/migration/models
+  - ./cmd/migrate/migration/version
+  - ./cmd/migrate/migration/version-local
+  - ./cmd/version
+  - ./common
+  - ./common/account
+  - ./common/actions
+  - ./common/database
+  - ./common/dto
+  - ./common/filestore
+  - ./common/global
+  - ./common/health
+  - ./common/logincaptcha
+  - ./common/middleware
+  - ./common/middleware/handler
+  - ./common/models
+  - ./common/request
+  - ./common/settings
+  - ./common/storage
+  - ./common/worker
+  - ./config
+  - ./docs/admin
+  - ./internal/testconfig
+  - ./test
+  - ./test/firewall/cmd
+  - ./test/loadtest
+  - ./tools/checksilent
+
+rules:
+  - name: reusable infrastructure does not depend on business modules
+    packages: [./common/..., ./config/...]
+    deny: [./app/..., ./cmd/...]
+  - name: network models do not depend on services or HTTP wiring
+    packages: [./app/net/models/...]
+    deny: [./app/net/service/..., ./app/net/handler/..., ./app/net/router/..., ./cmd/..., ./common/middleware/..., github.com/gin-gonic/gin/...]
+  - name: network services do not depend on HTTP wiring
+    packages: [./app/net/service/...]
+    deny: [./app/net/handler/..., ./app/net/router/..., ./common/middleware/..., github.com/gin-gonic/gin/...]
+  - name: application services do not depend on host commands
+    packages: [./app/..., ./common/...]
+    deny: [./cmd/...]
+  - name: policy engine stays independent of request and persistence wiring
+    packages: [./app/net/service/firewall/engine/...]
+    deny: [./cmd/..., ./common/middleware/..., ./app/net/handler/..., ./app/net/router/..., ./app/net/models/firewall/storage/..., github.com/gin-gonic/gin/..., gorm.io/gorm/...]

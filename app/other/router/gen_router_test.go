@@ -3,7 +3,8 @@ package router
 import (
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // genWritingRoutes are the three that do not read. They write Go and Vue
@@ -85,9 +86,11 @@ func TestGenWriteRoutesEnabledAgreesWithWhatWasRegistered(t *testing.T) {
 			// registeredRoutes puts the mode back before it returns, so ask
 			// the predicate under a mode set here - about the same value the
 			// engine was just built under.
-			previous := config.ApplicationConfig.Mode
-			t.Cleanup(func() { config.ApplicationConfig.Mode = previous })
-			config.ApplicationConfig.Mode = mode
+
+			testconfig.Apply(t, func(settings *config.Config) {
+				settings.
+					Application.Mode = mode
+			})
 
 			claimed := GenWriteRoutesEnabled()
 			actual := routes["/api/v1/gen/todb/:tableId"]
@@ -109,13 +112,14 @@ func TestGenWriteRoutesEnabledAgreesWithWhatWasRegistered(t *testing.T) {
 func TestRegisteredRoutesRestoresTheModeBeforeReturning(t *testing.T) {
 	const sentinel = "not-a-mode"
 
-	previous := config.ApplicationConfig.Mode
-	t.Cleanup(func() { config.ApplicationConfig.Mode = previous })
-	config.ApplicationConfig.Mode = sentinel
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = sentinel
+	})
 
 	registeredRoutes(t, "prod")
 
-	if got := config.ApplicationConfig.Mode; got != sentinel {
+	if got := config.Current().Settings.Application.Mode; got != sentinel {
 		t.Errorf("mode after the helper returned = %q, want %q - it was left set to what "+
 			"the helper was asked about", got, sentinel)
 	}
@@ -125,7 +129,7 @@ func TestRegisteredRoutesRestoresTheModeBeforeReturning(t *testing.T) {
 //
 // buildRouter has one call site, in run(), and route registration is not on
 // any phase or reload callback - so a configuration reload moves
-// config.ApplicationConfig.Mode without moving the routes. From that moment
+// config.Current().Settings.Application.Mode without moving the routes. From that moment
 // GenWriteRoutesEnabled answers about a mode the engine was not built under.
 //
 // That gap is why the start-up warning tells the reader to restart rather than
@@ -137,9 +141,10 @@ func TestChangingTheModeDoesNotUnregisterWhatWasAlreadyBuilt(t *testing.T) {
 		t.Fatal("built under dev without the writing routes, so this test asserts nothing")
 	}
 
-	previous := config.ApplicationConfig.Mode
-	t.Cleanup(func() { config.ApplicationConfig.Mode = previous })
-	config.ApplicationConfig.Mode = "prod"
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = "prod"
+	})
 
 	if GenWriteRoutesEnabled() {
 		t.Fatal("the predicate still allows prod, so the disagreement below is not the one meant")

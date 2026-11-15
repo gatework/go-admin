@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// apisFile is a handler package with two methods: one that reads the caller's
+// handlerFile is a handler package with two methods: one that reads the caller's
 // data permission and one that does not.
-const apisFile = `package apis
+const handlerFile = `package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-admin/common/actions"
+	"motor/common/actions"
 )
 
 type SysUser struct{}
@@ -29,14 +29,14 @@ func routerFile(uses string) string {
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-admin/app/admin/apis"
-	"go-admin/common/actions"
+	"motor/app/admin/handler"
+	"motor/common/actions"
 )
 
 var _ = actions.PermissionAction
 
 func register(v1 *gin.RouterGroup) {
-	api := apis.SysUser{}
+	api := handler.SysUser{}
 	r := v1.Group("/sys-user")` + uses + `
 	{
 		r.GET("/:id", api.Scoped)
@@ -49,8 +49,8 @@ func register(v1 *gin.RouterGroup) {
 // never installs the middleware which puts one there.
 func TestDataScopeRouteWithoutTheMiddlewareIsReported(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"app/admin/apis/sys_user.go":   apisFile,
-		"app/admin/router/sys_user.go": routerFile(`.Use(gin.Logger())`),
+		"app/admin/handler/sys_user.go": handlerFile,
+		"app/admin/router/sys_user.go":  routerFile(`.Use(gin.Logger())`),
 	})
 	f := requireOne(t, check(t, root, options{}), checkDataScopeRoute)
 	for _, want := range []string{`GET "/sys-user/:id"`, "SysUser.Scoped", "PermissionAction"} {
@@ -63,8 +63,8 @@ func TestDataScopeRouteWithoutTheMiddlewareIsReported(t *testing.T) {
 // The middleware installed in the chain is the fix, and must silence it.
 func TestDataScopeRouteWithTheMiddlewareIsQuiet(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"app/admin/apis/sys_user.go":   apisFile,
-		"app/admin/router/sys_user.go": routerFile(`.Use(gin.Logger()).Use(actions.PermissionAction())`),
+		"app/admin/handler/sys_user.go": handlerFile,
+		"app/admin/router/sys_user.go":  routerFile(`.Use(gin.Logger()).Use(actions.PermissionAction())`),
 	})
 	if got := only(t, check(t, root, options{}), checkDataScopeRoute); len(got) != 0 {
 		t.Errorf("reported %d findings for a guarded group:\n%v", len(got), got)
@@ -77,16 +77,16 @@ func TestDataScopeRouteWithTheMiddlewareIsQuiet(t *testing.T) {
 // "fixed" into rejecting every user who did not create their own account.
 func TestARouteWhoseHandlerReadsNoPermissionIsQuiet(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"app/admin/apis/sys_user.go": apisFile,
+		"app/admin/handler/sys_user.go": handlerFile,
 		"app/admin/router/sys_user.go": `package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-admin/app/admin/apis"
+	"motor/app/admin/handler"
 )
 
 func register(v1 *gin.RouterGroup) {
-	api := apis.SysUser{}
+	api := handler.SysUser{}
 	r := v1.Group("")
 	{
 		r.GET("/getinfo", api.Unscoped)
@@ -104,17 +104,17 @@ func register(v1 *gin.RouterGroup) {
 // check that cries wolf is one people switch off.
 func TestASubgroupInheritsTheMiddleware(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"app/admin/apis/sys_user.go": apisFile,
+		"app/admin/handler/sys_user.go": handlerFile,
 		"app/admin/router/sys_user.go": `package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-admin/app/admin/apis"
-	"go-admin/common/actions"
+	"motor/app/admin/handler"
+	"motor/common/actions"
 )
 
 func register(v1 *gin.RouterGroup) {
-	api := apis.SysUser{}
+	api := handler.SysUser{}
 	parent := v1.Group("/sys").Use(actions.PermissionAction())
 	child := parent.Group("/user")
 	{
@@ -132,8 +132,8 @@ func register(v1 *gin.RouterGroup) {
 // permission may be reported, or the check becomes a name search.
 func TestAHandlerIsMatchedByPackageNotJustName(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"app/admin/apis/sys_user.go": apisFile,
-		"app/other/apis/sys_user.go": `package apis
+		"app/admin/handler/sys_user.go": handlerFile,
+		"app/other/handler/sys_user.go": `package handler
 
 import "github.com/gin-gonic/gin"
 
@@ -145,11 +145,11 @@ func (e SysUser) Scoped(c *gin.Context) {}
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-admin/app/other/apis"
+	"motor/app/other/handler"
 )
 
 func register(v1 *gin.RouterGroup) {
-	api := apis.SysUser{}
+	api := handler.SysUser{}
 	r := v1.Group("/other")
 	{
 		r.GET("/:id", api.Scoped)
@@ -159,5 +159,13 @@ func register(v1 *gin.RouterGroup) {
 	})
 	if got := only(t, check(t, root, options{}), checkDataScopeRoute); len(got) != 0 {
 		t.Errorf("reported %d findings for a same-named handler in another package:\n%v", len(got), got)
+	}
+}
+
+func TestDataScopeMiddlewareOnIndividualRouteIsRecognized(t *testing.T) {
+	source := strings.Replace(routerFile(""), `r.GET("/:id", api.Scoped)`, `r.GET("/:id", actions.PermissionAction(func() bool { return true }), api.Scoped)`, 1)
+	root := fixture(t, map[string]string{"app/admin/handler/sys_user.go": handlerFile, "app/admin/router/sys_user.go": source})
+	if got := only(t, check(t, root, options{}), checkDataScopeRoute); len(got) != 0 {
+		t.Fatalf("guarded individual route reported: %v", got)
 	}
 }

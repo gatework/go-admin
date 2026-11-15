@@ -22,7 +22,7 @@ func NoCache(c *gin.Context) {
 // for options requests and aborts then exits the middleware
 // chain and ends the request.
 func Options(c *gin.Context) {
-	if c.Request.Method != "OPTIONS" {
+	if c.Request.Method != http.MethodOptions {
 		c.Next()
 	} else {
 		c.Header("Access-Control-Allow-Origin", "*")

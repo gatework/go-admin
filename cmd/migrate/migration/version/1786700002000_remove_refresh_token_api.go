@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/cmd/migrate/migration"
-	"go-admin/cmd/migrate/migration/models"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	"github.com/gatework/motor/cmd/migrate/migration/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 // 清理 GET /api/v1/refresh_token 的残留权限数据。
@@ -21,29 +21,32 @@ import (
 //
 // 按 path 匹配而非固定 id —— 使用者若执行过 `server -a` 重新注册接口，id 会
 // 与官方种子数据不同。
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
-	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700002000RemoveRefreshTokenApi)
+	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700002000RemoveRefreshTokenAPI)
 }
 
+//nolint:gosec // This is an API route path, not a credential.
 const refreshTokenPath = "/api/v1/refresh_token"
 
-func _1786700002000RemoveRefreshTokenApi(db *gorm.DB, version string) error {
+func _1786700002000RemoveRefreshTokenAPI(db *gorm.DB, version string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		var apiIds []int
-		if err := tx.Model(&models.SysApi{}).
+		var apiIDs []int
+		if err := tx.Model(&models.SysAPI{}).
 			Where("path = ? AND action = ?", refreshTokenPath, "GET").
-			Pluck("id", &apiIds).Error; err != nil {
+			Pluck("id", &apiIDs).Error; err != nil {
 			return err
 		}
 
-		if len(apiIds) > 0 {
+		if len(apiIDs) > 0 {
 			// 先断开绑定，再删接口本身，避免遗留悬空外键
 			// 连接表由 GORM many2many 生成，列名为 sys_api_id 而非 api_id
-			if err := tx.Exec("DELETE FROM sys_menu_api_rule WHERE sys_api_id IN ?", apiIds).Error; err != nil {
+			if err := tx.Exec("DELETE FROM sys_menu_api_rule WHERE sys_api_id IN ?", apiIDs).Error; err != nil {
 				return err
 			}
-			if err := tx.Where("id IN ?", apiIds).Delete(&models.SysApi{}).Error; err != nil {
+			if err := tx.Where("id IN ?", apiIDs).Delete(&models.SysAPI{}).Error; err != nil {
 				return err
 			}
 		}

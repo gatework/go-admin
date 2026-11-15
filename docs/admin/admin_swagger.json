@@ -2,11 +2,11 @@
     "swagger": "2.0",
     "info": {
         "description": "基于Gin + Vue + Element UI的前后端分离权限管理系统的接口文档\n添加qq群: 521386980 进入技术交流群 请先star，谢谢！",
-        "title": "go-admin API",
+        "title": "motor API",
         "contact": {},
         "license": {
             "name": "MIT",
-            "url": "https://github.com/go-admin-team/go-admin/blob/master/LICENSE.md"
+            "url": "https://github.com/gatework/motor/blob/master/LICENSE.md"
         },
         "version": "2.0.0"
     },
@@ -1670,7 +1670,7 @@
                                                         "list": {
                                                             "type": "array",
                                                             "items": {
-                                                                "$ref": "#/definitions/models.SysApi"
+                                                                "$ref": "#/definitions/models.SysAPI"
                                                             }
                                                         }
                                                     }
@@ -1717,7 +1717,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.SysApi"
+                                            "$ref": "#/definitions/models.SysAPI"
                                         }
                                     }
                                 }
@@ -1747,7 +1747,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.SysApiUpdateReq"
+                            "$ref": "#/definitions/dto.SysAPIUpdateReq"
                         }
                     }
                 ],
@@ -1833,7 +1833,7 @@
                                                         "list": {
                                                             "type": "array",
                                                             "items": {
-                                                                "$ref": "#/definitions/models.SysApi"
+                                                                "$ref": "#/definitions/models.SysAPI"
                                                             }
                                                         }
                                                     }
@@ -2811,7 +2811,7 @@
                 }
             }
         },
-        "dto.SysApiUpdateReq": {
+        "dto.SysAPIUpdateReq": {
             "type": "object",
             "properties": {
                 "action": {
@@ -3268,7 +3268,7 @@
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {
@@ -3355,7 +3355,7 @@
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {
@@ -3767,7 +3767,7 @@
                 }
             }
         },
-        "models.SysApi": {
+        "models.SysAPI": {
             "type": "object",
             "properties": {
                 "action": {
@@ -3982,7 +3982,7 @@
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {

@@ -2,15 +2,16 @@ package jobs
 
 import (
 	"context"
-	"gorm.io/gorm"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
+	"gorm.io/gorm"
 
-	models2 "go-admin/app/jobs/models"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
+
+	models2 "github.com/gatework/motor/app/jobs/models"
 )
 
 // An instance that starts while another one holds the lease must not
@@ -20,7 +21,7 @@ import (
 func TestASecondInstanceDoesNotScheduleWhileTheFirstHoldsTheLease(t *testing.T) {
 	const tenant = "second-instance"
 	db := leaseDB(t)
-	sdk.Runtime.SetCrontabByTenant(tenant, cronjob.NewWithSeconds())
+	sdk.Runtime.SetCrontab(tenant, cronjob.NewWithSeconds())
 
 	first := newSupervisor(tenant, db, "instance-a")
 	first.tick()
@@ -42,7 +43,7 @@ func TestASecondInstanceDoesNotScheduleWhileTheFirstHoldsTheLease(t *testing.T) 
 func TestTheSupervisorStopsSchedulingWhenItLosesTheLease(t *testing.T) {
 	const tenant = "loses-lease"
 	db := leaseDB(t)
-	sdk.Runtime.SetCrontabByTenant(tenant, cronjob.NewWithSeconds())
+	sdk.Runtime.SetCrontab(tenant, cronjob.NewWithSeconds())
 
 	holder := newSupervisor(tenant, db, "instance-a")
 	holder.tick()
@@ -75,7 +76,7 @@ func TestTheSupervisorStopsSchedulingWhenItLosesTheLease(t *testing.T) {
 func TestABrieflyUnreachableDatabaseDoesNotStopTheScheduler(t *testing.T) {
 	const tenant = "db-blip"
 	db := leaseDB(t)
-	sdk.Runtime.SetCrontabByTenant(tenant, cronjob.NewWithSeconds())
+	sdk.Runtime.SetCrontab(tenant, cronjob.NewWithSeconds())
 
 	s := newSupervisor(tenant, db, "instance-a")
 	s.tick()
@@ -100,7 +101,7 @@ func TestBlockedRenewalExpiresIndependently(t *testing.T) {
 	db := leaseDB(t)
 	const tenant = "blocked-renewal-regression"
 	c := cronjob.NewWithSeconds()
-	sdk.Runtime.SetCrontabByTenant(tenant, c)
+	sdk.Runtime.SetCrontab(tenant, c)
 	s := newSupervisor(tenant, db, "first")
 	s.lease.ttl = 120 * time.Millisecond
 	s.tick()
@@ -135,7 +136,7 @@ func TestBlockedRenewalExpiresIndependently(t *testing.T) {
 func TestSlowSuccessfulAcquisitionCannotExtendLeaseFromReceipt(t *testing.T) {
 	db := leaseDB(t).Session(&gorm.Session{SkipDefaultTransaction: true})
 	const key = "slow-successful-acquisition"
-	sdk.Runtime.SetCrontabByTenant(key, cronjob.NewWithSeconds())
+	sdk.Runtime.SetCrontab(key, cronjob.NewWithSeconds())
 	s := newSupervisor(key, db, "slow-owner")
 	s.lease.ttl = 80 * time.Millisecond
 	var delayed atomic.Bool

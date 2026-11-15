@@ -2,19 +2,22 @@ package service
 
 import (
 	"errors"
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
 	"strings"
 
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+
 	"gorm.io/gorm"
 
-	"go-admin/common/actions"
-	cDto "go-admin/common/dto"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/common/actions"
+	cDto "github.com/gatework/motor/common/dto"
 )
 
+// SysUser coordinates administration queries and mutations.
 type SysUser struct {
 	service.Service
 }
@@ -24,7 +27,7 @@ func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, l
 	var err error
 	var data models.SysUser
 
-	err = e.Orm.Debug().Preload("Dept").
+	err = e.DB.Debug().Preload("Dept").
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -33,7 +36,7 @@ func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, l
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
@@ -49,36 +52,36 @@ func (e *SysUser) GetPage(c *dto.SysUserGetPageReq, p *actions.DataPermission, l
 // every user who did not create their own account.
 //
 // GetProfile has always read the same row this way, with no scope at all.
-func (e *SysUser) GetSelf(d *dto.SysUserById, model *models.SysUser) error {
-	err := e.Orm.First(model, d.GetId()).Error
+func (e *SysUser) GetSelf(d *dto.SysUserByID, model *models.SysUser) error {
+	err := e.DB.First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
 }
 
 // Get 获取SysUser对象
-func (e *SysUser) Get(d *dto.SysUserById, p *actions.DataPermission, model *models.SysUser) error {
+func (e *SysUser) Get(d *dto.SysUserByID, p *actions.DataPermission, model *models.SysUser) error {
 	var data models.SysUser
 
-	err := e.Orm.Model(&data).Debug().
+	err := e.DB.Model(&data).Debug().
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).
-		First(model, d.GetId()).Error
+		First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
@@ -89,20 +92,20 @@ func (e *SysUser) Insert(c *dto.SysUserInsertReq) error {
 	var err error
 	var data models.SysUser
 	var i int64
-	err = e.Orm.Model(&data).Where("username = ?", c.Username).Count(&i).Error
+	err = e.DB.Model(&data).Where("username = ?", c.Username).Count(&i).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if i > 0 {
 		err := errors.New("用户名已存在！")
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	c.Generate(&data)
-	err = e.Orm.Create(&data).Error
+	err = e.DB.Create(&data).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
@@ -118,83 +121,34 @@ func (e *SysUser) Insert(c *dto.SysUserInsertReq) error {
 // the check in the API handler ahead of this call), and letting a caller
 // grant themselves a different role or department through it would be a
 // privilege escalation the exclusion was never meant to open.
-func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerId int) error {
+func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerID int) error {
 	var err error
 	var model models.SysUser
-	if callerId <= 0 || c.UserId <= 0 {
+	if callerID <= 0 || c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
-	query := e.Orm
-	if c.UserId != callerId {
+	query := e.DB
+	if c.UserID != callerID {
 		query = query.Scopes(actions.Permission(model.TableName(), p))
 	}
-	db := query.First(&model, c.GetId())
+	db := query.First(&model, c.GetID())
 	if err = db.Error; err != nil {
-		e.Log.Errorf("Service UpdateSysUser error: %s", err)
+		e.Logger.Errorf("Service UpdateSysUser error: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
 		return errors.New("无权更新该数据")
 
 	}
-	if model.UserId == callerId {
-		c.RoleId = model.RoleId
-		c.DeptId = model.DeptId
+	if model.UserID == callerID {
+		c.RoleID = model.RoleID
+		c.DeptID = model.DeptID
 		c.Status = model.Status
 	}
 	c.Generate(&model)
-	model.UpdateBy = callerId
-	return e.Orm.Transaction(func(tx *gorm.DB) error {
-		omit := []string{"password", "salt", "auth_version", "create_by", "created_at", "deleted_at", "user_id"}
-		self := model.UserId == callerId
-		if self {
-			// A concurrent administrator edit must not be undone by a self-profile save.
-			omit = append(omit, "role_id", "dept_id", "status")
-		} else if model.Status != "" && model.Status != "1" && model.Status != "2" {
-			return errors.New("invalid user status")
-		}
-		scope := func(db *gorm.DB) *gorm.DB {
-			if self {
-				return db
-			}
-			return db.Scopes(actions.Permission(model.TableName(), p))
-		}
-		// Compare effective struct updates against the current row, not the earlier
-		// read. A value restored later must never restore an old credential stamp.
-		var changed []string
-		var values []any
-		add := func(column string, value any) {
-			changed = append(changed, "("+column+" <> ? OR "+column+" IS NULL)")
-			values = append(values, value)
-		}
-		if model.Username != "" {
-			add("username", model.Username)
-		}
-		if !self {
-			if model.RoleId != 0 {
-				add("role_id", model.RoleId)
-			}
-			if model.DeptId != 0 {
-				add("dept_id", model.DeptId)
-			}
-			if model.Status != "" {
-				add("status", model.Status)
-			}
-		}
-		if len(changed) != 0 {
-			if err := scope(tx.Table(model.TableName())).Where("user_id = ? AND deleted_at = 0", model.UserId).
-				Where(strings.Join(changed, " OR "), values...).UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error; err != nil {
-				return err
-			}
-		}
-		update := scope(tx.Model(&model)).Where("user_id = ?", model.UserId).Omit(omit...).Updates(&model)
-		if update.Error != nil {
-			return update.Error
-		}
-		if update.RowsAffected == 0 {
-			return errors.New("update userinfo error")
-		}
-		return nil
+	model.UpdateBy = callerID
+	return e.DB.Transaction(func(tx *gorm.DB) error {
+		return e.persistUserUpdate(tx, model, p, model.UserID == callerID)
 	})
 }
 
@@ -202,11 +156,11 @@ func (e *SysUser) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, cal
 // token identity; account ownership does not depend on who created that user.
 // The permission argument is retained for source compatibility.
 func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermission) error {
-	if c.UserId <= 0 {
+	if c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
-	result := e.Orm.Model(&models.SysUser{}).Where("user_id = ?", c.UserId).
-		Updates(map[string]any{"avatar": c.Avatar, "update_by": c.UserId})
+	result := e.DB.Model(&models.SysUser{}).Where("user_id = ?", c.UserID).
+		Updates(map[string]any{"avatar": c.Avatar, "update_by": c.UserID})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -218,13 +172,13 @@ func (e *SysUser) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPer
 
 // UpdateStatus 更新用户状态
 func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermission) error {
-	if c.UserId <= 0 || (c.Status != "1" && c.Status != "2") {
+	if c.UserID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid user status")
 	}
 	var model models.SysUser
-	result := e.Orm.Table(model.TableName()).Scopes(actions.Permission(model.TableName(), p)).
-		Where("user_id = ? AND deleted_at = 0", c.UserId).
-		Updates(map[string]interface{}{
+	result := e.DB.Table(model.TableName()).Scopes(actions.Permission(model.TableName(), p)).
+		Where("user_id = ? AND deleted_at = 0", c.UserID).
+		Updates(map[string]any{
 			"auth_version": gorm.Expr("CASE WHEN status <> ? THEN auth_version + 1 ELSE auth_version END", c.Status),
 			"status":       c.Status, "update_by": c.UpdateBy,
 		})
@@ -234,7 +188,7 @@ func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPer
 	if result.RowsAffected == 0 {
 		// MySQL may report zero changed rows for an idempotent status request.
 		var count int64
-		if err := e.Orm.Model(&models.SysUser{}).Scopes(actions.Permission(model.TableName(), p)).Where("user_id = ?", c.UserId).Count(&count).Error; err != nil {
+		if err := e.DB.Model(&models.SysUser{}).Scopes(actions.Permission(model.TableName(), p)).Where("user_id = ?", c.UserID).Count(&count).Error; err != nil {
 			return err
 		}
 		if count == 0 {
@@ -248,11 +202,11 @@ func (e *SysUser) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPer
 func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission) error {
 	var err error
 	var model models.SysUser
-	db := e.Orm.Scopes(
+	db := e.DB.Scopes(
 		actions.Permission(model.TableName(), p),
-	).First(&model, c.GetId())
+	).First(&model, c.GetID())
 	if err = db.Error; err != nil {
-		e.Log.Errorf("At Service ResetSysUserPwd error: %s", err)
+		e.Logger.Errorf("At Service ResetSysUserPwd error: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
@@ -260,8 +214,8 @@ func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission)
 	}
 	c.Generate(&model)
 	model.UpdateBy = c.UpdateBy
-	result := e.Orm.Model(&model).Scopes(actions.Permission(model.TableName(), p)).
-		Where("user_id = ?", model.UserId).Select("Password", "Salt", "UpdateBy").Updates(&model)
+	result := e.DB.Model(&model).Scopes(actions.Permission(model.TableName(), p)).
+		Where("user_id = ?", model.UserID).Select("Password", "Salt", "UpdateBy").Updates(&model)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -273,16 +227,16 @@ func (e *SysUser) ResetPwd(c *dto.ResetSysUserPwdReq, p *actions.DataPermission)
 }
 
 // Remove 删除SysUser
-func (e *SysUser) Remove(c *dto.SysUserById, p *actions.DataPermission) error {
+func (e *SysUser) Remove(c *dto.SysUserByID, p *actions.DataPermission) error {
 	var err error
 	var data models.SysUser
 
-	db := e.Orm.Model(&data).
+	db := e.DB.Model(&data).
 		Scopes(
 			actions.Permission(data.TableName(), p),
-		).Delete(&data, c.GetId())
+		).Delete(&data, c.GetID())
 	if err = db.Error; err != nil {
-		e.Log.Errorf("Error found in  RemoveSysUser : %s", err)
+		e.Logger.Errorf("Error found in  RemoveSysUser : %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
@@ -302,56 +256,115 @@ func (e *SysUser) UpdatePwd(id int, oldPassword, newPassword string, _ *actions.
 	}
 	c := &models.SysUser{}
 
-	err = e.Orm.Model(c).
-		Select("UserId", "Password", "Salt").
+	err = e.DB.Model(c).
+		Select("user_id", "password", "salt").
 		First(c, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("无权更新该数据")
 		}
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	var ok bool
 	ok, err = pkg.CompareHashAndPassword(c.Password, oldPassword)
 	if err != nil {
-		e.Log.Errorf("CompareHashAndPassword error, %s", err.Error())
+		e.Logger.Errorf("CompareHashAndPassword error, %s", err.Error())
 		return err
 	}
 	if !ok {
 		err = errors.New("incorrect Password")
-		e.Log.Warnf("user[%d] %s", id, err.Error())
+		e.Logger.Warnf("user[%d] %s", id, err.Error())
 		return err
 	}
 	c.Password = newPassword
-	db := e.Orm.Model(c).Where("user_id = ?", id).
+	db := e.DB.Model(c).Where("user_id = ?", id).
 		Select("Password", "Salt").
 		Updates(c)
 	if err = db.Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if db.RowsAffected == 0 {
 		err = errors.New("set password error")
-		log.Warnf("db update error")
+		log.NewHelper(log.Default()).Warnf("db update error")
 		return err
 	}
 	return nil
 }
 
-func (e *SysUser) GetProfile(c *dto.SysUserById, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
-	err := e.Orm.Preload("Dept").First(user, c.GetId()).Error
+// GetProfile loads the authenticated user's profile.
+func (e *SysUser) GetProfile(c *dto.SysUserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
+	err := e.DB.Preload("Dept").First(user, c.GetID()).Error
 	if err != nil {
 		return err
 	}
-	err = e.Orm.Find(roles, user.RoleId).Error
+	err = e.DB.Find(roles, user.RoleID).Error
 	if err != nil {
 		return err
 	}
-	err = e.Orm.Find(posts, user.PostIds).Error
+	err = e.DB.Find(posts, user.PostIDs).Error
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func credentialChanges(model models.SysUser, self bool) ([]string, []any) {
+	var changed []string
+	var values []any
+	add := func(column string, value any) {
+		changed = append(changed, "("+column+" <> ? OR "+column+" IS NULL)")
+		values = append(values, value)
+	}
+	if model.Username != "" {
+		add("username", model.Username)
+	}
+	if !self {
+		if model.RoleID != 0 {
+			add("role_id", model.RoleID)
+		}
+		if model.DeptID != 0 {
+			add("dept_id", model.DeptID)
+		}
+		if model.Status != "" {
+			add("status", model.Status)
+		}
+	}
+	return changed, values
+}
+
+func (e *SysUser) persistUserUpdate(tx *gorm.DB, model models.SysUser, p *actions.DataPermission, isSelf bool) error {
+	omit := []string{"password", "salt", "auth_version", "create_by", "created_at", "deleted_at", "user_id"}
+	self := isSelf
+	if self {
+		// A concurrent administrator edit must not be undone by a self-profile save.
+		omit = append(omit, "role_id", "dept_id", "status")
+	} else if model.Status != "" && model.Status != "1" && model.Status != "2" {
+		return errors.New("invalid user status")
+	}
+	scope := func(db *gorm.DB) *gorm.DB {
+		if self {
+			return db
+		}
+		return db.Scopes(actions.Permission(model.TableName(), p))
+	}
+	// Compare effective struct updates against the current row, not the earlier
+	// read. A value restored later must never restore an old credential stamp.
+	changed, values := credentialChanges(model, self)
+	if len(changed) != 0 {
+		if err := scope(tx.Table(model.TableName())).Where("user_id = ? AND deleted_at = 0", model.UserID).
+			Where(strings.Join(changed, " OR "), values...).UpdateColumn("auth_version", gorm.Expr("auth_version + ?", 1)).Error; err != nil {
+			return err
+		}
+	}
+	update := scope(tx.Model(&model)).Where("user_id = ?", model.UserID).Omit(omit...).Updates(&model)
+	if update.Error != nil {
+		return update.Error
+	}
+	if update.RowsAffected == 0 {
+		return errors.New("update userinfo error")
+	}
 	return nil
 }

@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	jobmodels "go-admin/app/jobs/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	jobmodels "github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Create sys_job_lease and seed the one row the scheduler competes for
@@ -32,6 +32,8 @@ import (
 // softDeleteTables list because it embeds no common.ModelTime: a lease that
 // could be soft-deleted would be a row that both does and does not hold the
 // scheduler.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700009000JobSchedulerLease)

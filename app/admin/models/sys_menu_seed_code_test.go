@@ -8,8 +8,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func ptr(s string) *string { return &s }
-
 // uk_sys_menu_app_seed_code_del covers (app_code, seed_code, deleted_at) and
 // is created by 1786700008000, not from a struct tag. It cannot come from a
 // tag: a named uniqueIndex collects every field carrying that name, and
@@ -41,7 +39,7 @@ func TestSysMenuDeclaresNoSeedCodeIndexOfItsOwn(t *testing.T) {
 	// Two applications, the same seed code. The real index allows it because
 	// app_code is part of the key; an index on seed_code alone does not.
 	for _, app := range []string{"order", "crm"} {
-		row := SysMenu{MenuName: app + "Dir", AppCode: app, SeedCode: ptr("dir")}
+		row := SysMenu{MenuName: app + "Dir", AppCode: app, SeedCode: new("dir")}
 		if err := db.Create(&row).Error; err != nil {
 			t.Fatalf("%s could not use the seed code \"dir\": %v", app, err)
 		}

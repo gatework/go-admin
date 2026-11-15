@@ -1,13 +1,16 @@
 package middleware
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 type deliveryReadProbe struct {
@@ -24,9 +27,9 @@ func (p deliveryResultProbe) MarshalJSON() ([]byte, error) {
 	return []byte(`{"script":"secret","output":"secret"}`), nil
 }
 func TestDeliveryBodyAndResultNeverEnterOperationLog(t *testing.T) {
-	old := config.LoggerConfig.EnabledDB
-	config.LoggerConfig.EnabledDB = true
-	defer func() { config.LoggerConfig.EnabledDB = old }()
+
+	testconfig.Apply(t, func(s *config.Config) { s.Logger.EnabledDB = true })
+
 	gin.SetMode(gin.TestMode)
 	for _, path := range []string{"/api/v1/network-delivery/orders", "/api/v1/network-delivery/orders/1/targets/2", "/api/v1/network-delivery/devices/1/connection"} {
 		t.Run(path, func(t *testing.T) {

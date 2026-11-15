@@ -1,14 +1,16 @@
 package models
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/storage/queue"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/storage"
 )
 
 // SaveOperaLog shortens JsonResult before writing it. Cutting at a byte offset
@@ -23,18 +25,21 @@ func TestSaveOperaLogTruncatesOnCharacterBoundary(t *testing.T) {
 	if err := db.AutoMigrate(&SysOperaLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	previous := sdk.Runtime.GetDbByTenant(tenant)
-	sdk.Runtime.SetDbByTenant(tenant, db)
-	t.Cleanup(func() { sdk.Runtime.SetDbByTenant(tenant, previous) })
+	previous := sdk.Runtime.DB(tenant)
+	sdk.Runtime.SetDB(tenant, db)
+	t.Cleanup(func() { sdk.Runtime.SetDB(tenant, previous) })
 
 	// 150 characters, 3 bytes each: byte 100 falls inside the 34th character.
 	long := strings.Repeat("中", 150)
 
-	msg := &queue.Message{}
-	msg.SetValues(map[string]interface{}{"title": "t", "jsonResult": long})
-	msg.SetPrefix(tenant)
-	if err := SaveOperaLog(msg); err != nil {
-		t.Fatalf("SaveOperaLog: %v", err)
+	payload, err := json.Marshal(map[string]any{"title": "t", "jsonResult": long})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := storage.Message{Values: map[string]any{"payload": string(payload), storage.PrefixKey: tenant}}
+
+	if err := SaveOperaLog(t.Context(), msg); err != nil {
+		t.Fatalf("SaveOperaLogger: %v", err)
 	}
 
 	var rows []SysOperaLog
@@ -44,7 +49,7 @@ func TestSaveOperaLogTruncatesOnCharacterBoundary(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row written, got %d", len(rows))
 	}
-	got := rows[0].JsonResult
+	got := rows[0].JSONResult
 	if !utf8.ValidString(got) {
 		t.Errorf("stored JsonResult is not valid UTF-8: %q", got)
 	}

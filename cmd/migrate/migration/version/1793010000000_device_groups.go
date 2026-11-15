@@ -3,18 +3,22 @@ package version
 import (
 	"runtime"
 
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
-	adminmodels "go-admin/app/admin/models"
-	_ "go-admin/app/admin/service"
-	"go-admin/app/network/grouping"
-	networkmodels "go-admin/app/network/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+
+	// Registers the host menu seeder before migrations run.
+	_ "github.com/gatework/motor/app/admin/service"
+	"github.com/gatework/motor/app/net/models/grouping"
+	networkmodels "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, file, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(file), _1793010000000DeviceGroups)
@@ -39,16 +43,16 @@ func seedDeviceGroups(db *gorm.DB) error {
 		if err := advanceNetworkSeedSequences(tx); err != nil {
 			return err
 		}
-		if err := seed.SeedMenus(tx, "network", []seed.MenuSpec{
+		if err := seed.Menus(tx, "network", []seed.MenuSpec{
 			{Code: "management", Kind: contractmodels.Directory, Title: "网络管理", Path: "/network", Component: "Layout", Icon: "branch", Sort: 30},
-			{Code: "device-manage", Parent: "management", Kind: contractmodels.Menu, Title: "设备管理", Path: "/network/device", Component: "/network/device/index", Icon: "desktop", Sort: 1, ApiCodes: []string{"list", "options", "sync-status", "group-tree"}},
-			{Code: "device-list", Parent: "device-manage", Kind: contractmodels.Button, Title: "查询台账", Permission: "network:device:list", Sort: 1, ApiCodes: []string{"list", "group-tree"}},
-			{Code: "device-query", Parent: "device-manage", Kind: contractmodels.Button, Title: "查看设备", Permission: "network:device:query", Sort: 2, ApiCodes: []string{"query", "group-tree"}},
-			{Code: "device-edit", Parent: "device-manage", Kind: contractmodels.Button, Title: "编辑台账", Permission: "network:device:edit", Sort: 3, ApiCodes: []string{"edit", "query", "group-tree", "assign-group"}},
-			{Code: "device-group-add", Parent: "device-manage", Kind: contractmodels.Button, Title: "新增分组", Permission: "network:device-group:add", Sort: 6, ApiCodes: []string{"group-add", "group-tree"}},
-			{Code: "device-group-edit", Parent: "device-manage", Kind: contractmodels.Button, Title: "编辑分组", Permission: "network:device-group:edit", Sort: 7, ApiCodes: []string{"group-edit", "group-tree"}},
-			{Code: "device-group-remove", Parent: "device-manage", Kind: contractmodels.Button, Title: "删除分组", Permission: "network:device-group:remove", Sort: 8, ApiCodes: []string{"group-remove", "group-tree"}},
-		}, []seed.ApiSpec{
+			{Code: "device-manage", Parent: "management", Kind: contractmodels.Menu, Title: "设备管理", Path: "/network/device", Component: "/network/device/index", Icon: "desktop", Sort: 1, APICodes: []string{"list", "options", "sync-status", "group-tree"}},
+			{Code: "device-list", Parent: "device-manage", Kind: contractmodels.Button, Title: "查询台账", Permission: "network:device:list", Sort: 1, APICodes: []string{"list", "group-tree"}},
+			{Code: "device-query", Parent: "device-manage", Kind: contractmodels.Button, Title: "查看设备", Permission: "network:device:query", Sort: 2, APICodes: []string{"query", "group-tree"}},
+			{Code: "device-edit", Parent: "device-manage", Kind: contractmodels.Button, Title: "编辑台账", Permission: "network:device:edit", Sort: 3, APICodes: []string{"edit", "query", "group-tree", "assign-group"}},
+			{Code: "device-group-add", Parent: "device-manage", Kind: contractmodels.Button, Title: "新增分组", Permission: "network:device-group:add", Sort: 6, APICodes: []string{"group-add", "group-tree"}},
+			{Code: "device-group-edit", Parent: "device-manage", Kind: contractmodels.Button, Title: "编辑分组", Permission: "network:device-group:edit", Sort: 7, APICodes: []string{"group-edit", "group-tree"}},
+			{Code: "device-group-remove", Parent: "device-manage", Kind: contractmodels.Button, Title: "删除分组", Permission: "network:device-group:remove", Sort: 8, APICodes: []string{"group-remove", "group-tree"}},
+		}, []seed.APISpec{
 			{Code: "list", Title: "设备台账列表", Path: "/api/v1/network-device", Method: "GET", Handle: "go-admin/app/network/apis.Device.GetPage-fm"},
 			{Code: "query", Title: "设备台账详情", Path: "/api/v1/network-device/:id", Method: "GET", Handle: "go-admin/app/network/apis.Device.Get-fm"},
 			{Code: "edit", Title: "编辑人工台账", Path: "/api/v1/network-device/:id", Method: "PUT", Handle: "go-admin/app/network/apis.Device.Update-fm"},

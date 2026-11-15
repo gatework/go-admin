@@ -9,8 +9,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 func TestArcoMenuIconsOnlyChangesBuiltInNavigation(t *testing.T) {
@@ -22,9 +22,9 @@ func TestArcoMenuIconsOnlyChangesBuiltInNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := []models.SysMenu{
-		{MenuId: 1, MenuName: "SysRoleManage", MenuType: "C", Title: "角色", Icon: "peoples", Path: "/roles"},
-		{MenuId: 2, MenuName: "CustomReport", MenuType: "C", Icon: "star"},
-		{MenuId: 3, MenuName: "SysUserManage", MenuType: "F", Icon: "check"},
+		{MenuID: 1, MenuName: "SysRoleManage", MenuType: "C", Title: "角色", Icon: "peoples", Path: "/roles"},
+		{MenuID: 2, MenuName: "CustomReport", MenuType: "C", Icon: "star"},
+		{MenuID: 3, MenuName: "SysUserManage", MenuType: "F", Icon: "check"},
 	}
 	for i := range rows {
 		if err = db.Create(&rows[i]).Error; err != nil {

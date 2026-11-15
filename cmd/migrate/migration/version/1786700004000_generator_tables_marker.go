@@ -6,8 +6,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Convert the two generator tables to the same delete marker every other table
@@ -23,6 +23,8 @@ import (
 //
 // tb_demo has the same shape and is deliberately not here: nothing reads it at
 // runtime, so there is no mismatch to fix.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700004000GeneratorTablesMarker)

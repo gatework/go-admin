@@ -3,10 +3,13 @@ package middleware
 import (
 	"testing"
 
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/runtime"
 )
 
 // freshRuntime hands the test its own Runtime and puts the old one back, the
@@ -17,7 +20,7 @@ func freshRuntime(t *testing.T) {
 	t.Helper()
 	previous := sdk.Runtime
 	t.Cleanup(func() { sdk.Runtime = previous })
-	sdk.Runtime = runtime.NewConfig()
+	sdk.Runtime = runtime.New()
 }
 
 // TestInitMiddlewareRegistersUsableJwtHandlerFunc is the reverse proof for
@@ -37,9 +40,7 @@ func freshRuntime(t *testing.T) {
 func TestInitMiddlewareRegistersUsableJwtHandlerFunc(t *testing.T) {
 	freshRuntime(t)
 
-	previousSecret := config.JwtConfig.Secret
-	config.JwtConfig.Secret = "test-secret-key"
-	t.Cleanup(func() { config.JwtConfig.Secret = previousSecret })
+	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "test-secret-key" })
 
 	gin.SetMode(gin.TestMode)
 	InitMiddleware(gin.New())
@@ -60,9 +61,7 @@ func TestInitMiddlewareRegistersUsableJwtHandlerFunc(t *testing.T) {
 func TestInitMiddlewareBuildsOneSharedJwtInstance(t *testing.T) {
 	freshRuntime(t)
 
-	previousSecret := config.JwtConfig.Secret
-	config.JwtConfig.Secret = "test-secret-key"
-	t.Cleanup(func() { config.JwtConfig.Secret = previousSecret })
+	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "test-secret-key" })
 
 	gin.SetMode(gin.TestMode)
 	InitMiddleware(gin.New())

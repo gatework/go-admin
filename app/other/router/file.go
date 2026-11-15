@@ -2,17 +2,19 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"go-admin/app/other/apis"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor/app/other/handler"
 )
 
+//nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
 	routerCheckRole = append(routerCheckRole, registerFileRouter)
 }
 
 // 需认证的路由代码
 func registerFileRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	var api = apis.File{}
+	var api = handler.File{}
 	r := v1.Group("").Use(authMiddleware.MiddlewareFunc())
 	{
 		r.POST("/public/uploadFile", api.UploadFile)

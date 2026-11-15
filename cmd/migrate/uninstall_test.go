@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	adminmodels "go-admin/app/admin/models"
-	_ "go-admin/app/admin/service" // registers the seeder SeedMenus dispatches to
-	"go-admin/cmd/migrate/migration"
-	commonmodels "go-admin/common/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	_ "github.com/gatework/motor/app/admin/service" // registers the seeder SeedMenus dispatches to
+	"github.com/gatework/motor/cmd/migrate/migration"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 const adminRoleKey = "admin"
@@ -31,7 +32,7 @@ func newUninstallDB(t *testing.T) *gorm.DB {
 		t.Fatalf("open sqlite: %v", err)
 	}
 	if err := db.AutoMigrate(
-		&adminmodels.SysMenu{}, &adminmodels.SysApi{}, &adminmodels.SysRole{},
+		&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{},
 		&adminmodels.SysApp{}, &adminmodels.SysAppCasbinGrant{}, &commonmodels.Migration{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
@@ -60,12 +61,12 @@ func newUninstallDB(t *testing.T) *gorm.DB {
 // code, because two applications do not share an endpoint - and if a fixture
 // let them, the second one's policies would already exist and its ledger
 // would legitimately come out empty, which would make it a useless control.
-func specsFor(code string) ([]seed.MenuSpec, []seed.ApiSpec) {
+func specsFor(code string) ([]seed.MenuSpec, []seed.APISpec) {
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: "M", Title: code + " example", Path: "/apps/" + code, Component: "Layout", Sort: 10},
-		{Code: "list", Parent: "dir", Kind: "C", Title: code, Path: "list", Component: "apps/" + code + "/index", Sort: 1, ApiCodes: []string{"list"}},
+		{Code: "list", Parent: "dir", Kind: "C", Title: code, Path: "list", Component: "apps/" + code + "/index", Sort: 1, APICodes: []string{"list"}},
 	}
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: code + " list", Path: "/api/v1/" + code, Method: "GET", Handle: "apis." + code + ".GetPage-fm"},
 		{Code: "create", Title: "create " + code, Path: "/api/v1/" + code, Method: "POST", Handle: "apis." + code + ".Insert-fm"},
 	}
@@ -78,7 +79,7 @@ func seedApp(t *testing.T, db *gorm.DB, code string) {
 	t.Helper()
 	menus, apis := specsFor(code)
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return seed.SeedMenus(tx, code, menus, apis)
+		return seed.Menus(tx, code, menus, apis)
 	}); err != nil {
 		t.Fatalf("seeding %q: %v", code, err)
 	}
@@ -144,7 +145,7 @@ func TestUninstallRemovesWhatWasSeededAndNothingElse(t *testing.T) {
 	if len(rep.Skipped) != 0 || len(rep.Orphans) != 0 {
 		t.Errorf("a clean uninstall reported skipped=%v orphans=%v", rep.Skipped, rep.Orphans)
 	}
-	if rep.Menus == 0 || rep.Apis == 0 || rep.Policies == 0 || rep.Migrations == 0 {
+	if rep.Menus == 0 || rep.APIs == 0 || rep.Policies == 0 || rep.Migrations == 0 {
 		t.Errorf("the report says nothing was removed: %+v", rep)
 	}
 }
@@ -401,7 +402,7 @@ func TestFindOrphanPoliciesCoversEveryPathAcrossChunks(t *testing.T) {
 	// short, and large enough to need three of them.
 	const n = 205
 	keys := make([]policyKey, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		path := "/api/v1/thing" + strconv.Itoa(i)
 		keys = append(keys, policyKey{V1: path, V2: "GET"})
 		if err := db.Exec(
@@ -446,13 +447,13 @@ func TestFindOrphanPoliciesCoversEveryPathAcrossChunks(t *testing.T) {
 // nothing, rather than the empty IN list that would be a syntax error in raw
 // SQL, and removing the guard leaves this test green. It stays as an explicit
 // statement of intent rather than a reliance on that rendering.
-func TestUninstallWithApisButNoMenus(t *testing.T) {
+func TestUninstallWithAPIsButNoMenus(t *testing.T) {
 	db := newUninstallDB(t)
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "hook", Title: "Inbound hook", Path: "/api/v1/hook", Method: "POST", Handle: "hook.Receive"},
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return seed.SeedMenus(tx, "hooks", nil, apis)
+		return seed.Menus(tx, "hooks", nil, apis)
 	}); err != nil {
 		t.Fatalf("seeding: %v", err)
 	}
@@ -461,8 +462,8 @@ func TestUninstallWithApisButNoMenus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("uninstall: %v", err)
 	}
-	if rep.Apis != 1 {
-		t.Errorf("removed %d api(s), want 1", rep.Apis)
+	if rep.APIs != 1 {
+		t.Errorf("removed %d api(s), want 1", rep.APIs)
 	}
 	if rep.Policies != 1 {
 		t.Errorf("removed %d policy(ies), want 1", rep.Policies)
@@ -473,13 +474,13 @@ func TestUninstallWithApisButNoMenus(t *testing.T) {
 }
 
 // The mirror case: menus and no apis at all.
-func TestUninstallWithMenusButNoApis(t *testing.T) {
+func TestUninstallWithMenusButNoAPIs(t *testing.T) {
 	db := newUninstallDB(t)
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: "M", Title: "Reports", Path: "/apps/reports", Component: "Layout", Sort: 10},
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return seed.SeedMenus(tx, "reports", menus, nil)
+		return seed.Menus(tx, "reports", menus, nil)
 	}); err != nil {
 		t.Fatalf("seeding: %v", err)
 	}

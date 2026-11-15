@@ -3,10 +3,10 @@ package middleware
 import (
 	"time"
 
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"go-admin/common/middleware/handler"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/common/middleware/handler"
 )
 
 // authMiddleware is the single JWT middleware instance the whole process
@@ -19,14 +19,14 @@ var authMiddleware *jwt.GinJWTMiddleware
 // AuthInit jwt验证new
 func AuthInit() (*jwt.GinJWTMiddleware, error) {
 	timeout := time.Hour
-	if config.ApplicationConfig.Mode == "dev" {
+	if config.Current().Settings.Application.Mode == "dev" {
 		timeout = time.Duration(876010) * time.Hour
 	} else {
-		if config.JwtConfig.Timeout != 0 {
-			timeout = time.Duration(config.JwtConfig.Timeout) * time.Second
+		if config.Current().Settings.JWT.Timeout != 0 {
+			timeout = time.Duration(config.Current().Settings.JWT.Timeout) * time.Second
 		}
 	}
-	secret := config.JwtConfig.Secret
+	secret := config.Current().Settings.JWT.Secret
 	payload, authorize := handler.AuthCallbacks(secret)
 	return jwt.New(&jwt.GinJWTMiddleware{
 		Realm:           "test zone",
@@ -59,7 +59,7 @@ func AuthInit() (*jwt.GinJWTMiddleware, error) {
 // call chain with a far less useful stack trace.
 func GetAuthMiddleware() *jwt.GinJWTMiddleware {
 	if authMiddleware == nil {
-		log.Fatal("JWT middleware not initialized; InitMiddleware must run before any module's InitRouter")
+		log.NewHelper(log.Default()).Fatal("JWT middleware not initialized; InitMiddleware must run before any module's InitRouter")
 	}
 	return authMiddleware
 }

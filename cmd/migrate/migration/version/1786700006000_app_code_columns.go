@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Add sys_menu.app_code and sys_api.app_code ahead of PRD 006 F9's Seeder.
@@ -25,6 +25,8 @@ import (
 // reads the runtime models' own gorm tags directly, which is also what
 // makes the column this adds match the one the admin Seeder writes through
 // those same structs.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700006000AppCodeColumns)
@@ -37,8 +39,8 @@ func _1786700006000AppCodeColumns(db *gorm.DB, version string) error {
 			return err
 		}
 	}
-	if !m.HasColumn(&adminmodels.SysApi{}, "AppCode") {
-		if err := m.AddColumn(&adminmodels.SysApi{}, "AppCode"); err != nil {
+	if !m.HasColumn(&adminmodels.SysAPI{}, "AppCode") {
+		if err := m.AddColumn(&adminmodels.SysAPI{}, "AppCode"); err != nil {
 			return err
 		}
 	}

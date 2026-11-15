@@ -87,7 +87,7 @@ func BenchmarkEncrypt(b *testing.B) {
 	b.Run("already hashed", func(b *testing.B) {
 		u := SysUser{Password: fresh.Password}
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			if err := u.Encrypt(); err != nil {
 				b.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func BenchmarkEncrypt(b *testing.B) {
 
 	b.Run("plaintext", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			u := SysUser{Password: knownPassword}
 			if err := u.Encrypt(); err != nil {
 				b.Fatal(err)

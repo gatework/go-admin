@@ -2,8 +2,6 @@ package router_test
 
 import (
 	"errors"
-	"go-admin/app/admin/models"
-	"gorm.io/gorm"
 	"io"
 	"net"
 	"net/http"
@@ -13,11 +11,17 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"github.com/gorilla/websocket"
-	"go-admin/app/admin/router"
-	"go-admin/common/middleware"
+
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/app/admin/router"
+	"github.com/gatework/motor/common/middleware"
 )
 
 func TestWebsocketRejectsForeignOrigin(t *testing.T) {
@@ -32,11 +36,14 @@ func TestWebsocketRejectsForeignOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := gin.New()
-	r.Use(middleware.WithContextDb)
+	r.Use(middleware.WithContextDB)
 	router.InitSysRouter(r, mw)
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/test-connection/log?token="+token, http.Header{"Origin": []string{"https://foreign.example"}})
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if conn != nil {
 		conn.Close()
 		t.Fatal("foreign origin upgraded")
@@ -54,7 +61,7 @@ func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	second := models.SysUser{UserId: 2, Username: "second-admin", Password: "Audit-password-1", RoleId: 1, Status: "2"}
+	second := models.SysUser{UserID: 2, Username: "second-admin", Password: "Audit-password-1", RoleID: 1, Status: "2"}
 	if err := db.Create(&second).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -78,13 +85,16 @@ func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
 	os.Stdout = capture
 	defer func() { os.Stdout = old }()
 	r := gin.New()
-	r.Use(middleware.WithContextDb)
+	r.Use(middleware.WithContextDB)
 	router.InitSysRouter(r, mw)
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	dial := func(token string) *websocket.Conn {
 		t.Helper()
-		conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/opaque-uuid/log?token="+token, http.Header{"Origin": []string{srv.URL}})
+		conn, handshakeResponse2, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/opaque-uuid/log?token="+token, http.Header{"Origin": []string{srv.URL}})
+		if handshakeResponse2 != nil && handshakeResponse2.Body != nil {
+			defer handshakeResponse2.Body.Close()
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +120,7 @@ func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
 	read(first, "stream-line")
 	closePath := func(token string) {
 		t.Helper()
-		req, err := http.NewRequest("GET", srv.URL+"/wslogout/opaque-uuid/log", nil)
+		req, err := http.NewRequest(http.MethodGet, srv.URL+"/wslogout/opaque-uuid/log", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +130,7 @@ func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
 			t.Fatal(err)
 		}
 		response.Body.Close()
-		if response.StatusCode != 200 {
+		if response.StatusCode != http.StatusOK {
 			t.Fatalf("disconnect status=%d", response.StatusCode)
 		}
 	}
@@ -140,7 +150,7 @@ func TestWebsocketOwnedConnectionAndActualMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	read(first, "other-user-safe")
-	req, err := http.NewRequest("POST", srv.URL+"/api/v1/logout", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/logout", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,9 +187,9 @@ func TestWebsocketRejectsNamedTenantAndUnsupportedChannel(t *testing.T) {
 			db := dbFor(t, tc.tenant, "denied-admin")
 			token := tokenFor(t, mw, db, "denied-admin", tc.tenant)
 			r := gin.New()
-			r.Use(middleware.WithContextDb)
+			r.Use(middleware.WithContextDB)
 			router.InitSysRouter(r, mw)
-			req := httptest.NewRequest("GET", "/ws/uuid/"+tc.channel, nil)
+			req := httptest.NewRequest(http.MethodGet, "/ws/uuid/"+tc.channel, nil)
 			req.Host = tc.tenant
 			req.Header.Set("Authorization", "Bearer "+token)
 			out := httptest.NewRecorder()
@@ -208,22 +218,28 @@ func TestWebsocketRechecksRevokedSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := gin.New()
-	r.Use(middleware.WithContextDb)
+	r.Use(middleware.WithContextDB)
 	router.InitSysRouter(r, mw)
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	endpoint := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/revocation-uuid/log?token=" + token
-	conn, _, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	conn, handshakeResponse3, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	if handshakeResponse3 != nil && handshakeResponse3.Body != nil {
+		defer handshakeResponse3.Body.Close()
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
 	duplicate, resp, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if duplicate != nil {
 		duplicate.Close()
 		t.Fatal("duplicate replaced live connection")
 	}
-	if err == nil || resp == nil || resp.StatusCode != 409 {
+	if err == nil || resp == nil || resp.StatusCode != http.StatusConflict {
 		t.Fatalf("duplicate handshake: %v %v", resp, err)
 	}
 	if err := db.Table("sys_user").Where("user_id=1").UpdateColumn("auth_version", gorm.Expr("auth_version+1")).Error; err != nil {
@@ -235,7 +251,10 @@ func TestWebsocketRechecksRevokedSessions(t *testing.T) {
 	if err == nil || (errors.As(err, &networkError) && networkError.Timeout()) {
 		t.Fatalf("remote revocation did not close websocket: %v", err)
 	}
-	replay, _, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	replay, handshakeResponse5, err := websocket.DefaultDialer.Dial(endpoint, nil)
+	if handshakeResponse5 != nil && handshakeResponse5.Body != nil {
+		defer handshakeResponse5.Body.Close()
+	}
 	if replay != nil {
 		replay.Close()
 		t.Fatal("revoked token reopened websocket")
@@ -257,7 +276,10 @@ func TestWebsocketDevelopmentLoopbackOrigins(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mw := auth(t)
-			config.ApplicationConfig.Mode = tc.mode
+			testconfig.Apply(t, func(settings *config.Config) {
+				settings.
+					Application.Mode = tc.mode
+			})
 			db := dbFor(t, "*", "development-admin")
 			token := tokenFor(t, mw, db, "development-admin", "*")
 			t.Chdir(t.TempDir())
@@ -268,17 +290,20 @@ func TestWebsocketDevelopmentLoopbackOrigins(t *testing.T) {
 				t.Fatal(err)
 			}
 			r := gin.New()
-			r.Use(middleware.WithContextDb)
+			r.Use(middleware.WithContextDB)
 			router.InitSysRouter(r, mw)
 			srv := httptest.NewServer(r)
 			defer srv.Close()
 			conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/development-uuid/log?token="+token, http.Header{"Origin": []string{tc.origin}})
+			if resp != nil && resp.Body != nil {
+				defer resp.Body.Close()
+			}
 			if !tc.allowed {
 				if conn != nil {
 					conn.Close()
 					t.Fatal("disallowed origin upgraded")
 				}
-				if err == nil || resp == nil || resp.StatusCode != 403 {
+				if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 					t.Fatalf("expected 403: response=%v err=%v", resp, err)
 				}
 				return

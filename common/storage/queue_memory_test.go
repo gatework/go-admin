@@ -1,14 +1,15 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 func memoryQueueConfigs() []struct {
@@ -27,13 +28,13 @@ func memoryQueueConfigs() []struct {
 func TestMemoryQueueRunAfterShutdownReturns(t *testing.T) {
 	for _, tc := range memoryQueueConfigs() {
 		t.Run(tc.name, func(t *testing.T) {
-			q, err := openQueue(tc.config)
+			q, err := openQueue(t.Context(), tc.config)
 			if err != nil {
 				t.Fatal(err)
 			}
-			q.Shutdown()
+			q.Shutdown(t.Context())
 			done := make(chan struct{})
-			go func() { defer close(done); q.Run() }()
+			go func() { defer close(done); q.Run(t.Context()) }()
 			select {
 			case <-done:
 			case <-time.After(time.Second):
@@ -47,25 +48,23 @@ func TestMemoryQueueConcurrentRunAndDrain(t *testing.T) {
 	for _, tc := range memoryQueueConfigs() {
 		t.Run(tc.name, func(t *testing.T) {
 			for range 100 {
-				q, err := openQueue(tc.config)
+				q, err := openQueue(t.Context(), tc.config)
 				if err != nil {
 					t.Fatal(err)
 				}
 				var consumed atomic.Int32
-				q.Register("t", func(corestorage.Messager) error { consumed.Add(1); return nil })
+				q.Subscribe(t.Context(), "t", func(context.Context, corestorage.Message) error { consumed.Add(1); return nil })
 				for range 5 {
-					if err := q.Append(swapMsg()); err != nil {
+					if err := q.Publish(t.Context(), swapMsg()); err != nil {
 						t.Fatal(err)
 					}
 				}
 				start, done := make(chan struct{}), make(chan struct{})
 				var workers sync.WaitGroup
 				for range 4 {
-					workers.Add(1)
-					go func() { defer workers.Done(); <-start; q.Run() }()
+					workers.Go(func() { ; <-start; q.Run(t.Context()) })
 				}
-				workers.Add(1)
-				go func() { defer workers.Done(); <-start; q.Shutdown() }()
+				workers.Go(func() { ; <-start; q.Shutdown(t.Context()) })
 				go func() { workers.Wait(); close(done) }()
 				close(start)
 				select {
@@ -76,7 +75,7 @@ func TestMemoryQueueConcurrentRunAndDrain(t *testing.T) {
 				if consumed.Load() != 5 {
 					t.Fatalf("drained %d messages, want 5", consumed.Load())
 				}
-				if err := q.Append(swapMsg()); !errors.Is(err, corestorage.ErrQueueClosed) {
+				if err := q.Publish(t.Context(), swapMsg()); !errors.Is(err, corestorage.ErrQueueClosed) {
 					t.Fatalf("Append after drain: %v", err)
 				}
 			}

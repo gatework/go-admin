@@ -2,11 +2,11 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
+	jwt "github.com/gatework/motor-core/jwtauth"
 
-	"go-admin/app/{{.PackageName}}/apis"
-	"go-admin/common/middleware"
-	"go-admin/common/actions"
+	"github.com/gatework/motor/app/{{.PackageName}}/handler"
+	"github.com/gatework/motor/common/middleware"
+	"github.com/gatework/motor/common/actions"
 )
 
 func init() {
@@ -15,13 +15,13 @@ func init() {
 
 // register{{.ClassName}}Router
 func register{{.ClassName}}Router(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	api := apis.{{.ClassName}}{}
+	h := handler.{{.ClassName}}{}
 	r := v1.Group("/{{.ModuleName}}").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
-		r.GET("", actions.PermissionAction(), api.GetPage)
-		r.GET("/:id", actions.PermissionAction(), api.Get)
-		r.POST("", api.Insert)
-		r.PUT("/:id", actions.PermissionAction(), api.Update)
-		r.DELETE("", api.Delete)
+		r.GET("", actions.PermissionAction(), h.List)
+		r.GET("/:id", actions.PermissionAction(), h.Get)
+		r.POST("", h.Create)
+		r.PUT("/:id", actions.PermissionAction(), h.Update)
+		r.DELETE("", h.Delete)
 	}
 }

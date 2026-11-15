@@ -1,8 +1,8 @@
 version: '3.8'
 services:
-  go-admin-api:
-    container_name: go-admin
-    image: go-admin:latest
+  motor-api:
+    container_name: motor
+    image: motor:latest
     privileged: true
     restart: always
     ports:
@@ -15,9 +15,9 @@ services:
     # this against config/settings.yml.
     stop_grace_period: 30s
     volumes:
-      - ./config/:/go-admin-api/config/
-      - ./static/:/go-admin-api/static/
-      - ./temp/:/go-admin-api/temp/
+      - ./config/:/motor-api/config/
+      - ./static/:/motor-api/static/
+      - ./temp/:/motor-api/temp/
     networks:
       - myweb
 networks:

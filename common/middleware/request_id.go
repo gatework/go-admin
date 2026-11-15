@@ -1,35 +1,36 @@
 package middleware
 
 import (
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"net/http"
 	"strings"
+
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// RequestId 自动增加requestId
-func RequestId(trafficKey string) gin.HandlerFunc {
+// RequestID 自动增加requestId
+func RequestID(trafficKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == http.MethodOptions {
 			c.Next()
 			return
 		}
-		requestId := c.GetHeader(trafficKey)
-		if requestId == "" {
-			requestId = c.GetHeader(strings.ToLower(trafficKey))
+		requestID := c.GetHeader(trafficKey)
+		if requestID == "" {
+			requestID = c.GetHeader(strings.ToLower(trafficKey))
 		}
-		if requestId == "" {
-			requestId = uuid.New().String()
+		if requestID == "" {
+			requestID = uuid.New().String()
 		}
-		c.Request.Header.Set(trafficKey, requestId)
-		c.Set(trafficKey, requestId)
+		c.Request.Header.Set(trafficKey, requestID)
+		c.Set(trafficKey, requestID)
 		c.Set(pkg.LoggerKey,
-			logger.NewHelper(logger.DefaultLogger).
-				WithFields(map[string]interface{}{
-					trafficKey: requestId,
+			logger.NewHelper(logger.Default()).
+				WithFields(map[string]any{
+					trafficKey: requestID,
 				}))
 		c.Next()
 	}

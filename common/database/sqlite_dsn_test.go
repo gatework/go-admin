@@ -15,8 +15,8 @@ func TestSqliteDSN(t *testing.T) {
 	}
 
 	t.Run("plain path gets every default", func(t *testing.T) {
-		path, q := parse(sqliteDSN("./go-admin-db.db"))
-		if path != "./go-admin-db.db" {
+		path, q := parse(sqliteDSN("./motor-db.db"))
+		if path != "./motor-db.db" {
 			t.Errorf("path = %q", path)
 		}
 		for _, p := range sqlitePragmas {

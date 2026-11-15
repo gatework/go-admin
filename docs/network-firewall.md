@@ -51,7 +51,7 @@
 | `reference`、`address_range`、`service_term` | 引用、地址区间和保持端口配对的服务索引 |
 | `request`、`request_row`、`analysis`、`analysis_target`、`analysis_result`、`draft` | 版本化输入、权限关联、持久化任务与结构化草稿 |
 
-模型入口 `app/firewall/models.Schema()` 共 32 张表，另复用两张已有连接/设备租约表。迁移使用 `models.Migrate`：PostgreSQL / SQLite 为 TEXT，MySQL 的大载荷列为 LONGTEXT，重复迁移不缩窄列。
+模型入口 `app/net/models/firewall.Schema()` 共 32 张表，另复用两张已有连接/设备租约表。迁移使用 `models.Migrate`：PostgreSQL / SQLite 为 TEXT，MySQL 的大载荷列为 LONGTEXT，重复迁移不缩窄列。
 
 快照采用预期版本 CAS 发布；SQL 投影提交后才确认文件 outbox。进程重启会重放未完成投影。离线导入中，用户声明不完整或解析不完整的快照只归档，不替换当前版本；在线采集的最新不完整证据会成为当前版本，撤销旧覆盖证据并使旧分析/草稿过期，避免继续拿旧完整配置证明当前访问。页面明确显示不完整状态，未知部分继续阻止设计被标记为已验证。快照记录原文摘要、语义摘要、采集时间、解析器版本与软件版本。
 
@@ -67,7 +67,7 @@ Docker 开发环境用 `firewall_snapshots` 卷保存 `/var/lib/motor/firewall`�
 
 ## API 与能力边界
 
-所有接口位于 `/api/v1/network-firewall`，沿用 `code/data/msg` 和 `data.list/count/pageIndex/pageSize`。完整方法、路由及权限的单一声明为 `app/firewall/routes.go`，路由注册和菜单迁移共用该声明。主要资源为 `/options`、`/domains`、`/instances`、`/imports`、`/snapshots/:id/objects/:kind`、`/normalize`、`/requests`、`/analyses`、`/drafts`。在线入口为 `GET /devices`、`GET/PUT /devices/:id/connection`、`POST/GET /collection-batches`、`GET /collection-batches/:id`、`POST /collection-batches/:id/cancel`；创建批次输入为 `{requestKey, instanceIds, kind}`，`kind` 为 `connection_test` 或 `capture`。
+所有接口位于 `/api/v1/network-firewall`，沿用 `code/data/msg` 和 `data.list/count/pageIndex/pageSize`。完整方法、路由及权限的单一声明为 `app/net/router/firewall_routes.go`，路由注册和菜单迁移共用该声明。主要资源为 `/options`、`/domains`、`/instances`、`/imports`、`/snapshots/:id/objects/:kind`、`/normalize`、`/requests`、`/analyses`、`/drafts`。在线入口为 `GET /devices`、`GET/PUT /devices/:id/connection`、`POST/GET /collection-batches`、`GET /collection-batches/:id`、`POST /collection-batches/:id/cancel`；创建批次输入为 `{requestKey, instanceIds, kind}`，`kind` 为 `connection_test` 或 `capture`。
 
 设计按同一实例累积原生 `Plan.After`，最终重新验证所有目标、目标范围之外的行为和 NAT 保持情况。只有证明成立的结构化候选才显示已验证。涉及活跃 NAT 的编辑、不能证明原始报文行为的厂商/模式、推测的入接口、未知语法或不完整需求均保留待确认草稿；Hillstone 当前继续显示 `needs_review`。此阶段没有命令预览、审批、下发和保存设备配置接口。
 

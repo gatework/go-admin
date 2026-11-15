@@ -4,10 +4,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 
-	"go-admin/common/middleware"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/common/middleware"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // registeredRoutes builds the generator's routes on an engine of its own and
@@ -31,10 +33,12 @@ func registeredRoutes(t *testing.T, mode string) map[string]bool {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	previous := config.ApplicationConfig.Mode
-	defer func() { config.ApplicationConfig.Mode = previous }()
-	config.ApplicationConfig.Mode = mode
+	restore := testconfig.Swap(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = mode
+	})
 
+	defer restore()
 	r := gin.New()
 	v1 := r.Group("/api/v1")
 	sysNoCheckRoleRouter(v1, &jwt.GinJWTMiddleware{})

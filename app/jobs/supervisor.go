@@ -2,13 +2,15 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
+
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
 )
 
 const (
@@ -22,27 +24,30 @@ var supervisors sync.Map // tenant key -> *supervisor
 // expiry callback never waits for database I/O. Stopping cron prevents future
 // dispatch; already running jobs still need their own idempotency contract.
 type supervisor struct {
-	key      string
-	db       *gorm.DB
-	lease    *lease
-	cron     *cron.Cron
-	control  *cronControl
-	tickMu   sync.Mutex
-	mu       sync.Mutex
-	running  bool
-	closed   bool
-	deadline time.Time
-	timer    *time.Timer
-	stop     chan struct{}
-	stopOnce sync.Once
-	done     chan struct{}
-	cancel   context.CancelFunc
+	key             string
+	db              *gorm.DB
+	lease           *lease
+	cron            *cron.Cron
+	control         *cronControl
+	tickMu          sync.Mutex
+	mu              sync.Mutex
+	running         bool
+	closed          bool
+	deadline        time.Time
+	timer           *time.Timer
+	stop            chan struct{}
+	stopOnce        sync.Once
+	done            chan struct{}
+	cancel          context.CancelFunc
+	execution       context.Context //nolint:containedctx // Scheduler-owned lifecycle context; request contexts are never retained.
+	executionCancel context.CancelFunc
 }
 
 func newSupervisor(key string, db *gorm.DB, owner string) *supervisor {
-	c := sdk.Runtime.GetAllCrontab()[key]
+	c := sdk.Runtime.Crontabs()[key]
+	execution, cancel := context.WithCancel(context.Background())
 	return &supervisor{key: key, db: db, lease: &lease{db: db, owner: owner, ttl: leaseTTL},
-		cron: c, control: &cronControl{cron: c}, stop: make(chan struct{}), done: make(chan struct{})}
+		execution: execution, executionCancel: cancel, cron: c, control: &cronControl{cron: c}, stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 func (s *supervisor) start() {
@@ -94,7 +99,7 @@ func (s *supervisor) tick() {
 	}
 	if err != nil {
 		s.mu.Unlock()
-		log.Errorf("[Job] scheduler lease for %s: %v", s.key, err)
+		log.NewHelper(log.Default()).Errorf("[Job] scheduler lease for %s: %v", s.key, err)
 		return
 	}
 	if !held || ctx.Err() != nil || !time.Now().Before(deadline) {
@@ -116,7 +121,7 @@ func (s *supervisor) tick() {
 	})
 	s.mu.Unlock()
 	if err := s.reconcile(ctx); err != nil {
-		log.Errorf("[Job] reconciling %s: %v", s.key, err)
+		log.NewHelper(log.Default()).Errorf("[Job] reconciling %s: %v", s.key, err)
 	}
 }
 
@@ -139,7 +144,7 @@ func (s *supervisor) stopScheduling() {
 }
 
 func (s *supervisor) shutdown(ctx context.Context) {
-	s.stopOnce.Do(func() { close(s.stop) })
+	s.stopOnce.Do(func() { close(s.stop); s.executionCancel() })
 	s.mu.Lock()
 	s.closed = true
 	if s.cancel != nil {
@@ -153,7 +158,7 @@ func (s *supervisor) shutdown(ctx context.Context) {
 	}
 	s.control.waitStopped(ctx)
 	if err := s.lease.releaseContext(ctx); err != nil {
-		log.Errorf("[Job] releasing lease for %s: %v", s.key, err)
+		log.NewHelper(log.Default()).Errorf("[Job] releasing lease for %s: %v", s.key, err)
 	}
 	supervisors.CompareAndDelete(s.key, s)
 }
@@ -168,10 +173,18 @@ func (s *supervisor) holdsLease() bool {
 // deliberately does nothing: the leader also reconciles every heartbeat.
 func Reconcile(ctx context.Context, key string) error {
 	if value, ok := supervisors.Load("*"); ok {
-		return value.(*supervisor).reconcile(ctx)
+		s, ok := value.(*supervisor)
+		if !ok {
+			return fmt.Errorf("jobs: invalid supervisor registry entry")
+		}
+		return s.reconcile(ctx)
 	}
 	if value, ok := supervisors.Load(key); ok {
-		return value.(*supervisor).reconcile(ctx)
+		s, ok := value.(*supervisor)
+		if !ok {
+			return fmt.Errorf("jobs: invalid supervisor registry entry")
+		}
+		return s.reconcile(ctx)
 	}
 	return nil
 }
@@ -199,7 +212,7 @@ func (s *supervisor) reconcile(ctx context.Context) error {
 		if !s.holdsLease() {
 			return nil
 		}
-		if err := applyJobs(ctx, s.cron, list, s.holdsLease); err != nil {
+		if err := applyJobs(ctx, s.cron, list, jobExecution{ctx: s.execution, allowed: s.holdsLease}); err != nil {
 			return err
 		}
 		if ctx.Err() != nil || !s.holdsLease() {

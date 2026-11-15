@@ -6,8 +6,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	jobmodels "go-admin/app/jobs/models"
-	common "go-admin/common/models"
+	jobmodels "github.com/gatework/motor/app/jobs/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 func openJobLeaseDB(t *testing.T) *gorm.DB {

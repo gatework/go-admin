@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -17,14 +18,14 @@ import (
 // IssueEmail returns a registration challenge, but never returns a password-reset token.
 func (s Service) IssueEmail(ctx context.Context, kind, email string) (string, error) {
 	if kind != "register" && kind != "reset" {
-		return "", ErrInvalid
+		return "", InvalidErr
 	}
 	email, e := NormalizeEmail(email)
 	if e != nil {
 		return "", e
 	}
 	if !s.configured() {
-		return "", ErrUnavailable
+		return "", UnavailableErr
 	}
 	if kind == "register" {
 		p, e := s.Policy()
@@ -32,7 +33,7 @@ func (s Service) IssueEmail(ctx context.Context, kind, email string) (string, er
 			return "", e
 		}
 		if !p.Enabled {
-			return "", ErrDisabled
+			return "", DisabledErr
 		}
 	}
 	if e = s.TakeLimit("email:"+kind+":"+email, 1, time.Minute); e != nil {
@@ -61,7 +62,7 @@ func (s Service) IssueEmail(ctx context.Context, kind, email string) (string, er
 	title := "motor · Email verification"
 	body := fmt.Sprintf("Your verification code is %s. It expires in 10 minutes.\nIf you did not request this, ignore this email.\n", code)
 	if kind == "reset" {
-		c.UserID = users[0].UserId
+		c.UserID = users[0].UserID
 		c.Credential = digest(users[0].Password)
 		title = "motor · Password reset"
 		body = fmt.Sprintf("Reset your password: %s/#/reset-password?token=%s&email=%s\nVerification code: %s\nThis link and code expire in 10 minutes and can be used once. If you did not request this, ignore this email.\n", strings.TrimRight(s.BaseURL, "/"), url.QueryEscape(token), url.QueryEscape(email), code)
@@ -83,6 +84,7 @@ func (s Service) IssueEmail(ctx context.Context, kind, email string) (string, er
 	return token, nil
 }
 
+// Registration defines the registration contract.
 type Registration struct {
 	Username             string `json:"username"`
 	Name                 string `json:"name"`
@@ -93,12 +95,13 @@ type Registration struct {
 	Code                 string `json:"code"`
 }
 
+// Register handles the register operation.
 func (s Service) Register(r Registration) error {
 	var err error
 	r.Username = strings.TrimSpace(r.Username)
 	r.Email, err = NormalizeEmail(r.Email)
 	if err != nil || !usernamePattern.MatchString(r.Username) || len(r.Name) > 128 || r.Name == "" || r.Password != r.PasswordConfirmation {
-		return ErrInvalid
+		return InvalidErr
 	}
 	if err = Password(r.Password); err != nil {
 		return err
@@ -116,20 +119,20 @@ func (s Service) Register(r Registration) error {
 			return e
 		}
 		if !p.Enabled {
-			return ErrDisabled
+			return DisabledErr
 		}
 		var count int64
 		if e := tx.Model(&User{}).Where("LOWER(username) = ? OR LOWER(email) = ?", strings.ToLower(r.Username), r.Email).Count(&count).Error; e != nil {
 			return e
 		}
 		if count > 0 {
-			return ErrIdentity
+			return IdentityErr
 		}
 		if _, e := s.consumeEmail(tx, r.Token, r.Code, "register", r.Email); e != nil {
 			return e
 		}
 		var role Role
-		if e := tx.Where("role_key = ? AND deleted_at = 0", "registered").First(&role).Error; e == gorm.ErrRecordNotFound {
+		if e := tx.Where("role_key = ? AND deleted_at = 0", "registered").First(&role).Error; errors.Is(e, gorm.ErrRecordNotFound) {
 			role = Role{RoleKey: "registered", RoleName: "注册用户", Status: "2", DataScope: "5"}
 			if e = tx.Create(&role).Error; e != nil {
 				return e
@@ -138,14 +141,15 @@ func (s Service) Register(r Registration) error {
 			return e
 		}
 		if role.Admin || role.RoleKey == "admin" || role.Status != "2" {
-			return ErrDisabled
+			return DisabledErr
 		}
 		// Never bind privileged fields from the request. This role starts with no administrative grants.
-		u := User{Username: r.Username, NickName: r.Name, Email: r.Email, Password: string(hash), Status: "2", RoleId: role.RoleId, DeptId: 1, PostId: 1}
+		u := User{Username: r.Username, NickName: r.Name, Email: r.Email, Password: string(hash), Status: "2", RoleID: role.RoleID, DeptID: 1, PostID: 1}
 		return tx.Create(&u).Error
 	})
 }
 
+// Reset defines the reset contract.
 type Reset struct {
 	Token                string `json:"token"`
 	Code                 string `json:"code"`
@@ -154,10 +158,11 @@ type Reset struct {
 	PasswordConfirmation string `json:"passwordConfirmation"`
 }
 
+// ResetPassword handles the resetpassword operation.
 func (s Service) ResetPassword(r Reset) error {
 	email, e := NormalizeEmail(r.Email)
 	if e != nil || r.Password != r.PasswordConfirmation {
-		return ErrInvalid
+		return InvalidErr
 	}
 	if e = Password(r.Password); e != nil {
 		return e
@@ -176,11 +181,11 @@ func (s Service) ResetPassword(r Reset) error {
 		}
 		var u User
 		if e = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND LOWER(email) = ? AND deleted_at = 0 AND status = ?", c.UserID, email, "2").First(&u).Error; e != nil {
-			return ErrInvalid
+			return InvalidErr
 		}
 		if digest(u.Password) != c.Credential {
-			return ErrInvalid
+			return InvalidErr
 		}
-		return tx.Model(&User{}).Where("user_id = ?", u.UserId).Update("password", string(hash)).Error
+		return tx.Model(&User{}).Where("user_id = ?", u.UserID).Update("password", string(hash)).Error
 	})
 }

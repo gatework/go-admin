@@ -21,20 +21,20 @@ func TestSysColumnsUpdateClearsSentinelFields(t *testing.T) {
 		t.Fatalf("migrate sys_columns: %v", err)
 	}
 
-	col := SysColumns{TableId: 1, ColumnName: "status", ColWidth: 150, DefaultValue: "active"}
+	col := SysColumns{TableID: 1, ColumnName: "status", ColWidth: 150, DefaultValue: "active"}
 	if _, err := col.Create(db); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
 	// Reset back to the sentinel - the UI action for "go back to inferred
 	// width / no default", not merely "never configured".
-	update := SysColumns{ColumnId: col.ColumnId, ColWidth: 0, DefaultValue: ""}
+	update := SysColumns{ColumnID: col.ColumnID, ColWidth: 0, DefaultValue: ""}
 	if _, err := update.Update(db); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
 	var got SysColumns
-	if err := db.Table("sys_columns").First(&got, col.ColumnId).Error; err != nil {
+	if err := db.Table("sys_columns").First(&got, col.ColumnID).Error; err != nil {
 		t.Fatalf("read back: %v", err)
 	}
 	if got.ColWidth != 0 {

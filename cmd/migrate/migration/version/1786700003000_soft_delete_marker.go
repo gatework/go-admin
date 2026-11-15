@@ -3,12 +3,13 @@ package version
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"time"
 
 	"gorm.io/gorm"
 
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Convert deleted_at from a nullable timestamp to a non-null millisecond
@@ -26,6 +27,8 @@ import (
 //
 // DDL does not roll back on MySQL, so this is written to be re-runnable rather
 // than transactional: every step asks whether it has already been taken.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700003000SoftDeleteMarker)
@@ -170,7 +173,7 @@ func isConverted(db *gorm.DB, table string) (bool, error) {
 
 func copyTimestamps(db *gorm.DB, table string) error {
 	type row struct {
-		Id        int64
+		ID        int64
 		DeletedAt *time.Time
 	}
 
@@ -192,8 +195,8 @@ func copyTimestamps(db *gorm.DB, table string) error {
 			continue
 		}
 		u := fmt.Sprintf("UPDATE %s SET %s = ? WHERE %s = ?", table, tempColumn, key)
-		if err := db.Exec(u, r.DeletedAt.UnixMilli(), r.Id).Error; err != nil {
-			return fmt.Errorf("marking row %d deleted: %w", r.Id, err)
+		if err := db.Exec(u, r.DeletedAt.UnixMilli(), r.ID).Error; err != nil {
+			return fmt.Errorf("marking row %d deleted: %w", r.ID, err)
 		}
 	}
 	return nil
@@ -274,7 +277,7 @@ func dropIndexesOn(db *gorm.DB, table, column string) error {
 // from its documentation and has not been run - this repository has no SQL
 // Server to run it against.
 func dropIndex(db *gorm.DB, table, index string) string {
-	switch db.Dialector.Name() {
+	switch db.Name() {
 	case "mysql":
 		return fmt.Sprintf("DROP INDEX `%s` ON `%s`", index, table)
 	case "sqlserver":
@@ -292,11 +295,8 @@ func indexNamesFor(db *gorm.DB, table, column string) ([]string, error) {
 	}
 	var names []string
 	for _, idx := range indexes {
-		for _, c := range idx.Columns() {
-			if c == column {
-				names = append(names, idx.Name())
-				break
-			}
+		if slices.Contains(idx.Columns(), column) {
+			names = append(names, idx.Name())
 		}
 	}
 	return names, nil
@@ -305,7 +305,7 @@ func indexNamesFor(db *gorm.DB, table, column string) ([]string, error) {
 // The three statements every dialect spells differently.
 
 func addBigIntColumn(db *gorm.DB, table, column string) string {
-	if db.Dialector.Name() == "sqlserver" {
+	if db.Name() == "sqlserver" {
 		return fmt.Sprintf("ALTER TABLE %s ADD %s BIGINT NOT NULL DEFAULT 0", table, column)
 	}
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s BIGINT NOT NULL DEFAULT 0", table, column)
@@ -316,7 +316,7 @@ func dropColumn(db *gorm.DB, table, column string) string {
 }
 
 func renameColumn(db *gorm.DB, table, from, to string) string {
-	switch db.Dialector.Name() {
+	switch db.Name() {
 	case "sqlserver":
 		return fmt.Sprintf("EXEC sp_rename '%s.%s', '%s', 'COLUMN'", table, from, to)
 	case "mysql":

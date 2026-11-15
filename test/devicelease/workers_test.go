@@ -13,32 +13,33 @@ import (
 	"testing"
 	"time"
 
-	native "github.com/gatework/firemon/device"
-	"github.com/gatework/go-net-connector/connector"
-	wl "github.com/gatework/go-wireless"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	base "github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"github.com/google/uuid"
-	dm "go-admin/app/delivery/models"
-	ds "go-admin/app/delivery/service"
-	dd "go-admin/app/delivery/service/dto"
-	fm "go-admin/app/fabric/models"
-	fs "go-admin/app/fabric/service"
-	fd "go-admin/app/fabric/service/dto"
-	fwmodel "go-admin/app/firewall/models"
-	fw "go-admin/app/firewall/service"
-	nm "go-admin/app/network/models"
-	wm "go-admin/app/wireless/models"
-	ws "go-admin/app/wireless/service"
-	wd "go-admin/app/wireless/service/dto"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	native "github.com/gatework/firemon/device"
+	"github.com/gatework/go-net-connector/connector"
+	wl "github.com/gatework/go-wireless"
+	"github.com/gatework/motor-core/sdk/contract/actions"
+	base "github.com/gatework/motor-core/sdk/service"
+	dm "github.com/gatework/motor/app/net/models/delivery"
+	fm "github.com/gatework/motor/app/net/models/fabric"
+	fwmodel "github.com/gatework/motor/app/net/models/firewall"
+	nm "github.com/gatework/motor/app/net/models/inventory"
+	wm "github.com/gatework/motor/app/net/models/wireless"
+	ds "github.com/gatework/motor/app/net/service/delivery"
+	dd "github.com/gatework/motor/app/net/service/dto/delivery"
+	fd "github.com/gatework/motor/app/net/service/dto/fabric"
+	wd "github.com/gatework/motor/app/net/service/dto/wireless"
+	fs "github.com/gatework/motor/app/net/service/fabric"
+	fw "github.com/gatework/motor/app/net/service/firewall"
+	ws "github.com/gatework/motor/app/net/service/wireless"
 )
 
 func TestMain(m *testing.M) {
-	if os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN") == "" {
-		fmt.Fprintln(os.Stderr, "devicelease integration requires GO_ADMIN_TEST_POSTGRES_DSN")
+	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
+		fmt.Fprintln(os.Stderr, "devicelease integration requires MOTOR_TEST_POSTGRES_DSN")
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
@@ -46,7 +47,7 @@ func TestMain(m *testing.M) {
 
 func database(t *testing.T) (*gorm.DB, *gorm.DB) {
 	t.Helper()
-	dsn := os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("MOTOR_TEST_POSTGRES_DSN")
 	open := func(dsn string) *gorm.DB {
 		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 		if err != nil {
@@ -102,15 +103,7 @@ func newBarrier(t *testing.T, closed bool) *barrier {
 	t.Cleanup(b.finish)
 	return b
 }
-func (b *barrier) finish() { b.unblock.Do(func() { close(b.release) }) }
-func (b *barrier) wait(ctx context.Context) {
-	b.calls.Add(1)
-	b.once.Do(func() { close(b.entered) })
-	select {
-	case <-ctx.Done():
-	case <-b.release:
-	}
-}
+
 func entered(t *testing.T, b *barrier) {
 	t.Helper()
 	select {
@@ -156,7 +149,7 @@ func (c collector) Collect(ctx context.Context, _ nm.Device, _ dm.Connection, _ 
 
 type transport struct{ b *barrier }
 
-func (t transport) Open(ctx context.Context, _ dm.DeviceSnapshot, _ dm.Connection, _ func(fs.FabricSession) error) error {
+func (t transport) Open(ctx context.Context, _ dm.DeviceSnapshot, _ dm.Connection, _ func(fs.Session) error) error {
 	t.b.wait(ctx)
 	return receipt{t.b.closed}
 }
@@ -178,7 +171,7 @@ func (r reader) Close() error {
 	return nil
 }
 
-var permission = &actions.DataPermission{DataScope: actions.DataScopeAll, UserId: 7, RoleId: 1}
+var permission = &actions.DataPermission{DataScope: actions.DataScopeAll, UserID: 7, RoleID: 1}
 
 func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worker, func(context.Context) error) {
 	t.Helper()
@@ -197,11 +190,11 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 	if err := a.Create(&d).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Create(&dm.Connection{DeviceID: d.Id, Profile: profile, Protocol: "ssh", Port: 22, Version: 1}).Error; err != nil {
+	if err := a.Create(&dm.Connection{DeviceID: d.ID, Profile: profile, Protocol: "ssh", Port: 22, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	flow := &ds.Workflow{Service: base.Service{Orm: a}, Config: ds.Config{Enabled: true, Username: "fixture", Password: "fixture", Grace: time.Minute, Concurrency: 2}}
-	order, err := flow.Create(context.Background(), dd.Create{RequestKey: "lease-delivery-request", Title: "lease test", Targets: []dd.InputTarget{{DeviceID: d.Id, Script: "show version"}}}, 7, "fixture", permission)
+	flow := &ds.Workflow{Service: base.Service{DB: a}, Config: ds.Config{Enabled: true, Username: "fixture", Password: "fixture", Grace: time.Minute, Concurrency: 2}}
+	order, err := flow.Create(context.Background(), dd.Create{RequestKey: "lease-delivery-request", Title: "lease test", Targets: []dd.InputTarget{{DeviceID: d.ID, Script: "show version"}}}, 7, "fixture", permission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,8 +204,8 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 	worker := ds.NewWorker(flow, func(dm.Target) (ds.Session, error) { return session{gate}, nil })
 	switch kind {
 	case "wireless":
-		s := &ws.Wireless{Service: base.Service{Orm: b}}
-		if _, err := s.CreateCollection(context.Background(), d.Id, wd.CollectionReq{RequestKey: "lease-wireless-request"}, 7, permission); err != nil {
+		s := &ws.Wireless{Service: base.Service{DB: b}}
+		if _, err := s.CreateCollection(context.Background(), d.ID, wd.CollectionReq{RequestKey: "lease-wireless-request"}, 7, permission); err != nil {
 			t.Fatal(err)
 		}
 		return worker, ws.NewWorker(s, collector{gate}).Tick
@@ -222,7 +215,7 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 				t.Fatal(err)
 			}
 		}
-		s := &fs.Fabric{Service: base.Service{Orm: b}}
+		s := &fs.Fabric{Service: base.Service{DB: b}}
 		if _, err := s.CreateCollection(context.Background(), 1, &fd.CollectionCreateReq{RequestKey: "lease-fabric-request", Mode: "all"}, 7, permission); err != nil {
 			t.Fatal(err)
 		}
@@ -231,8 +224,8 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 		if err := b.Create(&fwmodel.Domain{ID: 1, Code: "default", Name: "fixture", Version: 1}).Error; err != nil {
 			t.Fatal(err)
 		}
-		s := &fw.Firewall{Service: base.Service{Orm: b}, Actor: 7, Root: t.TempDir()}
-		instance, err := s.CreateInstance(context.Background(), fw.InstanceInput{DeviceID: d.Id, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, permission)
+		s := &fw.Firewall{Service: base.Service{DB: b}, Actor: 7, Root: t.TempDir()}
+		instance, err := s.CreateInstance(context.Background(), fw.InstanceInput{DeviceID: d.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, permission)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -285,7 +278,7 @@ func TestWorkersSharePhysicalOwnership(t *testing.T) {
 						}
 					} else {
 						target, err := delivery.Claim(ctx)
-						if err != nil || target != nil {
+						if !errors.Is(err, ds.NoWorkErr) || target != nil {
 							t.Fatalf("competing delivery acquired: %v %v", target, err)
 						}
 					}
@@ -309,12 +302,23 @@ func TestWorkersSharePhysicalOwnership(t *testing.T) {
 						if err := a.First(&after, owner.DeviceID).Error; err != nil || !after.Quarantined {
 							t.Fatal("unknown close was not quarantined", err)
 						}
-						if target, err := delivery.Claim(ctx); err != nil || target != nil {
+						if target, err := delivery.Claim(ctx); !errors.Is(err, ds.NoWorkErr) || target != nil {
 							t.Fatal("quarantined device reacquired", err)
 						}
 					}
 				})
 			}
 		}
+	}
+}
+
+func (b *barrier) finish() { b.unblock.Do(func() { close(b.release) }) }
+
+func (b *barrier) wait(ctx context.Context) {
+	b.calls.Add(1)
+	b.once.Do(func() { close(b.entered) })
+	select {
+	case <-ctx.Done():
+	case <-b.release:
 	}
 }

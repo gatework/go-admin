@@ -5,45 +5,47 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	"go-admin/common/actions"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // An update the data permission excludes has to be refused, and refused in a
 // way that does not tell the caller whether the row exists. First reports both
 // cases the same way - no rows - so the message has to come from there rather
 // than from a RowsAffected check the error return has already skipped past.
-func TestSysApiUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
+func TestSysAPIUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:sysapi-perm?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Skipf("sqlite unavailable: %v", err)
 	}
-	if err := db.AutoMigrate(&models.SysApi{}); err != nil {
+	if err := db.AutoMigrate(&models.SysAPI{}); err != nil {
 		t.Skipf("automigrate: %v", err)
 	}
 
-	prev := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = true
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = prev })
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = true
+	})
 
 	// Owned by user 1.
-	row := models.SysApi{Handle: "h", Title: "t", Path: "/api/v1/probe", Type: "BUS", Action: "GET"}
-	row.CreateBy = 1
+	row := models.SysAPI{Handle: "h", Title: "t", Path: "/api/v1/probe", Type: "BUS", Action: "GET",
+		CreateBy: 1}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	e := &SysApi{Service: service.Service{Orm: db, Log: logger.NewHelper(logger.DefaultLogger)}}
-	req := &dto.SysApiUpdateReq{Id: row.Id, Title: "changed"}
+	e := &SysAPI{DB: db, Logger: logger.NewHelper(logger.Default())}
+	req := &dto.SysAPIUpdateReq{ID: row.ID, Title: "changed"}
 
 	// User 2, scope 5: only rows they created.
-	outsider := &actions.DataPermission{DataScope: "5", UserId: 2, DeptId: 1, RoleId: 2}
+	outsider := &actions.DataPermission{DataScope: "5", UserID: 2, DeptID: 1, RoleID: 2}
 	err = e.Update(req, outsider)
 	if err == nil {
 		t.Fatal("the update was allowed on a row the data permission excludes")
@@ -53,8 +55,8 @@ func TestSysApiUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 			"caller the row exists", err)
 	}
 
-	var after models.SysApi
-	if err := db.First(&after, row.Id).Error; err != nil {
+	var after models.SysAPI
+	if err := db.First(&after, row.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if after.Title != "t" {
@@ -63,13 +65,13 @@ func TestSysApiUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 
 	// The owner still gets through, so the scope is refusing rather than
 	// everything failing.
-	owner := &actions.DataPermission{DataScope: "5", UserId: 1, DeptId: 1, RoleId: 1}
-	if err := e.Update(&dto.SysApiUpdateReq{Id: row.Id, Title: "by owner"}, owner); err != nil {
+	owner := &actions.DataPermission{DataScope: "5", UserID: 1, DeptID: 1, RoleID: 1}
+	if err := e.Update(&dto.SysAPIUpdateReq{ID: row.ID, Title: "by owner"}, owner); err != nil {
 		t.Fatalf("the owner could not update their own row: %v", err)
 	}
 }
 
-func TestSysApiUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
+func TestSysAPIUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 	for _, scenario := range []string{"delete", "ownership changes"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -78,14 +80,17 @@ func TestSysApiUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 			}
 			pool, _ := db.DB()
 			t.Cleanup(func() { pool.Close() })
-			if err := db.AutoMigrate(&models.SysApi{}); err != nil {
+			if err := db.AutoMigrate(&models.SysAPI{}); err != nil {
 				t.Fatal(err)
 			}
-			oldDP := config.ApplicationConfig.EnableDP
-			config.ApplicationConfig.EnableDP = true
-			t.Cleanup(func() { config.ApplicationConfig.EnableDP = oldDP })
-			row := models.SysApi{Title: "before", Path: "/probe", Action: "GET"}
-			row.CreateBy = 1
+
+			testconfig.Apply(t, func(settings *config.Config) {
+				settings.
+					Application.EnableDP = true
+			})
+
+			row := models.SysAPI{Title: "before", Path: "/probe", Action: "GET",
+				CreateBy: 1}
 			if err := db.Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -97,9 +102,9 @@ func TestSysApiUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 				changed = true
 				next := tx.Session(&gorm.Session{NewDB: true})
 				if scenario == "delete" {
-					err = next.Unscoped().Delete(&models.SysApi{}, row.Id).Error
+					err = next.Unscoped().Delete(&models.SysAPI{}, row.ID).Error
 				} else {
-					err = next.Model(&models.SysApi{}).Where("id = ?", row.Id).Update("create_by", 2).Error
+					err = next.Model(&models.SysAPI{}).Where("id = ?", row.ID).Update("create_by", 2).Error
 				}
 				if err != nil {
 					t.Error(err)
@@ -107,20 +112,20 @@ func TestSysApiUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			s := SysApi{Service: service.Service{Orm: db, Log: logger.NewHelper(logger.DefaultLogger)}}
-			err = s.Update(&dto.SysApiUpdateReq{Id: row.Id, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserId: 1})
+			s := SysAPI{DB: db, Logger: logger.NewHelper(logger.Default())}
+			err = s.Update(&dto.SysAPIUpdateReq{ID: row.ID, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserID: 1})
 			if err == nil {
 				t.Fatal("write accepted after row disappeared or left permission scope")
 			}
 			if scenario == "delete" {
 				var count int64
-				db.Unscoped().Model(&models.SysApi{}).Count(&count)
+				db.Unscoped().Model(&models.SysAPI{}).Count(&count)
 				if count != 0 {
 					t.Fatal("deleted row resurrected")
 				}
 			} else {
-				var after models.SysApi
-				if err := db.First(&after, row.Id).Error; err != nil {
+				var after models.SysAPI
+				if err := db.First(&after, row.ID).Error; err != nil {
 					t.Fatal(err)
 				}
 				if after.CreateBy != 2 || after.Title != "before" {

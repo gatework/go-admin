@@ -4,8 +4,8 @@
 static/uploadfile
 main.exe
 *.exe
-go-admin
-go-admin.exe
+motor
+motor.exe
 # `go build ./tools/checksilent` drops the binary here, next to the one for the
 # server. Anchored with a leading slash: unanchored, the same pattern matches
 # tools/checksilent/ as well and the tool's own source never gets committed.
@@ -23,10 +23,10 @@ cmd/migrate/migration/version-local/*
 !cmd/migrate/migration/version-local/doc.go
 
 config/settings.deva.yml
-go-admin-server
+motor-server
 CLAUDE.md
 # Everything under .claude is private by default. Skills meant for people using
-# go-admin are re-included one directory at a time, so a personal one dropped in
+# motor are re-included one directory at a time, so a personal one dropped in
 # here is never committed by accident.
 .claude/*
 !.claude/skills/
@@ -35,7 +35,7 @@ CLAUDE.md
 config/settings.local.dev.yml
 
 # Go workspace files. They exist to point this module at a local checkout of
-# go-admin-core while the two are developed together, which is a private
+# motor-core while the two are developed together, which is a private
 # arrangement between one machine's directories - committing one would break
 # the build for everyone else.
 go.work

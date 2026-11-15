@@ -4,26 +4,30 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/utils"
-	"github.com/spf13/cobra"
 	"os"
 	"text/template"
+
+	"github.com/spf13/cobra"
+
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/pkg/utils"
 )
 
 var (
-	appName  string
+	appName string
+	// StartCmd exposes this command to the host CLI.
 	StartCmd = &cobra.Command{
 		Use:     "app",
 		Short:   "Create a new app",
 		Long:    "Use when you need to create a new app",
-		Example: "go-admin app -n admin",
+		Example: "motor app -n admin",
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
 	}
 )
 
+//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
 func init() {
 	StartCmd.PersistentFlags().StringVarP(&appName, "name", "n", "", "Start server with provided configuration file")
 }

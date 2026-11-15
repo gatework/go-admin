@@ -6,15 +6,16 @@ import (
 	"reflect"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth/user"
-	"github.com/go-admin-team/go-admin-core/v2/response"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 
-	"go-admin/common/dto"
+	"github.com/gatework/motor-core/jwtauth/user"
+	"github.com/gatework/motor-core/response"
+	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor-core/sdk/pkg"
+
+	"github.com/gatework/motor/common/dto"
 )
 
 // The generic CRUD actions. They serve the same five kinds of route as
@@ -46,16 +47,16 @@ import (
 type record[T any] interface {
 	*T
 	schema.Tabler
-	SetCreateBy(int)
-	SetUpdateBy(int)
-	GetId() any
+	SetCreateBy(id int)
+	SetUpdateBy(id int)
+	GetID() any
 }
 
 // searchReq is a list request: it binds itself, reports its page, and hands
 // back the struct whose search tags MakeCondition turns into WHERE clauses.
 type searchReq[S any] interface {
 	*S
-	Bind(*gin.Context) error
+	Bind(c *gin.Context) error
 	GetPageIndex() int
 	GetPageSize() int
 	GetNeedSearch() any
@@ -65,15 +66,15 @@ type searchReq[S any] interface {
 // DELETE body, as dto.ObjectById binds them.
 type idReq[I any] interface {
 	*I
-	Bind(*gin.Context) error
-	GetId() any
+	Bind(c *gin.Context) error
+	GetID() any
 }
 
 // controlReq is a create or update request: it binds itself and builds the
 // model row it describes.
 type controlReq[T, C any] interface {
 	*C
-	Bind(*gin.Context) error
+	Bind(c *gin.Context) error
 	ToModel() (*T, error)
 }
 
@@ -85,7 +86,7 @@ func Index[T, S any, PT record[T], PS searchReq[S]]() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		msgID := pkg.GenerateMsgIDFromContext(c)
+		msgID := pkg.RequestID(c)
 
 		var req S
 		if err := PS(&req).Bind(c); err != nil {
@@ -130,7 +131,7 @@ func ViewAs[T, I, R any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		msgID := pkg.GenerateMsgIDFromContext(c)
+		msgID := pkg.RequestID(c)
 
 		var req I
 		if err := PI(&req).Bind(c); err != nil {
@@ -142,7 +143,7 @@ func ViewAs[T, I, R any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 		p := GetPermissionFromContext(c)
 		err := db.Model(&object).WithContext(c.Request.Context()).Scopes(
 			Permission(PT(&object).TableName(), p),
-		).Where(keyIs(PI(&req).GetId())).First(&rsp).Error
+		).Where(keyIs(PI(&req).GetID())).First(&rsp).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			response.Error(c, http.StatusNotFound, nil, "查看对象不存在或无权查看")
 			return
@@ -176,13 +177,13 @@ func Create[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 			response.Error(c, 500, err, "模型生成失败")
 			return
 		}
-		PT(object).SetCreateBy(user.GetUserId(c))
+		PT(object).SetCreateBy(user.ID(c))
 		if err = db.WithContext(c.Request.Context()).Create(object).Error; err != nil {
 			log.Errorf("Create error: %s", err)
 			response.Error(c, 500, err, "创建失败")
 			return
 		}
-		response.OK(c, PT(object).GetId(), "创建成功")
+		response.OK(c, PT(object).GetID(), "创建成功")
 		c.Next()
 	}
 }
@@ -205,7 +206,7 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		msgID := pkg.GenerateMsgIDFromContext(c)
+		msgID := pkg.RequestID(c)
 
 		var req C
 		if err := PC(&req).Bind(c); err != nil {
@@ -217,7 +218,7 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 			response.Error(c, 500, err, "模型生成失败")
 			return
 		}
-		PT(object).SetUpdateBy(user.GetUserId(c))
+		PT(object).SetUpdateBy(user.ID(c))
 
 		query, err := updateSelection(db.WithContext(c.Request.Context()), object, PC(&req))
 		if err != nil {
@@ -227,7 +228,7 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		p := GetPermissionFromContext(c)
 		result := query.Scopes(
 			Permission(PT(object).TableName(), p),
-		).Where(keyIs(PT(object).GetId())).Updates(object)
+		).Where(keyIs(PT(object).GetID())).Updates(object)
 		if err = result.Error; err != nil {
 			log.Errorf("MsgID[%s] Update error: %s", msgID, err)
 			response.Error(c, 500, err, "更新失败")
@@ -237,7 +238,7 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 			response.Error(c, http.StatusForbidden, nil, "无权更新该数据")
 			return
 		}
-		response.OK(c, PT(object).GetId(), "更新成功")
+		response.OK(c, PT(object).GetID(), "更新成功")
 		c.Next()
 	}
 }
@@ -251,7 +252,7 @@ func Delete[T, I any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		msgID := pkg.GenerateMsgIDFromContext(c)
+		msgID := pkg.RequestID(c)
 
 		var req I
 		if err := PI(&req).Bind(c); err != nil {
@@ -260,12 +261,12 @@ func Delete[T, I any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 			return
 		}
 		var object T
-		PT(&object).SetUpdateBy(user.GetUserId(c))
+		PT(&object).SetUpdateBy(user.ID(c))
 
 		p := GetPermissionFromContext(c)
 		result := db.WithContext(c.Request.Context()).Scopes(
 			Permission(PT(&object).TableName(), p),
-		).Where(keyIs(PI(&req).GetId())).Delete(&object)
+		).Where(keyIs(PI(&req).GetID())).Delete(&object)
 		if err := result.Error; err != nil {
 			log.Errorf("MsgID[%s] Delete error: %s", msgID, err)
 			response.Error(c, 500, err, "删除失败")
@@ -277,14 +278,14 @@ func Delete[T, I any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 		}
 		// The key of the empty model, as DeleteAction answers: the rows are
 		// named by the request, not by a model.
-		response.OK(c, PT(&object).GetId(), "删除成功")
+		response.OK(c, PT(&object).GetID(), "删除成功")
 		c.Next()
 	}
 }
 
 // genericOrm reads the request's database, answering 500 when there is none.
 func genericOrm(c *gin.Context) (*gorm.DB, bool) {
-	db, err := pkg.GetOrm(c)
+	db, err := pkg.GetORM(c)
 	if err != nil {
 		api.GetRequestLogger(c).Error(err)
 		response.Error(c, 500, err, "数据库连接获取失败")

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 const applyTimeLayout = "2006-01-02 15:04:05"

@@ -2,23 +2,27 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
-	"go-admin/common"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth/user"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"github.com/gatework/motor/common"
 
-	"go-admin/common/global"
+	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor-core/jwtauth/user"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/storage"
+
+	"github.com/gatework/motor/common/global"
 )
 
 // LoggerToFile 日志记录到文件
@@ -34,14 +38,14 @@ func LoggerToFile() gin.HandlerFunc {
 		// off in the shipped configuration, where reading the body was a copy
 		// of every request made and discarded.
 		var body string
-		if config.LoggerConfig.EnabledDB && !sensitiveAccountPath(c.Request.URL.Path) {
+		if config.Current().Settings.Logger.EnabledDB && !sensitiveAccountPath(c.Request.URL.Path) {
 			body = readOperParam(c, log)
 		}
 
 		c.Next()
 		url := c.Request.URL.Path
-		if strings.Index(url, "logout") > -1 ||
-			strings.Index(url, "login") > -1 {
+		if strings.Contains(url, "logout") ||
+			strings.Contains(url, "login") {
 			return
 		}
 		// 结束时间
@@ -64,13 +68,13 @@ func LoggerToFile() gin.HandlerFunc {
 		st, bl := c.Get("status")
 		var statusBus = 0
 		if bl {
-			statusBus = st.(int)
+			statusBus, _ = st.(int)
 		}
 
 		// 请求方式
 		reqMethod := c.Request.Method
 		// 请求路由
-		reqUri := redactLogURL(c.Request.URL)
+		reqURI := redactLogURL(c.Request.URL)
 		// 状态码
 		statusCode := c.Writer.Status()
 		// 请求IP
@@ -78,19 +82,16 @@ func LoggerToFile() gin.HandlerFunc {
 		// 执行时间
 		latencyTime := endTime.Sub(startTime)
 		// 日志格式
-		logData := map[string]interface{}{
+		logData := map[string]any{
 			"statusCode":  statusCode,
 			"latencyTime": latencyTime,
 			"clientIP":    clientIP,
 			"method":      reqMethod,
-			"uri":         reqUri,
+			"uri":         reqURI,
 		}
 		log.WithFields(logData).Info()
-		defer func() {
-			log.Fields(map[string]interface{}{})
-		}()
-		if c.Request.Method != "OPTIONS" && config.LoggerConfig.EnabledDB && statusCode != 404 {
-			SetDBOperLog(c, clientIP, statusCode, reqUri, reqMethod, latencyTime, body, result, statusBus)
+		if c.Request.Method != http.MethodOptions && config.Current().Settings.Logger.EnabledDB && statusCode != 404 {
+			SetDBOperLog(c, clientIP, statusCode, reqURI, reqMethod, latencyTime, body, result, statusBus)
 		}
 	}
 }
@@ -162,13 +163,13 @@ type readCloser struct {
 // Split out of SetDBOperLog so the field set can be asserted in a test: the
 // consumer on the other end of the queue reads these keys by name, so a
 // dropped or renamed key costs a column in sys_opera_log and reports nothing.
-func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqUri string, reqMethod string, latencyTime time.Duration, body string, result string, status int) map[string]interface{} {
-	l := make(map[string]interface{})
+func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqURI string, reqMethod string, latencyTime time.Duration, body string, result string, status int) map[string]any {
+	l := make(map[string]any)
 	l["_fullPath"] = c.FullPath()
-	l["operUrl"] = reqUri
+	l["operUrl"] = reqURI
 	l["operIp"] = clientIP
 	l["operLocation"] = "" // pkg.GetLocation(clientIP, gaConfig.ExtConfig.AMap.Key)
-	l["operName"] = user.GetUserName(c)
+	l["operName"] = user.Name(c)
 	l["requestMethod"] = reqMethod
 	l["operParam"] = body
 	l["operTime"] = time.Now()
@@ -176,8 +177,8 @@ func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqUri stri
 	l["latencyTime"] = latencyTime.String()
 	l["statusCode"] = statusCode
 	l["userAgent"] = c.Request.UserAgent()
-	l["createBy"] = user.GetUserId(c)
-	l["updateBy"] = user.GetUserId(c)
+	l["createBy"] = user.ID(c)
+	l["updateBy"] = user.ID(c)
 	if status == http.StatusOK {
 		l["status"] = global.OperaStatusEnabled
 	} else {
@@ -187,20 +188,20 @@ func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqUri stri
 }
 
 // SetDBOperLog 写入操作日志表 fixme 该方法后续即将弃用
-func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqUri string, reqMethod string, latencyTime time.Duration, body string, result string, status int) {
+func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqURI string, reqMethod string, latencyTime time.Duration, body string, result string, status int) {
 
 	log := api.GetRequestLogger(c)
-	l := operaLogFields(c, clientIP, statusCode, reqUri, reqMethod, latencyTime, body, result, status)
-	q := sdk.Runtime.GetQueuePrefix(c.Request.Host)
-	message, err := sdk.Runtime.GetStreamMessage("", global.OperateLog, l)
+	l := operaLogFields(c, clientIP, statusCode, reqURI, reqMethod, latencyTime, body, result, status)
+	payload, err := json.Marshal(l)
 	if err != nil {
-		log.Errorf("GetStreamMessage error, %s", err.Error())
-		// 日志报错错误，不中断请求
-	} else {
-		err = q.Append(message)
-		if err != nil {
-			log.Errorf("Append message error, %s", err.Error())
-		}
+		log.Errorf("encode log message: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
+	defer cancel()
+	message := storage.Message{Topic: global.OperateLog, Values: map[string]any{"payload": string(payload)}}
+	if err := sdk.Runtime.QueueForTenant(c.Request.Host).Publish(ctx, message); err != nil {
+		log.Errorf("publish log message: %v", err)
 	}
 }
 
@@ -215,13 +216,13 @@ func redactLogJSON(input string) string {
 	if input == "" {
 		return ""
 	}
-	var value interface{}
+	var value any
 	decoder := json.NewDecoder(strings.NewReader(input))
 	decoder.UseNumber()
 	if decoder.Decode(&value) != nil {
 		return "[body omitted]"
 	}
-	var extra interface{}
+	var extra any
 	if decoder.Decode(&extra) != io.EOF {
 		return "[body omitted]"
 	}
@@ -243,9 +244,9 @@ func sensitiveLogKey(key string) bool {
 	return false
 }
 
-func redactLogValue(value interface{}) {
+func redactLogValue(value any) {
 	switch v := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for key, child := range v {
 			if sensitiveLogKey(key) {
 				v[key] = "[redacted]"
@@ -253,7 +254,7 @@ func redactLogValue(value interface{}) {
 				redactLogValue(child)
 			}
 		}
-	case []interface{}:
+	case []any:
 		for _, child := range v {
 			redactLogValue(child)
 		}

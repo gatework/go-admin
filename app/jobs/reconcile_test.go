@@ -2,15 +2,16 @@ package jobs
 
 import (
 	"context"
-	"github.com/robfig/cron/v3"
 	"runtime"
 	"testing"
 	"time"
 	"weak"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
-	"go-admin/app/jobs/models"
+	"github.com/robfig/cron/v3"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 func TestReconcileCommittedChangesAndStandby(t *testing.T) {
@@ -22,8 +23,8 @@ func TestReconcileCommittedChangesAndStandby(t *testing.T) {
 	const leaderKey = "reconcile-leader"
 	const standbyKey = "reconcile-standby"
 	leaderCron, standbyCron := cronjob.NewWithSeconds(), cronjob.NewWithSeconds()
-	sdk.Runtime.SetCrontabByTenant(leaderKey, leaderCron)
-	sdk.Runtime.SetCrontabByTenant(standbyKey, standbyCron)
+	sdk.Runtime.SetCrontab(leaderKey, leaderCron)
+	sdk.Runtime.SetCrontab(standbyKey, standbyCron)
 	leader := newSupervisor(leaderKey, db, "first")
 	standby := newSupervisor(standbyKey, db, "second")
 	t.Cleanup(leader.stopScheduling)

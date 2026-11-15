@@ -1,116 +1,102 @@
-/*
- * @Author: zhangwenjian
- * @Date: 2025/04/13 22:03
- * @Last Modified by: zhangwenjian
- * @Last Modified time: 2025/04/13 22:03
- */
-
+// Package storage owns the cache and queue generations installed by the host.
 package storage
 
 import (
 	"context"
-	"go-admin/common/health"
-	"log"
+	"errors"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/captcha"
-	corelog "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"github.com/gatework/motor-core/captcha"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
-// Setup 配置storage组件
-func Setup() {
+// Setup builds a complete resource generation before publishing it. Queue
+// subscriptions are attached before publication and Run, so reload never hands
+// producers a live queue without its consumers. ctx is the host lifetime.
+func Setup(ctx context.Context, settings config.Config, subscribe func(context.Context, corestorage.Queue) error) error {
+	setupMu.Lock()
+	defer setupMu.Unlock()
 	lifecycleMu.Lock()
 	closed := storageStopping
 	lifecycleMu.Unlock()
 	if closed {
-		return
+		return nil
 	}
-	setupCache()
-	setupCaptcha()
-	setupQueue()
-	registerQueueDrain()
-}
-
-func setupCache() {
-	cacheSetupMu.Lock()
-	defer cacheSetupMu.Unlock()
-	cacheAdapter, err := openCache(config.CacheConfig)
+	if err := finishPendingRetirements(ctx); err != nil {
+		return err
+	}
+	cache, err := openCache(ctx, &settings.Cache)
 	if err != nil {
-		log.Fatalf("cache setup error, %s\n", err.Error())
+		return fmt.Errorf("cache setup: %w", err)
+	}
+	q, err := openQueue(ctx, &settings.Queue)
+	if err != nil {
+		_ = cache.Close()
+		return fmt.Errorf("queue setup: %w", err)
+	}
+	if subscribe != nil {
+		if err := subscribe(ctx, q); err != nil {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), storageIOTimeout)
+			defer cancel()
+			return errors.Join(fmt.Errorf("queue subscriptions: %w", err), cache.Close(), q.Shutdown(cleanup))
+		}
 	}
 	lifecycleMu.Lock()
 	if storageStopping {
 		lifecycleMu.Unlock()
-		_ = cacheAdapter.Close()
-		return
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), storageIOTimeout)
+		defer cancel()
+		return errors.Join(cache.Close(), q.Shutdown(cleanup))
 	}
 	cacheMu.Lock()
-	previous := installedCache
-	retiringCache = previous
-	installedCache = cacheAdapter
+	previousCache := installedCache
+	retiringCache = previousCache
+	installedCache = cache
 	cacheMu.Unlock()
-	sdk.Runtime.SetCacheAdapter(cacheAdapter)
-	health.SetCacheProbe(cacheAdapter.probe)
-	lifecycleMu.Unlock()
-	if previous != nil {
-		if err := previous.Close(); err != nil {
-			corelog.Errorf("cache retirement: %v", err)
-		}
-		cacheMu.Lock()
-		if retiringCache == previous {
-			retiringCache = nil
-		}
-		cacheMu.Unlock()
+	queueMu.Lock()
+	previousQueue := installed
+	installed = q
+	installedGen++
+	var retirement *queueRetirement
+	if previousQueue != nil {
+		retirement = &queueRetirement{queue: previousQueue, done: make(chan struct{})}
+		retiringQueue = retirement
 	}
+	queueMu.Unlock()
+	publishGeneration(ctx, cache, q)
+	lifecycleMu.Unlock()
+	registerQueueDrain()
+	retirePreviousGeneration(ctx, previousCache, previousQueue, retirement)
+	return nil
 }
 
-func setupCaptcha() {
-	captcha.SetStore(captcha.NewCacheStore(sdk.Runtime.GetCacheAdapter(), 600))
+type shutdowner interface {
+	Shutdown(ctx context.Context) error
 }
 
 var (
-	lifecycleMu       sync.Mutex
-	storageStopping   bool
-	retiringQueueDone chan struct{}
-	queueMu           sync.Mutex
-	queueSetupMu      sync.Mutex
-	// installed is the adapter setupQueue built, kept so the next reload can
-	// shut it down, and counted so a consumer can tell one from the next.
-	installed    interface{ Shutdown() }
-	installedGen uint64
-	// drainRegistered records that the BeforeExit callback is on the runtime,
-	// so that a reload does not add another one.
+	setupMu         sync.Mutex
+	lifecycleMu     sync.Mutex
+	storageStopping bool
+	queueMu         sync.Mutex
+	installed       shutdowner
+	installedGen    uint64
+	retiringQueue   *queueRetirement
 	drainRegistered bool
 )
 
-// setShutdown is sdk.Runtime.SetShutdown, indirected so that registering can
-// be observed.
-//
-// It has to be: the runtime does not report how many callbacks a phase holds,
-// and shutdownQueue takes the adapter on its first run, so every registration
-// after the first returns immediately and changes nothing anybody can see. A
-// reload adding one callback per round would therefore be invisible from the
-// outside - which is exactly how it would survive.
 var setShutdown = func(f func(context.Context)) { sdk.Runtime.SetShutdown(f) }
 
-// registerQueueDrain puts shutdownQueue on the BeforeExit phase, once.
-//
-// Setup is one of the callbacks bootstrap.SetupConfig re-runs on every
-// configuration change, so registering from it without a guard would leave one
-// callback per reload - each shutting down the same adapter, each reported
-// separately when the budget runs out.
-//
-// A flag under the existing mutex rather than a sync.Once: the tests in this
-// package already save and restore installed and installedGen to keep one test
-// from deciding what the next one sees, and a sync.Once cannot be put back.
 func registerQueueDrain() {
 	queueMu.Lock()
 	first := !drainRegistered
 	drainRegistered = true
 	queueMu.Unlock()
-
 	if first {
 		setShutdown(func(ctx context.Context) {
 			lifecycleMu.Lock()
@@ -118,42 +104,18 @@ func registerQueueDrain() {
 			lifecycleMu.Unlock()
 			shutdownQueue(ctx)
 			if err := shutdownCache(ctx); err != nil {
-				corelog.Errorf("cache shutdown: %v", err)
+				logger.NewHelper(logger.Default()).Errorf("cache shutdown: %v", err)
 			}
 		})
 	}
 }
 
-// drainedInTime shuts q down and reports whether it finished before ctx expired.
-func drainedInTime(ctx context.Context, q interface{ Shutdown() }) bool {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		q.Shutdown()
-	}()
-	return finishedBeforeDeadline(ctx, done)
-}
-
-// finishedBeforeDeadline waits for done or for ctx, and resolves a tie in
-// favour of done.
-//
-// The tie is the reason this is a function of its own rather than one select
-// inline. Both channels can be ready when the select runs, select picks at
-// random among ready cases, and so a single look reports an overrun for a
-// drain that completed - about half the times it lands there, which is exactly
-// often enough to be dismissed as noise. core's own RunShutdown re-checks for
-// this reason.
-//
-// Taking channels rather than a queue is what makes it testable: a closed done
-// and an expired ctx can be handed in together, which is the state a race
-// would otherwise have to be caught in.
 func finishedBeforeDeadline(ctx context.Context, done <-chan struct{}) bool {
 	select {
 	case <-done:
 		return true
 	case <-ctx.Done():
 	}
-
 	select {
 	case <-done:
 		return true
@@ -162,130 +124,156 @@ func finishedBeforeDeadline(ctx context.Context, done <-chan struct{}) bool {
 	}
 }
 
-// shutdownQueue drains the queue this package installed, on the way out.
-//
-// Nothing used to. core's Memory.Shutdown closes the queue and waits for every
-// consumer to finish what it is holding, and the legacy adapter cancels its
-// context and closes the underlying queue - but neither ran at exit, so the
-// process left with the login log, the operation log and the API sync still
-// buffered, and left reporting success.
-//
-// The adapter is read here rather than captured at registration because a
-// reload replaces it. Registration happens once per process; this runs against
-// whatever is current when the signal arrives.
-//
-// Only an adapter this package installed. sdk.Runtime.GetQueueAdapter never
-// returns nil - with no queue section configured the runtime wraps its own
-// fallback queue - so going through that accessor would shut down a queue this
-// package neither built nor started.
-//
-// The adapter is taken, not read, so repeated drain calls cannot start more
-// waiters for it. The registered shutdown callback also prevents reloads from
-// publishing new resources while the current and retiring queues drain.
 func shutdownQueue(ctx context.Context) {
 	queueMu.Lock()
-	q := installed
-	retiring := retiringQueueDone
-	installed = nil
+	current, retiring := installed, retiringQueue
 	queueMu.Unlock()
-
-	if q == nil && retiring == nil {
-		return
-	}
-	complete := true
-	if q != nil {
-		complete = drainedInTime(ctx, q)
+	var err error
+	if current != nil {
+		err = current.Shutdown(ctx)
+		if err == nil {
+			queueMu.Lock()
+			if installed == current {
+				installed = nil
+			}
+			queueMu.Unlock()
+		}
 	}
 	if retiring != nil {
-		complete = finishedBeforeDeadline(ctx, retiring) && complete
+		err = errors.Join(err, retiring.wait(ctx))
 	}
-	if complete {
-		corelog.Info("queue: drained")
-		return
-	}
-	// The wait is what the budget bounds, not the work: Shutdown takes no
-	// context and is still running in that goroutine. Saying so here names what
-	// is being lost, which the generic overrun message cannot.
-	corelog.Warnf("queue: the shutdown budget ran out while the queue was still draining - " +
-		"whatever it had not delivered goes with the process. Raise extend.shutdown.cleanup " +
-		"if this recurs.")
-}
-
-// QueueGeneration reports how many times this package has installed a queue
-// adapter. It changes every time setupQueue builds a new one, which is on
-// every configuration reload, and is 0 before the first setup call. Empty configuration installs an owned memory queue too,
-// so its consumers participate in shutdown and backend transitions.
-//
-// It exists because there is no way to ask for the adapter's identity from the
-// outside. sdk.Runtime.GetQueueAdapter and GetQueuePrefix build a fresh
-// runtime.Queue wrapper on every call, so comparing what two calls return
-// compares two wrappers and never matches, however many times the underlying
-// adapter has been replaced. This package creates the adapter, so this is the
-// only place that knows. A counter rather than the adapter itself keeps the
-// comparison on a uint64: an adapter type that is not comparable would panic
-// an `==` between two interface values.
-func QueueGeneration() uint64 {
-	queueMu.Lock()
-	defer queueMu.Unlock()
-	return installedGen
-}
-
-func setupQueue() {
-	queueSetupMu.Lock()
-	defer queueSetupMu.Unlock()
-	queueAdapter, err := openQueue(config.QueueConfig)
 	if err != nil {
-		log.Fatalf("queue setup error, %s\n", err.Error())
+		logger.NewHelper(logger.Default()).Warnf("queue shutdown: %v", err)
 	}
-	lifecycleMu.Lock()
-	if storageStopping {
-		lifecycleMu.Unlock()
-		queueAdapter.Shutdown()
-		return
+}
+
+// QueueGeneration increases whenever a new host-owned queue is published.
+func QueueGeneration() uint64 { queueMu.Lock(); defer queueMu.Unlock(); return installedGen }
+
+// queueRetirement coordinates bounded attempts to retire one generation. A
+// timed-out attempt remains pending; shutdown can retry with its own budget.
+// Concurrent waiters join the same attempt instead of duplicating Shutdown.
+type queueRetirement struct {
+	mu      sync.Mutex
+	queue   shutdowner
+	running bool
+	changed chan struct{}
+	done    chan struct{}
+}
+
+func (r *queueRetirement) wait(ctx context.Context) error {
+	for {
+		r.mu.Lock()
+		select {
+		case <-r.done:
+			r.mu.Unlock()
+			return nil
+		default:
+		}
+		if err := ctx.Err(); err != nil {
+			r.mu.Unlock()
+			return err
+		}
+		if r.running {
+			changed := r.changed
+			r.mu.Unlock()
+			select {
+			case <-changed:
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		r.running = true
+		r.changed = make(chan struct{})
+		r.mu.Unlock()
+		err := r.queue.Shutdown(ctx)
+		r.mu.Lock()
+		r.running = false
+		if err == nil {
+			close(r.done)
+		}
+		close(r.changed)
+		r.mu.Unlock()
+		return err
 	}
+}
+
+func finishPendingRetirements(ctx context.Context) error {
+	retirementContext, cancelRetirement := context.WithTimeout(ctx, storageIOTimeout)
+	defer cancelRetirement()
 	queueMu.Lock()
-
-	previous := installed
-	sdk.Runtime.SetQueueAdapter(queueAdapter)
-	installed = queueAdapter
-	installedGen++
-	var retirement chan struct{}
-	if previous != nil {
-		retirement = make(chan struct{})
-		retiringQueueDone = retirement
-	}
+	pendingQueue := retiringQueue
 	queueMu.Unlock()
-	lifecycleMu.Unlock()
-
-	// The previous adapter goes down after the new one is installed, not
-	// before. Shutdown waits for its consumers to deliver what it still holds,
-	// and for that whole wait the runtime would otherwise be handing producers
-	// a queue that has stopped accepting: every Append in the window comes back
-	// ErrQueueClosed, and both call sites in common/middleware log it. Swapping
-	// first leaves no such window - a producer gets the new queue or the old
-	// one, and both work.
-	//
-	// Only an adapter this package installed. GetQueueAdapter never returns
-	// nil - with nothing configured the runtime falls back to its own memory
-	// queue and wraps that - so the `if q := GetQueueAdapter(); q != nil` this
-	// replaces was always true, and shut down the fallback queue on the very
-	// first start, before anything had used it.
-	if previous != nil {
-		previous.Shutdown()
-		close(retirement)
+	if pendingQueue != nil {
+		if err := pendingQueue.wait(retirementContext); err != nil {
+			return fmt.Errorf("previous queue retirement: %w", err)
+		}
 		queueMu.Lock()
-		if retiringQueueDone == retirement {
-			retiringQueueDone = nil
+		if retiringQueue == pendingQueue {
+			retiringQueue = nil
 		}
 		queueMu.Unlock()
 	}
+	cacheMu.Lock()
+	pendingCache := retiringCache
+	cacheMu.Unlock()
+	if pendingCache != nil {
+		if err := pendingCache.CloseContext(retirementContext); err != nil {
+			return fmt.Errorf("previous cache retirement: %w", err)
+		}
+		cacheMu.Lock()
+		if retiringCache == pendingCache {
+			retiringCache = nil
+		}
+		cacheMu.Unlock()
+	}
+	return nil
+}
 
-	// Deliberately not started here. Run has to come after the consumers have
-	// registered: the contract implementations refuse a registration once the
-	// queue is running (storage.ErrQueueAlreadyStarted), and the legacy
-	// adapter this repository still goes through swallows that error rather
-	// than reporting it - its own comment says the interface gives it no way
-	// to tell the caller. Starting here and registering afterwards is
-	// therefore a race that loses consumers in silence. Whoever registers is
-	// the one that starts it.
+func retirePreviousGeneration(ctx context.Context, previousCache *ownedCache, previousQueue shutdowner, retirement *queueRetirement) {
+	if previousCache != nil {
+		retirementContext, cancelRetirement := context.WithTimeout(ctx, storageIOTimeout)
+		defer cancelRetirement()
+		if err := previousCache.CloseContext(retirementContext); err != nil {
+			logger.NewHelper(logger.Default()).Errorf("cache retirement: %v", err)
+		}
+		cacheMu.Lock()
+		select {
+		case <-previousCache.closeDone:
+			if retiringCache == previousCache {
+				retiringCache = nil
+			}
+		default:
+		}
+		cacheMu.Unlock()
+	}
+	if previousQueue != nil {
+		retirementContext, cancelRetirement := context.WithTimeout(ctx, storageIOTimeout)
+		defer cancelRetirement()
+		if err := retirement.wait(retirementContext); err != nil {
+			logger.NewHelper(logger.Default()).Errorf("queue retirement: %v", err)
+		}
+		queueMu.Lock()
+		select {
+		case <-retirement.done:
+			if retiringQueue == retirement {
+				retiringQueue = nil
+			}
+		default:
+		}
+		queueMu.Unlock()
+	}
+}
+
+// publishGeneration starts only the subscribed queue; shutdown retains its owner.
+func publishGeneration(ctx context.Context, cache *ownedCache, q corestorage.Queue) {
+	sdk.Runtime.SetCache(cache)
+	sdk.Runtime.SetQueue(q)
+	captcha.SetStore(captcha.NewCacheStore(ctx, cache, 10*time.Minute))
+	go func() {
+		if err := q.Run(ctx); err != nil && ctx.Err() == nil && !errors.Is(err, corestorage.ErrQueueClosed) {
+			logger.NewHelper(logger.Default()).Errorf("queue runner: %v", err)
+		}
+	}()
 }

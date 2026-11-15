@@ -17,7 +17,7 @@ type cronControl struct {
 	busy        chan struct{}
 	stopPending bool
 	started     bool
-	stopped     context.Context
+	stopped     context.Context //nolint:containedctx // Scheduler-owned lifecycle context; request contexts are never retained.
 }
 
 func (c *cronControl) run(ctx context.Context, fn func() error) error {
@@ -63,7 +63,7 @@ func (c *cronControl) execute(fn func() error, result chan<- error) {
 			if started {
 				stopped := c.cron.Stop()
 				c.mu.Lock()
-				c.stopped = stopped
+				c.stopped = stopped //nolint:fatcontext // Cron.Stop returns a completion signal, not a derived request context.
 				c.mu.Unlock()
 			}
 			continue

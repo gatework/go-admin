@@ -1,10 +1,12 @@
 package common
 
 import (
-	"github.com/gin-gonic/gin"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
+// GetClientIP returns the selected data.
 func GetClientIP(c *gin.Context) string {
 	// 优先从 X-Forwarded-For 获取 IP
 	ip := c.Request.Header.Get("X-Forwarded-For")

@@ -7,25 +7,25 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	contractmigration "github.com/go-admin-team/go-admin-core/v2/sdk/contract/migration"
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
+	contractmigration "github.com/gatework/motor-core/sdk/contract/migration"
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
 
-	"github.com/go-admin-team/example-app-order/models"
+	"github.com/gatework/motor/example/app-order/models"
 )
 
 // fakeSeeder stands in for a host's real Seeder (the one wt-shim, as of
 // this writing, never registers - see the accompanying report's gap list).
 // It records what it received instead of writing to any table, which is
 // enough to check app-order's own MenuSpec/ApiSpec assembly without
-// depending on go-admin's sys_menu/sys_api schema.
+// depending on motor's sys_menu/sys_api schema.
 type fakeSeeder struct {
 	appCode string
 	menus   []seed.MenuSpec
-	apis    []seed.ApiSpec
+	apis    []seed.APISpec
 }
 
-func (f *fakeSeeder) SeedMenus(tx *gorm.DB, appCode string, menus []seed.MenuSpec, apis []seed.ApiSpec) error {
+func (f *fakeSeeder) Menus(tx *gorm.DB, appCode string, menus []seed.MenuSpec, apis []seed.APISpec) error {
 	f.appCode = appCode
 	f.menus = menus
 	f.apis = apis
@@ -77,7 +77,7 @@ func TestMigrationCreatesTablesSeedsMenusAndRecordsItself(t *testing.T) {
 		t.Fatalf("open sqlite: %v", err)
 	}
 	// sys_migration itself is created by the framework's own first
-	// migration (go-admin's cmd/migrate/migration/version/*_tables.go),
+	// migration (motor's cmd/migrate/migration/version/*_tables.go),
 	// which by the time any app's migration runs has always already run -
 	// simulate that precondition rather than app-order's own migration
 	// creating a table it does not own.
@@ -121,7 +121,7 @@ func TestMigrationCreatesTablesSeedsMenusAndRecordsItself(t *testing.T) {
 // apps/<code>/ convention for a packaged page's Component (documented on
 // MenuSpec.Component, enforced by nothing - see the report) is actually
 // followed.
-func assertMenuGraphIsConsistent(t *testing.T, menus []seed.MenuSpec, apis []seed.ApiSpec) {
+func assertMenuGraphIsConsistent(t *testing.T, menus []seed.MenuSpec, apis []seed.APISpec) {
 	t.Helper()
 
 	codes := make(map[string]seed.MenuSpec, len(menus))
@@ -139,7 +139,7 @@ func assertMenuGraphIsConsistent(t *testing.T, menus []seed.MenuSpec, apis []see
 				t.Errorf("menu %q has Parent %q, which is not a Code in this batch", m.Code, m.Parent)
 			}
 		}
-		for _, ac := range m.ApiCodes {
+		for _, ac := range m.APICodes {
 			if !apiCodes[ac] {
 				t.Errorf("menu %q references ApiCode %q, which is not in this batch's apis", m.Code, ac)
 			}

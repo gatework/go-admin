@@ -6,8 +6,8 @@
 // (Create/Delete/Index/Update/ViewAction) can bind a request without
 // knowing its concrete type - Action itself calls req.Bind(c). app-order's
 // handlers (apis/order.go) call api.Api.Bind directly on the raw struct
-// instead, exactly as go-admin's own hand-written handlers do (see
-// app/admin/apis/sys_post.go and its service/dto/sys_post.go, which is the
+// instead, exactly as motor's own hand-written handlers do (see
+// app/admin/handler/sys_post.go and its service/dto/sys_post.go, which is the
 // same shape: plain structs, no Bind method), so a Bind method here would
 // never be called by anything and would only mislead a reader into thinking
 // it is.
@@ -19,7 +19,7 @@
 package dto
 
 import (
-	contractdto "github.com/go-admin-team/go-admin-core/v2/sdk/contract/dto"
+	contractdto "github.com/gatework/motor-core/sdk/contract/dto"
 )
 
 // OrderItemReq is one line item in a create-order request.
@@ -52,6 +52,6 @@ type OrderSearchReq struct {
 }
 
 // OrderIdReq binds a single :id, for a detail lookup or a Pay request.
-type OrderIdReq struct {
-	Id int `uri:"id" validate:"required"`
+type OrderIDReq struct {
+	ID int `uri:"id" validate:"required"`
 }

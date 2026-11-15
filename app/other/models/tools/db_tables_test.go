@@ -1,14 +1,17 @@
 package tools
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	config2 "github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
+
+	config2 "github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
-const generatorSchema = "go_admin_test"
+const generatorSchema = "motor_test"
 
 // newCandidateDB stands in for MySQL: sqlite is given an attached database
 // called information_schema so the same query runs, and sys_tables lives on the
@@ -40,14 +43,15 @@ func newCandidateDB(t *testing.T, tables ...string) *gorm.DB {
 		t.Fatalf("migrate sys_tables: %v", err)
 	}
 
-	previousDriver := config2.DatabaseConfig.Driver
-	previousName := config2.GenConfig.DBName
-	config2.DatabaseConfig.Driver = "mysql"
-	config2.GenConfig.DBName = generatorSchema
-	t.Cleanup(func() {
-		config2.DatabaseConfig.Driver = previousDriver
-		config2.GenConfig.DBName = previousName
+	testconfig.Apply(t, func(settings *config2.Config) {
+		settings.
+			Database.Driver = "mysql"
 	})
+	testconfig.Apply(t, func(settings *config2.Config) {
+		settings.
+			Gen.DBName = generatorSchema
+	})
+
 	return db
 }
 
@@ -65,12 +69,7 @@ func candidateNames(t *testing.T, db *gorm.DB) []string {
 }
 
 func contains(names []string, want string) bool {
-	for _, name := range names {
-		if name == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(names, want)
 }
 
 // An empty sys_tables must not filter everything out - that is what a bare

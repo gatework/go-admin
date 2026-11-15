@@ -1,13 +1,15 @@
 package version
 
 import (
-	"github.com/glebarez/sqlite"
-	admin "go-admin/app/admin/models"
-	"go-admin/app/wireless/models"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"path/filepath"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	admin "github.com/gatework/motor/app/admin/models"
+	models "github.com/gatework/motor/app/net/models/wireless"
 )
 
 func TestWirelessMigrationIsIdempotentAndReadCapabilitiesCannotWrite(t *testing.T) {
@@ -15,7 +17,7 @@ func TestWirelessMigrationIsIdempotentAndReadCapabilitiesCannotWrite(t *testing.
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = db.AutoMigrate(&admin.SysMenu{}, &admin.SysApi{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); e != nil {
+	if e = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); e != nil {
 		t.Fatal(e)
 	}
 	if e = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; e != nil {
@@ -24,7 +26,7 @@ func TestWirelessMigrationIsIdempotentAndReadCapabilitiesCannotWrite(t *testing.
 	if e = db.Create(&admin.SysRole{RoleName: "Admin", RoleKey: "admin"}).Error; e != nil {
 		t.Fatal(e)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if e = seedNetworkWireless(db); e != nil {
 			t.Fatal(e)
 		}
@@ -35,14 +37,14 @@ func TestWirelessMigrationIsIdempotentAndReadCapabilitiesCannotWrite(t *testing.
 		}
 	}
 	var menus []admin.SysMenu
-	if e = db.Where("permission LIKE ?", "network:wireless:%").Preload("SysApi").Find(&menus).Error; e != nil {
+	if e = db.Where("permission LIKE ?", "network:wireless:%").Preload("SysAPI").Find(&menus).Error; e != nil {
 		t.Fatal(e)
 	}
 	if len(menus) != 6 {
 		t.Fatal(len(menus))
 	}
 	for _, m := range menus {
-		for _, a := range m.SysApi {
+		for _, a := range m.SysAPI {
 			if (m.Permission == "network:wireless:list" || m.Permission == "network:wireless:query") && a.Action != "GET" {
 				t.Fatal("read grants write", m.Permission, a.Path)
 			}

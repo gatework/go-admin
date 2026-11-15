@@ -3,32 +3,32 @@ package version
 import (
 	"testing"
 
-	"go-admin/app/admin/models"
+	"github.com/gatework/motor/app/admin/models"
 )
 
 const (
-	roleUpdateMenuId = 226
-	jobEditMenuId    = 463
-	jobRemoveMenuId  = 464
+	roleUpdateMenuID = 226
+	jobEditMenuID    = 463
+	jobRemoveMenuID  = 464
 )
 
-func TestBindAuthzApisGrantsWhatARoleAlreadyHolds(t *testing.T) {
+func TestBindAuthzAPIsGrantsWhatARoleAlreadyHolds(t *testing.T) {
 	db := openGenMenuDB(t)
 	for _, m := range []models.SysMenu{
-		{MenuId: roleUpdateMenuId, MenuName: "修改角色", Permission: "admin:sysRole:update", MenuType: "F"},
-		{MenuId: jobEditMenuId, MenuName: "修改定时任务", Permission: "job:sysJob:edit", MenuType: "F"},
-		{MenuId: jobRemoveMenuId, MenuName: "删除定时任务", Permission: "job:sysJob:remove", MenuType: "F"},
+		{MenuID: roleUpdateMenuID, MenuName: "修改角色", Permission: "admin:sysRole:update", MenuType: "F"},
+		{MenuID: jobEditMenuID, MenuName: "修改定时任务", Permission: "job:sysJob:edit", MenuType: "F"},
+		{MenuID: jobRemoveMenuID, MenuName: "删除定时任务", Permission: "job:sysJob:remove", MenuType: "F"},
 	} {
 		if err := db.Create(&m).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	addRole(t, db, 2, "roleAdmin", roleUpdateMenuId)
-	addRole(t, db, 3, "jobEditor", jobEditMenuId)
-	addRole(t, db, 4, "jobRemover", jobRemoveMenuId)
+	addRole(t, db, 2, "roleAdmin", roleUpdateMenuID)
+	addRole(t, db, 3, "jobEditor", jobEditMenuID)
+	addRole(t, db, 4, "jobRemover", jobRemoveMenuID)
 	addRole(t, db, 5, "clerk")
 
-	if err := bindAuthzApis(db); err != nil {
+	if err := bindAuthzAPIs(db); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,29 +44,29 @@ func TestBindAuthzApisGrantsWhatARoleAlreadyHolds(t *testing.T) {
 	}
 }
 
-func TestBindAuthzApisReusesSeededRowAndIsIdempotent(t *testing.T) {
+func TestBindAuthzAPIsReusesSeededRowAndIsIdempotent(t *testing.T) {
 	db := openGenMenuDB(t)
-	if err := db.Create(&models.SysMenu{MenuId: roleUpdateMenuId, Permission: "admin:sysRole:update", MenuType: "F"}).Error; err != nil {
+	if err := db.Create(&models.SysMenu{MenuID: roleUpdateMenuID, Permission: "admin:sysRole:update", MenuType: "F"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	seeded := models.SysApi{Id: 153, Path: "/api/v1/role-status", Action: "PUT"}
+	seeded := models.SysAPI{ID: 153, Path: "/api/v1/role-status", Action: "PUT"}
 	if err := db.Create(&seeded).Error; err != nil {
 		t.Fatal(err)
 	}
-	addRole(t, db, 2, "roleAdmin", roleUpdateMenuId)
+	addRole(t, db, 2, "roleAdmin", roleUpdateMenuID)
 
-	for i := 0; i < 2; i++ {
-		if err := bindAuthzApis(db); err != nil {
+	for i := range 2 {
+		if err := bindAuthzAPIs(db); err != nil {
 			t.Fatalf("run %d: %v", i+1, err)
 		}
 	}
 
 	var n int64
-	db.Model(&models.SysApi{}).Where("path = ?", seeded.Path).Count(&n)
+	db.Model(&models.SysAPI{}).Where("path = ?", seeded.Path).Count(&n)
 	if n != 1 {
 		t.Errorf("%d rows for %s, want the seeded one only", n, seeded.Path)
 	}
-	if got := boundApis(t, db, roleUpdateMenuId); got != 1 {
+	if got := boundAPIs(t, db, roleUpdateMenuID); got != 1 {
 		t.Errorf("menu bound to %d APIs after two runs, want 1", got)
 	}
 	if got := policies(t, db, "roleAdmin"); len(got) != 1 {
@@ -74,13 +74,13 @@ func TestBindAuthzApisReusesSeededRowAndIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestBindAuthzApisSkipsMenusThatDoNotExist(t *testing.T) {
+func TestBindAuthzAPIsSkipsMenusThatDoNotExist(t *testing.T) {
 	db := openGenMenuDB(t)
-	if err := bindAuthzApis(db); err != nil {
+	if err := bindAuthzAPIs(db); err != nil {
 		t.Fatal(err)
 	}
 	var n int64
-	db.Model(&models.SysApi{}).Count(&n)
+	db.Model(&models.SysAPI{}).Count(&n)
 	if n != 0 {
 		t.Errorf("%d APIs created with no menu to bind, want 0", n)
 	}

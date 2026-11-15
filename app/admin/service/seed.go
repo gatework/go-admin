@@ -9,26 +9,27 @@ import (
 
 	"gorm.io/gorm"
 
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
 
-	"go-admin/app/admin/models"
+	"github.com/gatework/motor/app/admin/models"
 )
 
-// adminSeeder is go-admin's own implementation of seed.Seeder: it turns the
+// adminSeeder is motor's own implementation of seed.Seeder: it turns the
 // MenuSpec/ApiSpec values a third-party application asks for into rows
 // across the four tables a visible, working menu entry needs - sys_api,
 // sys_menu, sys_menu_api_rule, and sys_role_menu/casbin_rule - following the
 // same shape cmd/migrate/migration/version/1786700001000_demo_menu.go
 // already hand-writes for the host's own demo module.
 //
-// See go-admin-core's docs/contract.md, "Application-supplied menu and API
+// See motor-core's docs/contract.md, "Application-supplied menu and API
 // entries", for the requirements this satisfies, and the security note on
 // seed.Seeder for what this boundary does and does not protect against: an
 // application already holds the same *gorm.DB this receives and could write
 // sys_menu/sys_api/casbin_rule directly, bypassing this entirely.
 type adminSeeder struct{}
 
+//nolint:gochecknoinits // The host seals startup registries after these module declarations are loaded.
 func init() {
 	seed.RegisterSeeder(adminSeeder{})
 }
@@ -57,8 +58,9 @@ const (
 	menuSortMax = 127
 )
 
-func (adminSeeder) SeedMenus(tx *gorm.DB, appCode string, menus []seed.MenuSpec, apis []seed.ApiSpec) error {
-	apiRows, err := seedApis(tx, appCode, apis)
+// Menus performs the menus administration operation.
+func (adminSeeder) Menus(tx *gorm.DB, appCode string, menus []seed.MenuSpec, apis []seed.APISpec) error {
+	apiRows, err := seedAPIs(tx, appCode, apis)
 	if err != nil {
 		return fmt.Errorf("seed: app %q: apis: %w", appCode, err)
 	}
@@ -97,20 +99,20 @@ func (adminSeeder) SeedMenus(tx *gorm.DB, appCode string, menus []seed.MenuSpec,
 // single API by hand, and the ones 1786700008000_seed_natural_keys.go put a
 // unique index on. Before inserting, this looks for a live row (deleted_at
 // = 0, applied automatically by the soft-delete plugin on every query
-// against models.SysApi) already holding that key and reuses it instead of
+// against models.SysAPI) already holding that key and reuses it instead of
 // inserting a second one - see the design doc §1.6: a migration retried
 // after a partial failure previously re-ran this as a bare tx.Create and
 // produced duplicate rows on the demo site.
 //
 // Unlike seedMenuTree's reuse branch, this one has nothing left to repair
-// after finding an existing row: models.SysApi carries no association
-// (nothing like SysMenu's many2many SysApi field) and this function writes
+// after finding an existing row: models.SysAPI carries no association
+// (nothing like SysMenu's many2many SysAPI field) and this function writes
 // nothing beyond the row itself - no second statement comparable to
 // seedMenuTree's paths UPDATE follows tx.Create below. An interrupted retry
 // can therefore only ever find this row complete or not find it at all.
-func seedApis(tx *gorm.DB, appCode string, apis []seed.ApiSpec) (map[string]models.SysApi, error) {
+func seedAPIs(tx *gorm.DB, appCode string, apis []seed.APISpec) (map[string]models.SysAPI, error) {
 	seen := make(map[string]bool, len(apis))
-	rows := make(map[string]models.SysApi, len(apis))
+	rows := make(map[string]models.SysAPI, len(apis))
 	for _, a := range apis {
 		if a.Code == "" {
 			return nil, errors.New("ApiSpec.Code must not be empty")
@@ -120,7 +122,7 @@ func seedApis(tx *gorm.DB, appCode string, apis []seed.ApiSpec) (map[string]mode
 		}
 		seen[a.Code] = true
 
-		var existing models.SysApi
+		var existing models.SysAPI
 		err := tx.Where("app_code = ? AND path = ? AND action = ?", appCode, a.Path, a.Method).
 			First(&existing).Error
 		switch {
@@ -133,7 +135,7 @@ func seedApis(tx *gorm.DB, appCode string, apis []seed.ApiSpec) (map[string]mode
 			return nil, fmt.Errorf("api %q: checking for an existing row: %w", a.Code, err)
 		}
 
-		row := models.SysApi{
+		row := models.SysAPI{
 			Handle:  a.Handle,
 			Title:   a.Title,
 			Path:    a.Path,
@@ -159,122 +161,105 @@ func seedApis(tx *gorm.DB, appCode string, apis []seed.ApiSpec) (map[string]mode
 // spec whose Parent never resolves - naming a Code missing from this call,
 // or only reachable through a cycle - stops making progress and is reported
 // rather than looping forever.
-func seedMenuTree(tx *gorm.DB, appCode string, specs []seed.MenuSpec, apiRows map[string]models.SysApi) ([]int, error) {
-	byCode := make(map[string]seed.MenuSpec, len(specs))
-	for _, s := range specs {
-		if s.Code == "" {
-			return nil, errors.New("MenuSpec.Code must not be empty")
-		}
-		if _, dup := byCode[s.Code]; dup {
-			return nil, fmt.Errorf("duplicate MenuSpec.Code %q", s.Code)
-		}
-		if err := validateMenuSpec(s); err != nil {
-			return nil, fmt.Errorf("%q: %w", s.Code, err)
-		}
-		byCode[s.Code] = s
+func seedMenuTree(tx *gorm.DB, appCode string, specs []seed.MenuSpec, apiRows map[string]models.SysAPI) ([]int, error) {
+	byCode, err := indexMenuSpecs(specs)
+	if err != nil {
+		return nil, err
 	}
-
 	created := make(map[string]models.SysMenu, len(specs))
 	ids := make([]int, 0, len(specs))
-
 	for len(created) < len(specs) {
 		progressed := false
-		for _, s := range specs {
-			if _, done := created[s.Code]; done {
+		for _, spec := range specs {
+			if _, done := created[spec.Code]; done {
 				continue
 			}
-
-			// Resolved before the idempotency check below, whether or not
-			// this spec's own row turns out to already exist: repairing an
-			// existing-but-incomplete row's paths needs the parent's
-			// already-resolved Paths exactly as much as creating a fresh
-			// row does (see repairExistingMenu), so both have to wait for
-			// it the same way.
-			var parentRow models.SysMenu
-			if s.Parent != "" {
-				parent, ok := created[s.Parent]
-				if !ok {
-					if _, exists := byCode[s.Parent]; !exists {
-						return nil, fmt.Errorf("%q: Parent %q is not a Code in this call", s.Code, s.Parent)
-					}
-					continue // s.Parent exists but has not been created yet; retry next pass
-				}
-				parentRow = parent
+			row, ready, err := persistSeedMenu(tx, appCode, spec, byCode, created, apiRows)
+			if err != nil {
+				return nil, err
 			}
-
-			// Idempotency check: does this node already have a row, from
-			// an earlier, possibly-interrupted attempt? The natural key is
-			// (app_code, seed_code) - menu_name's PascalCase concatenation
-			// is not injective and cannot be used for this (see menuName's
-			// doc comment and the design doc §1.6). Only a live row counts;
-			// the soft-delete plugin scopes deleted_at = 0 automatically on
-			// every query against models.SysMenu.
-			var existing models.SysMenu
-			found := false
-			err := tx.Where("app_code = ? AND seed_code = ?", appCode, s.Code).First(&existing).Error
-			switch {
-			case err == nil:
-				found = true
-			case errors.Is(err, gorm.ErrRecordNotFound):
-				// Nothing under the natural key. It may still be here from
-				// before seed_code existed, under the name that identified
-				// it then.
-				existing, found, err = adoptLegacyMenu(tx, appCode, s)
-				if err != nil {
-					return nil, fmt.Errorf("%q: %w", s.Code, err)
-				}
-			default:
-				return nil, fmt.Errorf("%q: checking for an existing row: %w", s.Code, err)
-			}
-			if found {
-				row, err := repairExistingMenu(tx, existing, appCode, s, parentRow, apiRows)
-				if err != nil {
-					return nil, fmt.Errorf("%q: repairing an existing row: %w", s.Code, err)
-				}
-				created[s.Code] = row
-				ids = append(ids, row.MenuId)
-				progressed = true
+			if !ready {
 				continue
 			}
-
-			row := menuRowFor(appCode, s, parentRow)
-			for _, code := range s.ApiCodes {
-				api, ok := apiRows[code]
-				if !ok {
-					return nil, fmt.Errorf("%q: ApiCodes references %q, which is not an ApiSpec.Code in this call", s.Code, code)
-				}
-				// The full row, not just {Id: api.Id}: gorm's many2many
-				// association save upserts an associated row whose primary
-				// key is already set, so a stub carrying only Id would
-				// overwrite every other column of an sys_api row this same
-				// call just wrote with zero values.
-				row.SysApi = append(row.SysApi, api)
-			}
-
-			if err := tx.Create(&row).Error; err != nil {
-				return nil, fmt.Errorf("%q: %w", s.Code, err)
-			}
-
-			// paths is a materialized path from the root ("/0"), built from
-			// ids that only exist once the row above is created - the same
-			// two-step create-then-update 1786700001000_demo_menu.go's
-			// hand-assigned ids let it do in one literal, sequenced here
-			// instead.
-			row.Paths = expectedPaths(row.MenuId, s.Parent, parentRow)
-			if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", row.MenuId).
-				Update("paths", row.Paths).Error; err != nil {
-				return nil, fmt.Errorf("%q: writing paths: %w", s.Code, err)
-			}
-
-			created[s.Code] = row
-			ids = append(ids, row.MenuId)
+			created[spec.Code] = row
+			ids = append(ids, row.MenuID)
 			progressed = true
 		}
 		if !progressed {
-			return nil, fmt.Errorf("unresolved Parent reference(s) among %d remaining spec(s); check for a cycle", len(specs)-len(created))
+			return nil, fmt.Errorf("unresolved parent reference(s) among %d remaining spec(s); check for a cycle", len(specs)-len(created))
 		}
 	}
 	return ids, nil
+}
+
+func indexMenuSpecs(specs []seed.MenuSpec) (map[string]seed.MenuSpec, error) {
+	byCode := make(map[string]seed.MenuSpec, len(specs))
+	for _, spec := range specs {
+		if spec.Code == "" {
+			return nil, errors.New("menu spec code must not be empty")
+		}
+		if _, duplicate := byCode[spec.Code]; duplicate {
+			return nil, fmt.Errorf("duplicate MenuSpec.Code %q", spec.Code)
+		}
+		if err := validateMenuSpec(spec); err != nil {
+			return nil, fmt.Errorf("%q: %w", spec.Code, err)
+		}
+		byCode[spec.Code] = spec
+	}
+	return byCode, nil
+}
+
+func persistSeedMenu(tx *gorm.DB, appCode string, spec seed.MenuSpec, byCode map[string]seed.MenuSpec, created map[string]models.SysMenu, apiRows map[string]models.SysAPI) (models.SysMenu, bool, error) {
+	var parentRow models.SysMenu
+	if spec.Parent != "" {
+		parent, ready := created[spec.Parent]
+		if !ready {
+			if _, exists := byCode[spec.Parent]; !exists {
+				return models.SysMenu{}, false, fmt.Errorf("%q: Parent %q is not a Code in this call", spec.Code, spec.Parent)
+			}
+			return models.SysMenu{}, false, nil
+		}
+		parentRow = parent
+	}
+	existing, found, err := findSeedMenu(tx, appCode, spec)
+	if err != nil {
+		return models.SysMenu{}, false, fmt.Errorf("%q: %w", spec.Code, err)
+	}
+	if found {
+		row, err := repairExistingMenu(tx, existing, appCode, spec, parentRow, apiRows)
+		if err != nil {
+			return models.SysMenu{}, false, fmt.Errorf("%q: repairing an existing row: %w", spec.Code, err)
+		}
+		return row, true, nil
+	}
+	row := menuRowFor(appCode, spec, parentRow)
+	for _, code := range spec.APICodes {
+		api, exists := apiRows[code]
+		if !exists {
+			return models.SysMenu{}, false, fmt.Errorf("%q: ApiCodes references %q, which is not an ApiSpec.Code in this call", spec.Code, code)
+		}
+		row.SysAPI = append(row.SysAPI, api)
+	}
+	if err := tx.Create(&row).Error; err != nil {
+		return models.SysMenu{}, false, fmt.Errorf("%q: %w", spec.Code, err)
+	}
+	row.Paths = expectedPaths(row.MenuID, spec.Parent, parentRow)
+	if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", row.MenuID).Update("paths", row.Paths).Error; err != nil {
+		return models.SysMenu{}, false, fmt.Errorf("%q: writing paths: %w", spec.Code, err)
+	}
+	return row, true, nil
+}
+
+func findSeedMenu(tx *gorm.DB, appCode string, spec seed.MenuSpec) (models.SysMenu, bool, error) {
+	var row models.SysMenu
+	err := tx.Where("app_code = ? AND seed_code = ?", appCode, spec.Code).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return adoptLegacyMenu(tx, appCode, spec)
+	}
+	if err != nil {
+		return row, false, fmt.Errorf("checking for an existing row: %w", err)
+	}
+	return row, true, nil
 }
 
 // expectedPaths is the materialized path a fresh insert of menuID under
@@ -292,7 +277,7 @@ func expectedPaths(menuID int, parent string, parentRow models.SysMenu) string {
 // to what a fresh insert of the same spec would have produced.
 //
 // A row can be found and still be incomplete: tx.Create's own association
-// write (the sys_menu_api_rule bindings from row.SysApi) and the paths
+// write (the sys_menu_api_rule bindings from row.SysAPI) and the paths
 // UPDATE that follows it are each their own statement, and design doc §1.5
 // establishes that nothing after the first DDL in a migration function can
 // be rolled back together - a process interrupted between the row insert
@@ -336,7 +321,7 @@ func expectedPaths(menuID int, parent string, parentRow models.SysMenu) string {
 // here just as much as it does there. Reconciling stale seed-driven
 // bindings, if it is ever wanted, belongs in the upgrade path with that
 // same ownership check - not silently inside every retry of every install.
-func repairExistingMenu(tx *gorm.DB, existing models.SysMenu, appCode string, s seed.MenuSpec, parentRow models.SysMenu, apiRows map[string]models.SysApi) (models.SysMenu, error) {
+func repairExistingMenu(tx *gorm.DB, existing models.SysMenu, appCode string, s seed.MenuSpec, parentRow models.SysMenu, apiRows map[string]models.SysAPI) (models.SysMenu, error) {
 	// Every column the spec decides, not just the two this used to touch. A
 	// menu whose parent was removed and reseeded kept parent_id pointing at
 	// the dead row while its paths named the new one, and the tree is built
@@ -345,11 +330,11 @@ func repairExistingMenu(tx *gorm.DB, existing models.SysMenu, appCode string, s 
 	// moved its component between versions had its change silently ignored
 	// for the same reason: nothing here wrote those columns.
 	want := menuRowFor(appCode, s, parentRow)
-	if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", existing.MenuId).
+	if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", existing.MenuID).
 		Select(specMenuFields).Updates(want).Error; err != nil {
 		return models.SysMenu{}, fmt.Errorf("bringing the row up to the spec: %w", err)
 	}
-	want.MenuId = existing.MenuId
+	want.MenuID = existing.MenuID
 	want.Paths = existing.Paths
 	want.Visible, want.IsFrame = existing.Visible, existing.IsFrame
 
@@ -358,14 +343,14 @@ func repairExistingMenu(tx *gorm.DB, existing models.SysMenu, appCode string, s 
 	}
 	existing = want
 
-	for _, code := range s.ApiCodes {
+	for _, code := range s.APICodes {
 		api, ok := apiRows[code]
 		if !ok {
 			return models.SysMenu{}, fmt.Errorf("ApiCodes references %q, which is not an ApiSpec.Code in this call", code)
 		}
 		if err := tx.Exec(
 			"INSERT INTO sys_menu_api_rule (sys_menu_menu_id, sys_api_id) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM sys_menu_api_rule WHERE sys_menu_menu_id = ? AND sys_api_id = ?)",
-			existing.MenuId, api.Id, existing.MenuId, api.Id,
+			existing.MenuID, api.ID, existing.MenuID, api.ID,
 		).Error; err != nil {
 			return models.SysMenu{}, fmt.Errorf("binding %q: %w", code, err)
 		}
@@ -382,10 +367,10 @@ func validateMenuSpec(s seed.MenuSpec) error {
 	switch s.Kind {
 	case contractmodels.Directory, contractmodels.Menu, contractmodels.Button:
 	default:
-		return fmt.Errorf("Kind %q is not one of Directory/Menu/Button", s.Kind)
+		return fmt.Errorf("kind %q is not one of Directory/Menu/Button", s.Kind)
 	}
 	if s.Sort < menuSortMin || s.Sort > menuSortMax {
-		return fmt.Errorf("Sort %d does not fit sys_menu.sort's tinyint column (%d..%d)", s.Sort, menuSortMin, menuSortMax)
+		return fmt.Errorf("sort %d does not fit sys_menu.sort's tinyint column (%d..%d)", s.Sort, menuSortMin, menuSortMax)
 	}
 	return nil
 }
@@ -415,7 +400,7 @@ func pascalCase(s string) string {
 }
 
 // grantToAdminRole is sys_role_menu and casbin_rule: the two tables
-// go-admin-core's contract.md requires alongside sys_menu/sys_api, without
+// motor-core's contract.md requires alongside sys_menu/sys_api, without
 // which a seeded menu is invisible to every role and its apis are
 // authorized for no one.
 //
@@ -426,7 +411,7 @@ func pascalCase(s string) string {
 // framework migration sorts before every app-prefixed one - means that
 // should not happen in practice, but failing this call over it would be
 // worse than a menu with no grant yet.
-func grantToAdminRole(tx *gorm.DB, appCode string, menuIDs []int, apiRows map[string]models.SysApi) error {
+func grantToAdminRole(tx *gorm.DB, appCode string, menuIDs []int, apiRows map[string]models.SysAPI) error {
 	var role models.SysRole
 	if err := tx.Where("role_key = ?", adminRoleKey).First(&role).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -438,7 +423,7 @@ func grantToAdminRole(tx *gorm.DB, appCode string, menuIDs []int, apiRows map[st
 	for _, id := range menuIDs {
 		if err := tx.Exec(
 			"INSERT INTO sys_role_menu (role_id, menu_id) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM sys_role_menu WHERE role_id = ? AND menu_id = ?)",
-			role.RoleId, id, role.RoleId, id,
+			role.RoleID, id, role.RoleID, id,
 		).Error; err != nil {
 			return err
 		}
@@ -521,7 +506,7 @@ func menuRowFor(appCode string, s seed.MenuSpec, parentRow models.SysMenu) model
 		Path:       s.Path,
 		MenuType:   s.Kind,
 		Permission: s.Permission,
-		ParentId:   parentRow.MenuId,
+		ParentID:   parentRow.MenuID,
 		Component:  s.Component,
 		Sort:       s.Sort,
 		// Visible "0" is shown, not hidden - the same defaults
@@ -546,7 +531,7 @@ func menuRowFor(appCode string, s seed.MenuSpec, parentRow models.SysMenu) model
 // The predicate is the row itself or a row strictly under it, rather than
 // `paths LIKE old || '%'`, which also matches /0/10 when old is /0/1.
 func repairPaths(tx *gorm.DB, row *models.SysMenu, s seed.MenuSpec, parentRow models.SysMenu) error {
-	want := expectedPaths(row.MenuId, s.Parent, parentRow)
+	want := expectedPaths(row.MenuID, s.Parent, parentRow)
 	old := row.Paths
 	if old == want {
 		return nil
@@ -555,7 +540,7 @@ func repairPaths(tx *gorm.DB, row *models.SysMenu, s seed.MenuSpec, parentRow mo
 		// A row whose paths was never written - an interrupted create. It
 		// has no subtree to speak of, and `LIKE '/%'` would match the whole
 		// table.
-		if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", row.MenuId).
+		if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", row.MenuID).
 			Update("paths", want).Error; err != nil {
 			return fmt.Errorf("writing paths: %w", err)
 		}
@@ -569,9 +554,9 @@ func repairPaths(tx *gorm.DB, row *models.SysMenu, s seed.MenuSpec, parentRow mo
 	}
 	for _, d := range subtree {
 		moved := want + strings.TrimPrefix(d.Paths, old)
-		if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", d.MenuId).
+		if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", d.MenuID).
 			Update("paths", moved).Error; err != nil {
-			return fmt.Errorf("moving %d from %s to %s: %w", d.MenuId, d.Paths, moved, err)
+			return fmt.Errorf("moving %d from %s to %s: %w", d.MenuID, d.Paths, moved, err)
 		}
 	}
 	row.Paths = want
@@ -612,7 +597,7 @@ func adoptLegacyMenu(tx *gorm.DB, appCode string, s seed.MenuSpec) (models.SysMe
 	}
 
 	seedCode := s.Code
-	if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", rows[0].MenuId).
+	if err := tx.Model(&models.SysMenu{}).Where("menu_id = ?", rows[0].MenuID).
 		Update("seed_code", seedCode).Error; err != nil {
 		return models.SysMenu{}, false, fmt.Errorf("claiming the row written before seed_code existed: %w", err)
 	}

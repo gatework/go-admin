@@ -1,6 +1,6 @@
 # 无线管理：功能、证据与 API 契约
 
-本模块在 Go Admin 中实现 CLI 优先的无线管理闭环。验收证据见前端 `docs/WIRELESS_VALIDATION.md`；功能实现、离线测试、本地服务就绪和真实设备验证分别记录。所有路径以 `/api/v1/network-wireless` 为前缀，沿用 Go Admin 响应包装及分页（`data.list`、`data.count`、`data.pageIndex`、`data.pageSize`），控制器 ID 为网络设备 ID，AP 路径中的 ID 为持久化资源 ID；业务 `apId`、`radioId`、BSSID 保留字符串。
+本模块在 motor 中实现 CLI 优先的无线管理闭环。验收证据见前端 `docs/WIRELESS_VALIDATION.md`；功能实现、离线测试、本地服务就绪和真实设备验证分别记录。所有路径以 `/api/v1/network-wireless` 为前缀，沿用 motor 响应包装及分页（`data.list`、`data.count`、`data.pageIndex`、`data.pageSize`），控制器 ID 为网络设备 ID，AP 路径中的 ID 为持久化资源 ID；业务 `apId`、`radioId`、BSSID 保留字符串。
 
 | 方法 | 路径 | 作用 | 权限 |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ Go 原生调用 GitHub 固定版本的 go-wireless Collector/adapter，无 Ruby 
 
 源码参照 `Works/ruby/motor/backend/app/controllers/motor/wireless_controller.rb`、`services/motor/wireless/{inventory,detail_inventory,runtime_analysis,spreadsheet,neighbors}.rb` 和前端无线模块。
 
-| Ruby 业务能力 | 本轮 Go Admin 实现 |
+| Ruby 业务能力 | 本轮 motor 实现 |
 | --- | --- |
 | 控制器/AP/射频/BSS/客户端台账 | 复用库存控制器，稳定资源 ID、分组筛选、列表/详情、跨控制器定位 |
 | 运行分析与证据 | 四类检查结果、完整性/时效/来源、SSID 分布；未扩展未经验证的 RF 阈值 |

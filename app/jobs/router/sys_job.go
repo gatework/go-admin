@@ -2,14 +2,16 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"go-admin/app/jobs/apis"
-	models2 "go-admin/app/jobs/models"
-	dto2 "go-admin/app/jobs/service/dto"
-	"go-admin/common/actions"
-	"go-admin/common/middleware"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor/app/jobs/handler"
+	models2 "github.com/gatework/motor/app/jobs/models"
+	dto2 "github.com/gatework/motor/app/jobs/service/dto"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/middleware"
 )
 
+//nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
 	routerCheckRole = append(routerCheckRole, registerSysJobRouter)
 }
@@ -22,16 +24,16 @@ func registerSysJobRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlew
 		r.GET("", actions.PermissionAction(), actions.Index[models2.SysJob, dto2.SysJobSearch]())
 		// The detail answers SysJobItem, whose entryId the edit form reads;
 		// the model itself marshals it as entry_id.
-		r.GET("/:id", actions.PermissionAction(), actions.ViewAs[models2.SysJob, dto2.SysJobById, dto2.SysJobItem]())
-		r.POST("", apis.ReconcileWrites, actions.Create[models2.SysJob, dto2.SysJobControl]())
-		r.PUT("", actions.PermissionAction(), apis.ReconcileWrites, actions.Update[models2.SysJob, dto2.SysJobControl]())
-		r.DELETE("", actions.PermissionAction(), apis.ReconcileWrites, actions.Delete[models2.SysJob, dto2.SysJobById]())
+		r.GET("/:id", actions.PermissionAction(), actions.ViewAs[models2.SysJob, dto2.SysJobByID, dto2.SysJobItem]())
+		r.POST("", handler.ReconcileWrites, actions.Create[models2.SysJob, dto2.SysJobControl]())
+		r.PUT("", actions.PermissionAction(), handler.ReconcileWrites, actions.Update[models2.SysJob, dto2.SysJobControl]())
+		r.DELETE("", actions.PermissionAction(), handler.ReconcileWrites, actions.Delete[models2.SysJob, dto2.SysJobByID]())
 	}
-	sysJob := apis.SysJob{}
+	sysJob := handler.Job{}
 
 	r2 := v1.Group("/job").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	{
-		r2.GET("/remove/:id", sysJob.RemoveJobForService)
-		r2.GET("/start/:id", sysJob.StartJobForService)
+		r2.GET("/remove/:id", sysJob.Stop)
+		r2.GET("/start/:id", sysJob.Start)
 	}
 }

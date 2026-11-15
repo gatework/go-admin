@@ -30,19 +30,19 @@ func deployWith(containerExtra, podExtra string) string {
 apiVersion: v1
 kind: Service
 metadata:
-  name: go-admin
+  name: motor
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: go-admin-v1
+  name: motor-v1
 spec:
   replicas: 1
   template:
     spec:
       containers:
-      - name: go-admin
-        image: go-admin
+      - name: motor
+        image: motor
 ` + containerExtra + podExtra
 }
 
@@ -264,12 +264,12 @@ func TestDockerStopAgainstTheShutdownBudget(t *testing.T) {
 			// deadline that exists as missing, and push whoever fixed that
 			// towards a flag that is on its way out.
 			name:   "the deprecated spelling still counts",
-			script: "docker stop --time 30 go-admin\n",
+			script: "docker stop --time 30 motor\n",
 			want:   -1,
 		},
 		{
 			name:   "the short form counts too",
-			script: "docker stop -t 30 go-admin\n",
+			script: "docker stop -t 30 motor\n",
 			want:   -1,
 		},
 		{
@@ -283,7 +283,7 @@ func TestDockerStopAgainstTheShutdownBudget(t *testing.T) {
 		},
 		{
 			name:     "shorter than the shutdown",
-			script:   "docker stop --timeout 5 go-admin\n",
+			script:   "docker stop --timeout 5 motor\n",
 			want:     Error,
 			contains: "allows 5 seconds and this shutdown takes 8",
 		},
@@ -291,25 +291,25 @@ func TestDockerStopAgainstTheShutdownBudget(t *testing.T) {
 			// Quoted back in the spelling that was written, so the message
 			// cannot misreport the line it is pointing at.
 			name:     "the message quotes the flag that was used",
-			script:   "docker stop -t 5 go-admin\n",
+			script:   "docker stop -t 5 motor\n",
 			want:     Error,
 			contains: "`docker stop -t 5`",
 		},
 		{
 			name:   "longer than the shutdown but inside the margin",
-			script: "docker stop --timeout=10 go-admin\n",
+			script: "docker stop --timeout=10 motor\n",
 			want:   Warn,
 		},
 		{
 			name:   "exactly the margin",
-			script: "docker stop --timeout 13 go-admin\n",
+			script: "docker stop --timeout 13 motor\n",
 			want:   -1,
 		},
 		{
 			// The settings file describes `docker stop` in prose right beside
 			// the budget this check reads.
 			name:   "a commented-out command is not one that runs",
-			script: "# docker stop go-admin\n",
+			script: "# docker stop motor\n",
 			want:   -1,
 		},
 	} {
@@ -358,24 +358,24 @@ func TestComposeStopGraceAgainstTheShutdownBudget(t *testing.T) {
 	}{
 		{
 			name:    "generous",
-			service: "  api:\n    image: go-admin:latest\n    stop_grace_period: 30s\n",
+			service: "  api:\n    image: motor:latest\n    stop_grace_period: 30s\n",
 			want:    -1,
 		},
 		{
 			name:     "not set at all",
-			service:  "  api:\n    image: go-admin:latest\n",
+			service:  "  api:\n    image: motor:latest\n",
 			want:     Error,
 			contains: "Set stop_grace_period: 13s",
 		},
 		{
 			name:     "shorter than the shutdown",
-			service:  "  api:\n    image: go-admin:latest\n    stop_grace_period: 5s\n",
+			service:  "  api:\n    image: motor:latest\n    stop_grace_period: 5s\n",
 			want:     Error,
 			contains: "stop_grace_period on service api allows 5 seconds",
 		},
 		{
 			name:    "longer than the shutdown but inside the margin",
-			service: "  api:\n    image: go-admin:latest\n    stop_grace_period: 10s\n",
+			service: "  api:\n    image: motor:latest\n    stop_grace_period: 10s\n",
 			want:    Warn,
 		},
 		{
@@ -383,7 +383,7 @@ func TestComposeStopGraceAgainstTheShutdownBudget(t *testing.T) {
 			// that only read the digits would call 1m30s ninety times too
 			// short.
 			name:    "minutes and seconds",
-			service: "  api:\n    image: go-admin:latest\n    stop_grace_period: 1m30s\n",
+			service: "  api:\n    image: motor:latest\n    stop_grace_period: 1m30s\n",
 			want:    -1,
 		},
 		{

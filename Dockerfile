@@ -1,4 +1,4 @@
-FROM golang:1.27.2-alpine AS nexttrace
+FROM golang:1.27.4-alpine AS nexttrace
 ARG NEXTTRACE_VERSION=v1.7.4
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -32,9 +32,8 @@ RUN apk add --no-cache ca-certificates tzdata libc6-compat iputils mtr tracerout
 COPY --from=nexttrace /tools/NTrace-core /usr/local/bin/nexttrace
 ENV TZ Asia/Shanghai
 
-COPY ./main /main
-COPY ./config/settings.demo.yml /config/settings.yml
-COPY ./go-admin-db.db /go-admin-db.db
+COPY ./motor /motor
+COPY ./config/settings.docker.yml /config/settings.yml
 EXPOSE 8000
-RUN  chmod +x /main
-CMD ["/main","server","-c", "/config/settings.yml"]
+RUN  chmod +x /motor
+CMD ["/motor","server","-c", "/config/settings.yml"]

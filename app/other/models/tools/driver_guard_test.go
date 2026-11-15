@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 func TestCodegenModelsRefuseUnsupportedOrMissingConnections(t *testing.T) {
@@ -19,9 +21,12 @@ func TestCodegenModelsRefuseUnsupportedOrMissingConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { pool.Close() })
-	previous := config.DatabaseConfig.Driver
-	config.DatabaseConfig.Driver = "mysql" // A global setting cannot enable another connection's dialect.
-	t.Cleanup(func() { config.DatabaseConfig.Driver = previous })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Database.Driver = "mysql"
+	}) // A global setting cannot enable another connection's dialect.
+
 	calls := map[string]func(*gorm.DB) error{
 		"tables page":  func(db *gorm.DB) error { _, _, err := new(DBTables).GetPage(db, 10, 1); return err },
 		"table":        func(db *gorm.DB) error { _, err := (&DBTables{TableName: "x"}).Get(db); return err },

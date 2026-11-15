@@ -1,6 +1,6 @@
 // Package service is app-order's business logic: everything the PRD asked
 // this example to prove out by hand rather than by wiring up core's generic
-// CRUD Actions (Create/Delete/Index/Update/ViewAction stay in go-admin, not
+// CRUD Actions (Create/Delete/Index/Update/ViewAction stay in motor, not
 // in core - see contract/actions's package doc for why). An order's write
 // path is a cross-table transaction and its one state change needs a
 // concurrency guard neither generic Action was ever built for, which is
@@ -14,28 +14,33 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	contractdto "github.com/go-admin-team/go-admin-core/v2/sdk/contract/dto"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/contract/actions"
+	contractdto "github.com/gatework/motor-core/sdk/contract/dto"
+	"github.com/gatework/motor-core/sdk/service"
 
-	"github.com/go-admin-team/example-app-order/models"
-	orderdto "github.com/go-admin-team/example-app-order/service/dto"
+	"github.com/gatework/motor/example/app-order/models"
+	orderdto "github.com/gatework/motor/example/app-order/service/dto"
 )
 
-// ErrOrderEmpty is returned by Create when the request has no line items.
-var ErrOrderEmpty = errors.New("app-order: an order must have at least one item")
+// OrderEmptyErr is returned by Create when the request has no line items.
+//
+//revive:disable-next-line:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
+var OrderEmptyErr = errors.New("app-order: an order must have at least one item")
 
-// ErrOrderNotPending is returned by Pay when the order could not be paid:
+// OrderNotPendingErr is returned by Pay when the order could not be paid:
 // it does not exist, it is not in models.StatusPending, or the caller's
 // data scope does not include it. Deliberately one error for all three -
 // see Pay's doc comment for why collapsing them is the fail-closed choice,
 // not a shortcut.
-var ErrOrderNotPending = errors.New("app-order: order is not awaiting payment")
+//
+//revive:disable-next-line:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
+var OrderNotPendingErr = errors.New("app-order: order is not awaiting payment")
 
 // Order is app-order's hand-written service. It embeds core's
 // sdk/service.Service purely for the Orm/Log/Cache fields every
-// api.Api.MakeService caller already wires up the same way go-admin's own
-// hand-written services do (see app/admin/apis/sys_post.go) - not because
+// api.Api.MakeService caller already wires up the same way motor's own
+// hand-written services do (see app/admin/handler/sys_post.go) - not because
 // anything here calls a method Service defines.
 type Order struct {
 	service.Service
@@ -45,13 +50,13 @@ type Order struct {
 // together: db.Transaction's closure form is what makes that true even
 // across a panic (it recovers, rolls back, and re-panics - see gorm's own
 // Transaction implementation), unlike the hand-rolled Begin/defer pattern
-// go-admin's sys_role.go/sys_dept.go/sys_menu.go/sys_tables.go use, which
+// motor's sys_role.go/sys_dept.go/sys_menu.go/sys_tables.go use, which
 // commits a half-written transaction on panic, never opens a real
 // transaction under sqlite, and reads a single global DB handle regardless
 // of which tenant the request is for.
-func (e *Order) Create(req *orderdto.OrderCreateReq, userId int) (*models.Order, error) {
+func (e *Order) Create(req *orderdto.OrderCreateReq, userID int) (*models.Order, error) {
 	if len(req.Items) == 0 {
-		return nil, ErrOrderEmpty
+		return nil, OrderEmptyErr
 	}
 
 	items := make([]models.OrderItem, 0, len(req.Items))
@@ -67,19 +72,19 @@ func (e *Order) Create(req *orderdto.OrderCreateReq, userId int) (*models.Order,
 
 	order := &models.Order{
 		OrderNo:    generateOrderNo(),
-		UserId:     userId,
+		UserID:     userID,
 		Status:     models.StatusPending,
 		TotalCents: total,
 	}
-	order.SetCreateBy(userId)
-	order.SetUpdateBy(userId)
+	order.SetCreateBy(userID)
+	order.SetUpdateBy(userID)
 
-	err := e.Orm.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(order).Error; err != nil {
 			return err
 		}
 		for i := range items {
-			items[i].OrderId = order.Id
+			items[i].OrderID = order.ID
 		}
 		// A single batch Create, not one Create per item: on the unique
 		// (order_id, product_name) violation the test suite exercises, the
@@ -101,8 +106,8 @@ func (e *Order) Create(req *orderdto.OrderCreateReq, userId int) (*models.Order,
 
 // Get loads one order, scoped to p's data permission, with its items.
 func (e *Order) Get(id int, p *actions.DataPermission, out *models.Order) error {
-	return e.Orm.
-		Scopes(actions.Permission(orderTableName, p)).
+	return e.DB.
+		Scopes(actions.Permission(orderTableName, p, func() bool { return config.Current().Settings.Application.EnableDP })).
 		Preload("Items").
 		Where("id = ?", id).
 		First(out).Error
@@ -110,7 +115,7 @@ func (e *Order) Get(id int, p *actions.DataPermission, out *models.Order) error 
 
 // GetPage lists orders visible to p's data scope, filtered by req's search
 // tags and paginated. The Find-then-Count-on-the-same-chain shape mirrors
-// go-admin's own common/actions.IndexAction: Limit(-1).Offset(-1) undoes
+// motor's own common/actions.IndexAction: Limit(-1).Offset(-1) undoes
 // Paginate's LIMIT/OFFSET before the count runs, on the same *gorm.DB
 // session, so the WHERE clause built by MakeCondition and Permission is not
 // re-resolved a second time.
@@ -119,11 +124,11 @@ func (e *Order) GetPage(req *orderdto.OrderSearchReq, p *actions.DataPermission,
 	// *req, not req: contractdto.MakeCondition resolves search tags through
 	// reflect.TypeOf(q).NumField(), which panics on a pointer. See
 	// service/dto/order.go's doc comment on OrderSearchReq.
-	err := e.Orm.Model(&models.Order{}).
+	err := e.DB.Model(&models.Order{}).
 		Scopes(
 			contractdto.MakeCondition(*req),
 			contractdto.Paginate(req.GetPageSize(), req.GetPageIndex()),
-			actions.Permission(orderTableName, p),
+			actions.Permission(orderTableName, p, func() bool { return config.Current().Settings.Application.EnableDP }),
 		).
 		Find(list).Limit(-1).Offset(-1).
 		Count(&count).Error
@@ -137,7 +142,7 @@ func (e *Order) GetPage(req *orderdto.OrderSearchReq, p *actions.DataPermission,
 // UPDATE, but only the one that actually flips a row from pending to paid
 // sees RowsAffected == 1 - the loser's WHERE matches nothing (the row is
 // already 'paid' by the time its UPDATE runs) and sees 0, becoming
-// ErrOrderNotPending rather than a second, silently-accepted payment.
+// OrderNotPendingErr rather than a second, silently-accepted payment.
 //
 // The same RowsAffected==0 outcome also covers "no such order" and "this
 // order exists but is outside p's data scope" - actions.Permission's own
@@ -147,8 +152,8 @@ func (e *Order) GetPage(req *orderdto.OrderSearchReq, p *actions.DataPermission,
 // not yours" response would leak which order ids exist to a caller who
 // should not be able to tell.
 func (e *Order) Pay(id int, p *actions.DataPermission) error {
-	result := e.Orm.
-		Scopes(actions.Permission(orderTableName, p)).
+	result := e.DB.
+		Scopes(actions.Permission(orderTableName, p, func() bool { return config.Current().Settings.Application.EnableDP })).
 		Model(&models.Order{}).
 		Where("id = ? AND status = ?", id, models.StatusPending).
 		Updates(map[string]interface{}{"status": models.StatusPaid})
@@ -156,7 +161,7 @@ func (e *Order) Pay(id int, p *actions.DataPermission) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return ErrOrderNotPending
+		return OrderNotPendingErr
 	}
 	return nil
 }

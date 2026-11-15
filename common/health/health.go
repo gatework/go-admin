@@ -1,6 +1,6 @@
 // Package health answers whether this process should be sent traffic.
 //
-// The two questions an orchestrator asks are not the same one, and go-admin
+// The two questions an orchestrator asks are not the same one, and motor
 // answers them at two endpoints:
 //
 //   - /health is liveness: is the process there at all. It stays a bare 200,
@@ -45,8 +45,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
+	"github.com/gatework/motor-core/sdk"
 )
 
 // draining is set when the process starts shutting down.
@@ -121,7 +120,7 @@ func registered() []namedCheck {
 
 // Ready asks every dependency this process cannot serve a request without.
 //
-// The queue is deliberately absent. Nothing on AdapterQueue answers "are you
+// The queue is deliberately absent. Nothing on Queue answers "are you
 // reachable" without publishing something, the memory backend cannot fail, and
 // a queue that is down degrades logging rather than stopping requests - which
 // is a reason to alert, not a reason to leave the load balancer pool.
@@ -136,17 +135,7 @@ func Ready(ctx context.Context) []Check {
 	return checks
 }
 
-// safely turns a panic into a failed check.
-//
-// Not defensive habit: the accessors hand back wrappers, not the resources.
-// sdk.Runtime.GetCacheAdapter builds a runtime.Cache around whatever is
-// configured and returns it even when nothing is - so the value is not nil, the
-// cache inside it is, and the first call dereferences it. A nil check cannot
-// see that, and the same is true of GetQueueAdapter.
-//
-// Whatever the reason, a probe is the last thing that should be able to take
-// the process down: the caller is asking whether this instance is well, and
-// killing it to answer is the wrong reply.
+// safely turns a custom probe panic into a failed check.
 func safely(name string, fn func() error) (c Check) {
 	c = Check{Name: name}
 	defer func() {
@@ -173,7 +162,7 @@ func Healthy(checks []Check) bool {
 }
 
 func pingDB(ctx context.Context) error {
-	databases := sdk.Runtime.GetAllDb()
+	databases := sdk.Runtime.Databases()
 	if len(databases) == 0 {
 		return errors.New("no database configured")
 	}
@@ -198,16 +187,14 @@ func pingDB(ctx context.Context) error {
 // other's value between the write and the read and each conclude the cache was
 // broken. A readiness probe that reports false negatives under load takes
 // healthy instances out of the pool, which is worse than not probing.
-const cacheProbePrefix = "go-admin:health:"
+const cacheProbePrefix = "motor:health:"
 
 // cacheProbeTTL is short because these keys are write-once and never read
 // again by anyone else; it only has to outlive the read that follows.
 const cacheProbeTTL = 30
 
-// SetCacheProbe installs an optional context-aware cache check. Hosts owning
-// their cache use this to preserve cancellation through legacy runtime wrappers.
-// Passing nil restores the bounded legacy-adapter fallback. The returned prior
-// hook lets an embedding host restore its previous configuration.
+// SetCacheProbe installs a custom readiness check. Passing nil uses the
+// context-aware cache published by the host.
 func SetCacheProbe(fn func(context.Context) error) func(context.Context) error {
 	cacheProbeMu.Lock()
 	defer cacheProbeMu.Unlock()
@@ -219,7 +206,6 @@ func SetCacheProbe(fn func(context.Context) error) func(context.Context) error {
 var (
 	cacheProbeMu       sync.RWMutex
 	cacheProbeOverride func(context.Context) error
-	legacyProbeGate    = make(chan struct{}, 1)
 )
 
 func probeCache(ctx context.Context) error {
@@ -232,68 +218,18 @@ func probeCache(ctx context.Context) error {
 	if probe != nil {
 		return probe(ctx)
 	}
-	// AdapterCache cannot cancel an in-flight operation. Keep at most one such
-	// probe running; timed-out callers do not create more blocked goroutines.
-	select {
-	case legacyProbeGate <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	adapter := sdk.Runtime.GetCacheAdapter()
-	result := make(chan Check, 1)
-	go func() {
-		defer func() { <-legacyProbeGate }()
-		result <- safely("cache", func() error { return probeLegacyCache(ctx, adapter) })
-	}()
-	select {
-	case check := <-result:
-		if !check.OK {
-			return errors.New(check.Err)
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func probeLegacyCache(ctx context.Context, adapter corestorage.AdapterCache) error {
-	if adapter == nil {
+	cache := sdk.Runtime.Cache()
+	if cache == nil {
 		return errors.New("no cache configured")
 	}
-	return ProbeCache(ctx, legacyCacheProbe{adapter})
-}
-
-type legacyCacheProbe struct{ corestorage.AdapterCache }
-
-func (c legacyCacheProbe) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return c.AdapterCache.Set(key, value, int(ttl/time.Second))
-}
-func (c legacyCacheProbe) Get(ctx context.Context, key string) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	return c.AdapterCache.Get(key)
-}
-func (c legacyCacheProbe) Del(ctx context.Context, keys ...string) error {
-	for _, key := range keys {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := c.AdapterCache.Del(key); err != nil {
-			return err
-		}
-	}
-	return nil
+	return ProbeCache(ctx, cache)
 }
 
 // ContextCache is the narrow read/write contract needed by the readiness check.
 type ContextCache interface {
-	Get(context.Context, string) (string, error)
-	Set(context.Context, string, string, time.Duration) error
-	Del(context.Context, ...string) error
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string, ttl time.Duration) error
+	Del(ctx context.Context, keys ...string) error
 }
 
 // ProbeCache verifies a round trip using one key and the caller's deadline.

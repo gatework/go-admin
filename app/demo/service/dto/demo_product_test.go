@@ -1,26 +1,27 @@
 package dto
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
-	"go-admin/app/demo/models"
+	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor/app/demo/models"
 )
 
 // ToModel builds the row to write; the key has to reach it, or an update
 // matches no row.
-func TestToModelCarriesId(t *testing.T) {
-	c := &DemoProductControl{Id: 42, Name: "示例", Code: "P-42", Price: 9.9}
+func TestToModelCarriesID(t *testing.T) {
+	c := &DemoProductControl{ID: 42, Name: "示例", Code: "P-42", Price: 9.9}
 	p, err := c.ToModel()
 	if err != nil {
 		t.Fatalf("ToModel: %v", err)
 	}
-	if p.Id != 42 {
-		t.Errorf("key not carried: got %d, want 42", p.Id)
+	if p.ID != 42 {
+		t.Errorf("key not carried: got %d, want 42", p.ID)
 	}
 	if p.Name != "示例" || p.Code != "P-42" || p.Price != 9.9 {
 		t.Errorf("fields mapped wrongly: %+v", p)
@@ -28,7 +29,7 @@ func TestToModelCarriesId(t *testing.T) {
 }
 
 func TestTableName(t *testing.T) {
-	if got := (models.DemoProduct{}).TableName(); got != "demo_product" {
+	if got := (&models.DemoProduct{}).TableName(); got != "demo_product" {
 		t.Errorf("TableName() = %q, want %q", got, "demo_product")
 	}
 }
@@ -48,7 +49,7 @@ func TestBindPreservesPresenceForJSONAndForms(t *testing.T) {
 			if err := req.Bind(c); err != nil {
 				t.Fatal(err)
 			}
-			if req.Id != 42 || req.Price != 0 || req.Remark != "" || !reflect.DeepEqual(req.UpdateFields(), []string{"price", "remark"}) {
+			if req.ID != 42 || req.Price != 0 || req.Remark != "" || !reflect.DeepEqual(req.UpdateFields(), []string{"price", "remark"}) {
 				t.Fatalf("bound request=%+v fields=%v", req, req.UpdateFields())
 			}
 		})

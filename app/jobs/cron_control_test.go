@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
 	"github.com/robfig/cron/v3"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 )
 
 type blockingCronSchedule struct {
@@ -71,7 +72,7 @@ func TestBlockedCronCannotBlockLeaseExpiryOrShutdown(t *testing.T) {
 	c := cronjob.NewWithSeconds()
 	schedule := &blockingCronSchedule{entered: make(chan struct{}), release: make(chan struct{})}
 	c.Schedule(schedule, cron.FuncJob(func() {}))
-	sdk.Runtime.SetCrontabByTenant(key, c)
+	sdk.Runtime.SetCrontab(key, c)
 	s := newSupervisor(key, db, "blocked-owner")
 	s.lease.ttl = 100 * time.Millisecond
 	s.tick()

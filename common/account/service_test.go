@@ -36,9 +36,9 @@ func accountTest(t *testing.T) (Service, *inbox, *time.Time) {
 		t.Fatal(e)
 	}
 	db.Create(&Policy{ID: 1})
-	db.Create(&Role{RoleId: 1, RoleKey: "admin", Status: "2", Admin: true})
+	db.Create(&Role{RoleID: 1, RoleKey: "admin", Status: "2", Admin: true})
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-password-123"), bcrypt.MinCost)
-	db.Create(&User{UserId: 1, Username: "admin", Email: "admin@example.com", Password: string(hash), Status: "2", RoleId: 1})
+	db.Create(&User{UserID: 1, Username: "admin", Email: "admin@example.com", Password: string(hash), Status: "2", RoleID: 1})
 	now := time.Unix(1800000000, 0)
 	box := &inbox{}
 	return Service{DB: db, Key: strings.Repeat("k", 32), Mail: box, BaseURL: "https://motor.example", Now: func() time.Time { return now }}, box, &now
@@ -47,7 +47,7 @@ func emailCode(body string) string { return regexp.MustCompile(`[0-9]{6}`).FindS
 func TestRegistrationPolicyVerifiedEmailAndOrdinaryRole(t *testing.T) {
 	s, box, _ := accountTest(t)
 	ctx := context.Background()
-	if _, e := s.IssueEmail(ctx, "register", "new@example.com"); !errors.Is(e, ErrDisabled) {
+	if _, e := s.IssueEmail(ctx, "register", "new@example.com"); !errors.Is(e, DisabledErr) {
 		t.Fatal(e)
 	}
 	if e := s.SetPolicy(true); e != nil {
@@ -58,7 +58,7 @@ func TestRegistrationPolicyVerifiedEmailAndOrdinaryRole(t *testing.T) {
 		t.Fatal(e)
 	}
 	r := Registration{Username: "new-user", Name: "New", Email: "new@example.com", Password: "new-password-123", PasswordConfirmation: "new-password-123", Token: token, Code: "wrong"}
-	if e = s.Register(r); !errors.Is(e, ErrInvalid) {
+	if e = s.Register(r); !errors.Is(e, InvalidErr) {
 		t.Fatal("wrong code accepted", e)
 	}
 	r.Code = emailCode(box.body)
@@ -68,8 +68,8 @@ func TestRegistrationPolicyVerifiedEmailAndOrdinaryRole(t *testing.T) {
 	var u User
 	s.DB.Where("username = ?", r.Username).First(&u)
 	var role Role
-	s.DB.First(&role, u.RoleId)
-	if role.Admin || role.RoleKey != "registered" || u.RoleId == 1 {
+	s.DB.First(&role, u.RoleID)
+	if role.Admin || role.RoleKey != "registered" || u.RoleID == 1 {
 		t.Fatal("privileged registration", role)
 	}
 	if e = s.Register(r); e == nil {
@@ -113,7 +113,7 @@ func TestMFALoginReplayRecoveryAndDisable(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.CompleteLogin(token, code, ""); !errors.Is(e, ErrInvalid) {
+	if _, e = s.CompleteLogin(token, code, ""); !errors.Is(e, InvalidErr) {
 		t.Fatal("reused enrollment code", e)
 	}
 	*now = now.Add(30 * time.Second)
@@ -148,7 +148,7 @@ func TestExpiredAndAttemptLimitedChallenges(t *testing.T) {
 		t.Fatal(e)
 	}
 	r := Registration{Username: "new-user", Name: "New", Email: "new@example.com", Password: "new-password-123", PasswordConfirmation: "new-password-123", Token: token, Code: "wrong"}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if e = s.Register(r); e == nil {
 			t.Fatal("bad code accepted")
 		}

@@ -1,21 +1,23 @@
 package tools
 
 import (
-	common "go-admin/common/models"
+	common "github.com/gatework/motor/common/models"
 
 	"gorm.io/gorm"
 )
 
+// SysColumns stores sys columns data in the database.
 type SysColumns struct {
-	ColumnId           int          `gorm:"primaryKey;autoIncrement" json:"columnId"`
-	TableId            int          `gorm:"" json:"tableId"`
+	common.ModelTime
+	ColumnID           int          `gorm:"primaryKey;autoIncrement" json:"columnId"`
+	TableID            int          `gorm:"" json:"tableId"`
 	ColumnName         string       `gorm:"size:128;" json:"columnName"`
 	ColumnComment      string       `gorm:"column:column_comment;size:128;" json:"columnComment"`
 	ColumnType         string       `gorm:"column:column_type;size:128;" json:"columnType"`
 	GoType             string       `gorm:"column:go_type;size:128;" json:"goType"`
 	GoField            string       `gorm:"column:go_field;size:128;" json:"goField"`
-	JsonField          string       `gorm:"column:json_field;size:128;" json:"jsonField"`
-	IsPk               string       `gorm:"column:is_pk;size:4;" json:"isPk"`
+	JSONField          string       `gorm:"column:json_field;size:128;" json:"jsonField"`
+	IsPK               string       `gorm:"column:is_pk;size:4;" json:"isPk"`
 	IsIncrement        string       `gorm:"column:is_increment;size:4;" json:"isIncrement"`
 	IsRequired         string       `gorm:"column:is_required;size:4;" json:"isRequired"`
 	IsInsert           string       `gorm:"column:is_insert;size:4;" json:"isInsert"`
@@ -23,11 +25,11 @@ type SysColumns struct {
 	IsList             string       `gorm:"column:is_list;size:4;" json:"isList"`
 	IsQuery            string       `gorm:"column:is_query;size:4;" json:"isQuery"`
 	QueryType          string       `gorm:"column:query_type;size:128;" json:"queryType"`
-	HtmlType           string       `gorm:"column:html_type;size:128;" json:"htmlType"`
+	HTMLType           string       `gorm:"column:html_type;size:128;" json:"htmlType"`
 	DictType           string       `gorm:"column:dict_type;size:128;" json:"dictType"`
 	Sort               int          `gorm:"column:sort;" json:"sort"`
 	List               string       `gorm:"column:list;size:1;" json:"list"`
-	Pk                 bool         `gorm:"column:pk;size:1;" json:"pk"`
+	PK                 bool         `gorm:"column:pk;size:1;" json:"pk"`
 	Required           bool         `gorm:"column:required;size:1;" json:"required"`
 	SuperColumn        bool         `gorm:"column:super_column;size:1;" json:"superColumn"`
 	UsableColumn       bool         `gorm:"column:usable_column;size:1;" json:"usableColumn"`
@@ -36,15 +38,15 @@ type SysColumns struct {
 	Edit               bool         `gorm:"column:edit;size:1;" json:"edit"`
 	Query              bool         `gorm:"column:query;size:1;" json:"query"`
 	Remark             string       `gorm:"column:remark;size:255;" json:"remark"`
-	FkTableName        string       `gorm:"" json:"fkTableName"`
-	FkTableNameClass   string       `gorm:"" json:"fkTableNameClass"`
-	FkTableNamePackage string       `gorm:"" json:"fkTableNamePackage"`
-	FkCol              []SysColumns `gorm:"-" json:"fkCol"`
-	FkLabelId          string       `gorm:"" json:"fkLabelId"`
-	FkLabelName        string       `gorm:"size:255;" json:"fkLabelName"`
+	FKTableName        string       `gorm:"" json:"fkTableName"`
+	FKTableNameClass   string       `gorm:"" json:"fkTableNameClass"`
+	FKTableNamePackage string       `gorm:"" json:"fkTableNamePackage"`
+	FKCol              []SysColumns `gorm:"-" json:"fkCol"`
+	FKLabelID          string       `gorm:"" json:"fkLabelId"`
+	FKLabelName        string       `gorm:"size:255;" json:"fkLabelName"`
 	CreateBy           int          `gorm:"column:create_by;size:20;" json:"createBy"`
-	UpdateBy           int          `gorm:"column:update_By;size:20;" json:"updateBy"`
 
+	UpdateBy int `gorm:"column:update_By;size:20;" json:"updateBy"`
 	// ColWidth and DefaultValue back PRD 010 F1/F2 (代码生成器前端模板迁移 Vue 3).
 	// Both use a sentinel default (0 / "") rather than NULL - see
 	// docs-prd/010-代码生成器前端模板迁移Vue3/数据库变更.md §1.1: a non-pointer
@@ -55,20 +57,21 @@ type SysColumns struct {
 	// ColWidth deliberately has no gorm size tag: this codebase's "size:N"
 	// convention on numeric fields maps to a narrow SQL integer type (see
 	// column_width_test.go), and col_width needs to hold values up to 800.
-	ColWidth     int    `gorm:"column:col_width;not null;default:0;comment:table column width in px, 0 = not configured" json:"colWidth"`
-	DefaultValue string `gorm:"column:default_value;size:255;not null;default:'';comment:form field default value, empty = not configured" json:"defaultValue"`
+	ColWidth int `gorm:"column:col_width;not null;default:0;comment:table column width in px, 0 = not configured" json:"colWidth"`
 
-	common.ModelTime
+	DefaultValue string `gorm:"column:default_value;size:255;not null;default:'';comment:form field default value, empty = not configured" json:"defaultValue"`
 }
 
+// TableName returns the database table used for this record.
 func (*SysColumns) TableName() string {
 	return "sys_columns"
 }
 
+// GetList stores get list data in the database.
 func (e *SysColumns) GetList(tx *gorm.DB, exclude bool) ([]SysColumns, error) {
 	var doc []SysColumns
 	table := tx.Table("sys_columns")
-	table = table.Where("table_id = ? ", e.TableId)
+	table = table.Where("table_id = ? ", e.TableID)
 	if exclude {
 		// Columns the framework fills in on every write, which a setting on the
 		// config page could not change. created_at and updated_at are not
@@ -84,6 +87,7 @@ func (e *SysColumns) GetList(tx *gorm.DB, exclude bool) ([]SysColumns, error) {
 	return doc, nil
 }
 
+// Create stores create data in the database.
 func (e *SysColumns) Create(tx *gorm.DB) (SysColumns, error) {
 	var doc SysColumns
 	e.CreateBy = 0
@@ -96,8 +100,9 @@ func (e *SysColumns) Create(tx *gorm.DB) (SysColumns, error) {
 	return doc, nil
 }
 
+// Update stores update data in the database.
 func (e *SysColumns) Update(tx *gorm.DB) (update SysColumns, err error) {
-	if err = tx.Table("sys_columns").First(&update, e.ColumnId).Error; err != nil {
+	if err = tx.Table("sys_columns").First(&update, e.ColumnID).Error; err != nil {
 		return
 	}
 
@@ -119,7 +124,7 @@ func (e *SysColumns) Update(tx *gorm.DB) (update SysColumns, err error) {
 	// field on this struct - Sort, the Pk/Required/... bools - and that is a
 	// pre-existing gap in this method affecting fields outside PRD 010's
 	// scope, not fixed here).
-	if err = tx.Table("sys_columns").Model(&update).Updates(map[string]interface{}{
+	if err = tx.Table("sys_columns").Model(&update).Updates(map[string]any{
 		"col_width":     e.ColWidth,
 		"default_value": e.DefaultValue,
 	}).Error; err != nil {

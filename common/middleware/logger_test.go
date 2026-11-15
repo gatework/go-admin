@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-admin/common/global"
+	"github.com/gatework/motor/common/global"
 )
 
 // The operation-log consumer reads these keys by name off the queue message.

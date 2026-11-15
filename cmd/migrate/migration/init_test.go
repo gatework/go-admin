@@ -10,14 +10,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	contractmigration "github.com/go-admin-team/go-admin-core/v2/sdk/contract/migration"
+	contractmigration "github.com/gatework/motor-core/sdk/contract/migration"
 
-	common "go-admin/common/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 // withContractRegistry points contractSnapshot at an isolated
 // *contractmigration.Registry for the duration of one test, instead of
-// go-admin-core's single process-wide one - see contractSnapshot's doc
+// motor-core's single process-wide one - see contractSnapshot's doc
 // comment for why that indirection exists. Restored on cleanup so other
 // tests in this package keep seeing an empty contract registry regardless of
 // run order.
@@ -74,7 +74,7 @@ func rowsByVersion(t *testing.T, db *gorm.DB) map[string]common.Migration {
 func TestForAppRecordsItsAppCode(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	m.ForApp("x").SetVersion("1786800001000", func(db *gorm.DB, version, appCode string) error {
 		return recordFor(db, version, appCode)
@@ -99,7 +99,7 @@ func TestForAppRecordsItsAppCode(t *testing.T) {
 func TestSetVersionStillRecordsTheFrameworkAsEmpty(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
 		return db.Create(&common.Migration{Version: version}).Error
@@ -122,7 +122,7 @@ func TestSetVersionStillRecordsTheFrameworkAsEmpty(t *testing.T) {
 func TestMigrateAppRunsOnlyThatApp(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	ran := map[string]bool{}
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
@@ -159,7 +159,7 @@ func TestMigrateAppRunsOnlyThatApp(t *testing.T) {
 func TestMigrateAppCoreSelectsTheFramework(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	ran := map[string]bool{}
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
@@ -188,7 +188,7 @@ func TestMigrateAppCoreSelectsTheFramework(t *testing.T) {
 func TestMigrateRunsEveryApp(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	var order []string
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
@@ -230,7 +230,7 @@ func TestMigrateRunsEveryApp(t *testing.T) {
 func TestNamespacingKeepsTwoAppsWithTheSameTimestampApart(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	const sameTimestamp = "1786800001000"
 	ran := 0
@@ -289,7 +289,7 @@ func TestForAppRejectsReservedCodes(t *testing.T) {
 func TestStatusReportsPendingAppliedAndOrphaned(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	applied := time.Date(2026, 8, 25, 14, 3, 11, 0, time.UTC)
 	if err := db.Create(&common.Migration{Version: "1786700009000", ApplyTime: applied}).Error; err != nil {
@@ -334,7 +334,7 @@ func TestStatusDoesNotCreateItsTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 	m.ForApp("crm").SetVersion("1786800001000", func(db *gorm.DB, version, appCode string) error { return nil })
 
 	entries, err := m.Status()
@@ -356,14 +356,14 @@ func TestStatusDoesNotCreateItsTable(t *testing.T) {
 func TestFailedMigrationLeavesNoRecord(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	m.ForApp("crm").SetVersion("1786800001000", func(db *gorm.DB, version, appCode string) error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			if err := recordFor(tx, version, appCode); err != nil {
 				return err
 			}
-			return errTestMigrationFailed
+			return testMigrationFailedErr
 		})
 	})
 
@@ -385,7 +385,7 @@ func TestFailedMigrationLeavesNoRecord(t *testing.T) {
 func TestRunReportsWhichVersionFailed(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	// Two versions, and the first one succeeds: the failure has to name the
 	// one that actually failed, which a report that just names the app, or
@@ -394,21 +394,21 @@ func TestRunReportsWhichVersionFailed(t *testing.T) {
 		return recordFor(db, version, appCode)
 	})
 	m.ForApp("crm").SetVersion("1786800002000", func(db *gorm.DB, version, appCode string) error {
-		return errTestMigrationFailed
+		return testMigrationFailedErr
 	})
 
 	err := m.MigrateApp("crm")
 	if err == nil {
 		t.Fatal("MigrateApp reported success")
 	}
-	var vf *VersionFailure
+	var vf *VersionError
 	if !errors.As(err, &vf) {
 		t.Fatalf("error is %T, want *VersionFailure: %v", err, err)
 	}
 	if vf.Version != "crm-1786800002000" {
 		t.Errorf("failed version = %q, want crm-1786800002000", vf.Version)
 	}
-	if !errors.Is(err, errTestMigrationFailed) {
+	if !errors.Is(err, testMigrationFailedErr) {
 		t.Errorf("the cause is not reachable through the wrapper: %v", err)
 	}
 	// The one that succeeded before it stays recorded: a retry must not run
@@ -422,7 +422,8 @@ func TestRunReportsWhichVersionFailed(t *testing.T) {
 	}
 }
 
-var errTestMigrationFailed = &testError{"boom"}
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var testMigrationFailedErr = &testError{"boom"}
 
 type testError struct{ s string }
 
@@ -434,7 +435,7 @@ func (e *testError) Error() string { return e.s }
 func TestMigrateAppOnAnUnknownCodeSaysSo(t *testing.T) {
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
 		return db.Create(&common.Migration{Version: version}).Error
 	})
@@ -471,7 +472,7 @@ func TestMergedEntriesRunsAContractRegisteredAppMigration(t *testing.T) {
 	reg := withContractRegistry(t)
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	ran := false
 	reg.ForApp("order").SetVersion("1793800000000", func(db *gorm.DB, version, appCode string) error {
@@ -503,7 +504,7 @@ func TestMergedEntriesStatusIncludesContractRegisteredMigrations(t *testing.T) {
 	reg := withContractRegistry(t)
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	reg.ForApp("order").SetVersion("1793800000000", func(db *gorm.DB, version, appCode string) error {
 		return recordFor(db, version, appCode)
@@ -541,7 +542,7 @@ func TestMergedEntriesStatusIncludesContractRegisteredMigrations(t *testing.T) {
 
 // AppCodes feeds both --app's typo detection (appRegistrationError) and the
 // group headings status prints; a contract-registered app has to appear
-// there or a real "go-admin migrate --app order" would be told the app does
+// there or a real "motor migrate --app order" would be told the app does
 // not exist.
 func TestMergedEntriesAppCodesIncludesContractRegisteredApps(t *testing.T) {
 	reg := withContractRegistry(t)
@@ -568,7 +569,7 @@ func TestMergedEntriesMigrateAppRunsOnlyThatContractApp(t *testing.T) {
 	reg := withContractRegistry(t)
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	ran := map[string]bool{}
 	m.SetVersion("1786700009000", func(db *gorm.DB, version string) error {
@@ -600,7 +601,7 @@ func TestMergedEntriesHostRegistrationWinsOnKeyCollision(t *testing.T) {
 	reg := withContractRegistry(t)
 	db := newTestDB(t)
 	m := newMigration()
-	m.SetDb(db)
+	m.SetDB(db)
 
 	hostRan, contractRan := false, false
 	m.ForApp("dup").SetVersion("1786800001000", func(db *gorm.DB, version, appCode string) error {

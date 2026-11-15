@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
-	"go-admin/common/account"
+	"github.com/gatework/motor-core/sdk/service"
+	"github.com/gatework/motor/common/account"
 )
 
+// Account coordinates administration queries and mutations.
 type Account struct{ service.Service }
+
+// AccountRequest coordinates administration queries and mutations.
 type AccountRequest struct {
 	Username             string `json:"username"`
 	Name                 string `json:"name"`
@@ -23,8 +26,9 @@ type AccountRequest struct {
 	Enabled              *bool  `json:"enabled"`
 }
 
+// Execute performs the execute administration operation.
 func (e *Account) Execute(ctx context.Context, operation string, id int, ip string, r AccountRequest) (any, error) {
-	s := account.New(e.Orm.WithContext(ctx))
+	s := account.New(e.DB.WithContext(ctx))
 	if operation != "settings" && operation != "status" && operation != "policy-get" {
 		if err := s.TakeLimit("request:"+operation+":"+ip, 10, 5*time.Minute); err != nil {
 			return nil, err
@@ -41,7 +45,7 @@ func (e *Account) Execute(ctx context.Context, operation string, id int, ip stri
 		return map[string]any{"enabled": p.Enabled, "emailConfigured": s.Mail != nil && len(s.Key) == 32 && s.BaseURL != "", "mfaConfigured": len(s.Key) == 32}, err
 	case "policy-set":
 		if r.Enabled == nil {
-			return nil, account.ErrInvalid
+			return nil, account.InvalidErr
 		}
 		return nil, s.SetPolicy(*r.Enabled)
 	case "registration-email":
@@ -52,14 +56,14 @@ func (e *Account) Execute(ctx context.Context, operation string, id int, ip stri
 	case "forgot":
 		// The response does not reveal whether an address exists or SMTP delivery succeeded.
 		if s.Mail == nil || len(s.Key) != 32 || s.BaseURL == "" {
-			return nil, account.ErrUnavailable
+			return nil, account.UnavailableErr
 		}
 		_, err := s.IssueEmail(ctx, "reset", r.Email)
-		if errors.Is(err, account.ErrLimited) || errors.Is(err, account.ErrInvalid) {
+		if errors.Is(err, account.LimitedErr) || errors.Is(err, account.InvalidErr) {
 			return nil, err
 		}
-		if err != nil && e.Log != nil {
-			e.Log.Warn("password recovery delivery failed")
+		if err != nil && e.Logger != nil {
+			e.Logger.Warn("password recovery delivery failed")
 		}
 		return map[string]any{"expiresIn": 600, "resendAfter": 60}, nil
 	case "reset":
@@ -70,7 +74,7 @@ func (e *Account) Execute(ctx context.Context, operation string, id int, ip stri
 			return nil, err
 		}
 		var count int64
-		err = e.Orm.Model(&account.Recovery{}).Where("user_id = ?", id).Count(&count).Error
+		err = e.DB.Model(&account.Recovery{}).Where("user_id = ?", id).Count(&count).Error
 		return map[string]any{"enabled": state.Enabled, "recoveryCodesRemaining": count, "configured": len(s.Key) == 32}, err
 	case "setup":
 		return s.Setup(id, r.Password)
@@ -83,5 +87,5 @@ func (e *Account) Execute(ctx context.Context, operation string, id int, ip stri
 		codes, err := s.ManageMFA(id, r.Password, r.Code, r.RecoveryCode, operation == "disable")
 		return map[string]any{"recoveryCodes": codes}, err
 	}
-	return nil, account.ErrInvalid
+	return nil, account.InvalidErr
 }

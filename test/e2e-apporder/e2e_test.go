@@ -72,16 +72,16 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// binary builds the go-admin binary with the example application linked in,
+// binary builds the motor binary with the example application linked in,
 // on the first call that needs it.
 func binary(t *testing.T) string {
 	t.Helper()
 	buildOnce.Do(func() {
-		sharedDir, buildErr = os.MkdirTemp("", "go-admin-e2e")
+		sharedDir, buildErr = os.MkdirTemp("", "motor-e2e")
 		if buildErr != nil {
 			return
 		}
-		sharedBin = filepath.Join(sharedDir, "go-admin-e2e")
+		sharedBin = filepath.Join(sharedDir, "motor-e2e")
 		out, err := exec.Command("go", "build", "-tags", "sqlite3", "-o", sharedBin, ".").CombinedOutput()
 		if err != nil {
 			buildErr = fmt.Errorf("building the binary: %v\n%s", err, out)
@@ -123,67 +123,6 @@ func newEnv(t *testing.T) *env {
 	return &env{t: t, dir: dir, bin: binary(t)}
 }
 
-// run executes the binary and returns its combined output and exit code.
-func (e *env) run(args ...string) (string, int) {
-	e.t.Helper()
-	args = append(args, "-c", "config/settings.yml")
-	cmd := exec.Command(e.bin, args...)
-	cmd.Dir = e.dir
-	out, err := cmd.CombinedOutput()
-	code := 0
-	if ee, ok := err.(*exec.ExitError); ok {
-		code = ee.ExitCode()
-	} else if err != nil {
-		e.t.Fatalf("running %v: %v", args, err)
-	}
-	return string(out), code
-}
-
-func (e *env) mustRun(args ...string) string {
-	e.t.Helper()
-	out, code := e.run(args...)
-	if code != 0 {
-		e.t.Fatalf("%v exited %d:\n%s", args, code, out)
-	}
-	return out
-}
-
-// open connects to the database the binary uses.
-//
-// Per call, and closed again straight away, on purpose: the binary under test
-// writes this same file, and a connection the test process holds open across
-// a run of it is a second writer for no reason. The cost is a few
-// milliseconds against a build measured in seconds.
-func (e *env) open() *sql.DB {
-	e.t.Helper()
-	db, err := sql.Open("sqlite", filepath.Join(e.dir, "e2e.db"))
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	return db
-}
-
-// exec runs one statement against the database the binary uses.
-func (e *env) exec(stmt string) {
-	e.t.Helper()
-	db := e.open()
-	defer db.Close()
-	if _, err := db.Exec(stmt); err != nil {
-		e.t.Fatalf("%s: %v", stmt, err)
-	}
-}
-
-func (e *env) count(query string, args ...any) int {
-	e.t.Helper()
-	db := e.open()
-	defer db.Close()
-	var n int
-	if err := db.QueryRow(query, args...).Scan(&n); err != nil {
-		e.t.Fatalf("%s: %v", query, err)
-	}
-	return n
-}
-
 // seeded is what installing this application writes, with the counts a
 // finished install leaves behind. An uninstall wants every one of them at
 // zero, and a reinstall wants them back - which is why one list serves all
@@ -199,21 +138,6 @@ var seeded = []struct {
 	{"policies", "SELECT COUNT(*) FROM casbin_rule WHERE v1 LIKE '/api/v1/order%'", 4},
 	{"migration records", "SELECT COUNT(*) FROM sys_migration WHERE app_code = 'order'", 1},
 	{"sys_app rows", "SELECT COUNT(*) FROM sys_app WHERE app_code = 'order'", 1},
-}
-
-// assertSeeded checks every row of seeded. gone flips the expectation to
-// zero, which is the whole of what an uninstall has to leave.
-func (e *env) assertSeeded(when string, gone bool) {
-	e.t.Helper()
-	for _, c := range seeded {
-		want := c.want
-		if gone {
-			want = 0
-		}
-		if n := e.count(c.query); n != want {
-			e.t.Errorf("%s, %s = %d, want %d", when, c.what, n, want)
-		}
-	}
 }
 
 func TestInstallUninstallReinstall(t *testing.T) {
@@ -308,5 +232,81 @@ func TestUnknownAppIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(out, "order") {
 		t.Errorf("the refusal does not name what is registered:\n%s", out)
+	}
+}
+
+// run executes the binary and returns its combined output and exit code.
+func (e *env) run(args ...string) (string, int) {
+	e.t.Helper()
+	args = append(args, "-c", "config/settings.yml")
+	cmd := exec.Command(e.bin, args...)
+	cmd.Dir = e.dir
+	out, err := cmd.CombinedOutput()
+	code := 0
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	} else if err != nil {
+		e.t.Fatalf("running %v: %v", args, err)
+	}
+	return string(out), code
+}
+
+func (e *env) mustRun(args ...string) string {
+	e.t.Helper()
+	out, code := e.run(args...)
+	if code != 0 {
+		e.t.Fatalf("%v exited %d:\n%s", args, code, out)
+	}
+	return out
+}
+
+// open connects to the database the binary uses.
+//
+// Per call, and closed again straight away, on purpose: the binary under test
+// writes this same file, and a connection the test process holds open across
+// a run of it is a second writer for no reason. The cost is a few
+// milliseconds against a build measured in seconds.
+func (e *env) open() *sql.DB {
+	e.t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(e.dir, "e2e.db"))
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return db
+}
+
+// exec runs one statement against the database the binary uses.
+func (e *env) exec(stmt string) {
+	e.t.Helper()
+	db := e.open()
+	defer db.Close()
+	if _, err := db.Exec(stmt); err != nil {
+		e.t.Fatalf("%s: %v", stmt, err)
+	}
+}
+
+func (e *env) count(query string, args ...any) int {
+	e.t.Helper()
+	db := e.open()
+	defer db.Close()
+	var n int
+	if err := db.QueryRow(query, args...).Scan(&n); err != nil {
+		e.t.Fatalf("%s: %v", query, err)
+	}
+	return n
+}
+
+// assertSeeded checks every row of seeded. gone flips the expectation to
+// zero, which is the whole of what an uninstall has to leave.
+func (e *env) assertSeeded(when string, gone bool) {
+	e.t.Helper()
+	for _, c := range seeded {
+		want := c.want
+		if gone {
+			want = 0
+		}
+		if n := e.count(c.query); n != want {
+			e.t.Errorf("%s, %s = %d, want %d", when, c.what, n, want)
+		}
 	}
 }

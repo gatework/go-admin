@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"go-admin/cmd/migrate/migration"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 // A mistyped --app used to be indistinguishable from an up-to-date database on

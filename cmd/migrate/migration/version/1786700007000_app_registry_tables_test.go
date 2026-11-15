@@ -6,8 +6,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 func openAppRegistryDB(t *testing.T) *gorm.DB {
@@ -71,7 +71,7 @@ func TestAppRegistryTablesAreCreated(t *testing.T) {
 func TestAppRegistryTablesAutoMigrateIsRepeatable(t *testing.T) {
 	db := openAppRegistryDB(t)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := db.Migrator().AutoMigrate(
 			new(adminmodels.SysApp),
 			new(adminmodels.SysAppCasbinGrant),
@@ -112,7 +112,7 @@ func TestSysAppCasbinGrantNaturalKeyIsUnique(t *testing.T) {
 		t.Fatalf("first insert: %v", err)
 	}
 	dup := grant
-	dup.Id = 0
+	dup.ID = 0
 	if err := db.Create(&dup).Error; err == nil {
 		t.Fatal("a second sys_app_casbin_grant row with the same natural key was accepted")
 	}
@@ -122,7 +122,7 @@ func TestSysAppCasbinGrantNaturalKeyIsUnique(t *testing.T) {
 	// pair would produce - the natural key has to be the one thing that
 	// rejects it, app_code is descriptive only and not part of the index.
 	other := grant
-	other.Id = 0
+	other.ID = 0
 	other.AppCode = "another-app"
 	if err := db.Create(&other).Error; err == nil {
 		t.Fatal("a duplicate natural key under a different app_code was accepted")

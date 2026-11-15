@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"go-admin/cmd/migrate/migration"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 // The repository carries two ModelTime types. The one in
@@ -63,7 +63,7 @@ func runtimeSoftDeleteTables(t *testing.T) map[string]string {
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, 0)
 		if err != nil {
-			return nil // not this test's business
+			return err
 		}
 		// Only files importing the runtime models package can embed its ModelTime.
 		if !importsRuntimeModels(f) {
@@ -85,7 +85,7 @@ func runtimeSoftDeleteTables(t *testing.T) map[string]string {
 }
 
 func importsRuntimeModels(f *ast.File) bool {
-	return importsPackage(f, "go-admin/common/models")
+	return importsPackage(f, "github.com/gatework/motor/common/models")
 }
 
 func importsPackage(f *ast.File, pkg string) bool {
@@ -172,7 +172,7 @@ func repoRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir
 		}
@@ -221,7 +221,7 @@ const versionPrefixLen = 13
 // migration as applied - the menu appears, its buttons do nothing, and no
 // error is reported anywhere.
 func TestPostConversionMigrationsAvoidFrozenSeedModels(t *testing.T) {
-	const frozenModels = "go-admin/cmd/migrate/migration/models"
+	const frozenModels = "github.com/gatework/motor/cmd/migrate/migration/models"
 
 	dir, err := os.Getwd()
 	if err != nil {

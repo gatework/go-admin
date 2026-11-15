@@ -20,7 +20,7 @@ import "time"
 // should report and skip, not delete something else that happens to look
 // the same.
 type SysAppCasbinGrant struct {
-	Id int `json:"id" gorm:"primaryKey;autoIncrement"`
+	ID int `json:"id" gorm:"primaryKey;autoIncrement"`
 
 	AppCode string `json:"appCode" gorm:"type:varchar(64);not null;index:idx_sys_app_casbin_grant_app_code;comment:app code that created this grant"`
 
@@ -38,6 +38,7 @@ type SysAppCasbinGrant struct {
 	CreatedAt time.Time `json:"createdAt" gorm:"comment:when this grant was recorded"`
 }
 
+// TableName returns the explicit persistence table name.
 func (*SysAppCasbinGrant) TableName() string {
 	return "sys_app_casbin_grant"
 }

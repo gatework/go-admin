@@ -3,14 +3,16 @@ package service
 import (
 	"errors"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	cDto "go-admin/common/dto"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	cDto "github.com/gatework/motor/common/dto"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk/service"
 )
 
+// SysOperaLog coordinates administration queries and mutations.
 type SysOperaLog struct {
 	service.Service
 }
@@ -20,7 +22,7 @@ func (e *SysOperaLog) GetPage(c *dto.SysOperaLogGetPageReq, list *[]models.SysOp
 	var err error
 	var data models.SysOperaLog
 
-	err = e.Orm.Model(&data).
+	err = e.DB.Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -28,7 +30,7 @@ func (e *SysOperaLog) GetPage(c *dto.SysOperaLogGetPageReq, list *[]models.SysOp
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("Service GetSysOperaLogPage error:%s", err.Error())
+		e.Logger.Errorf("Service GetSysOperaLogPage error:%s", err.Error())
 		return err
 	}
 	return nil
@@ -38,15 +40,15 @@ func (e *SysOperaLog) GetPage(c *dto.SysOperaLogGetPageReq, list *[]models.SysOp
 func (e *SysOperaLog) Get(d *dto.SysOperaLogGetReq, model *models.SysOperaLog) error {
 	var data models.SysOperaLog
 
-	err := e.Orm.Model(&data).
-		First(model, d.GetId()).Error
+	err := e.DB.Model(&data).
+		First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("Service GetSysOperaLog error:%s", err.Error())
+		e.Logger.Errorf("Service GetSysOperaLog error:%s", err.Error())
 		return err
 	}
 	if err != nil {
-		e.Log.Errorf("Service GetSysOperaLog error:%s", err.Error())
+		e.Logger.Errorf("Service GetSysOperaLog error:%s", err.Error())
 		return err
 	}
 	return nil
@@ -57,9 +59,9 @@ func (e *SysOperaLog) Remove(d *dto.SysOperaLogDeleteReq) error {
 	var err error
 	var data models.SysOperaLog
 
-	db := e.Orm.Model(&data).Delete(&data, d.GetId())
+	db := e.DB.Model(&data).Delete(&data, d.GetID())
 	if err = db.Error; err != nil {
-		e.Log.Errorf("Service RemoveSysOperaLog error:%s", err.Error())
+		e.Logger.Errorf("Service RemoveSysOperaLog error:%s", err.Error())
 		return err
 	}
 	if db.RowsAffected == 0 {

@@ -8,9 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-admin/app/demo/models"
-	"go-admin/common/dto"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/demo/models"
+	"github.com/gatework/motor/common/dto"
 )
 
 // DemoProductSearch 列表查询条件
@@ -22,12 +21,10 @@ import (
 // 未打 search tag 的字段不参与查询，可避免无意间开放过滤维度。
 type DemoProductSearch struct {
 	dto.Pagination `search:"-"`
-
+	DemoProductOrder
 	Name   string `form:"name" search:"type:icontains;column:name;table:demo_product"`
 	Code   string `form:"code" search:"type:exact;column:code;table:demo_product"`
 	Status string `form:"status" search:"type:exact;column:status;table:demo_product"`
-
-	DemoProductOrder
 }
 
 // DemoProductOrder 排序字段单独成组，避免与查询字段混在一起
@@ -35,8 +32,10 @@ type DemoProductOrder struct {
 	CreatedAtOrder string `form:"createdAtOrder" search:"type:order;column:created_at;table:demo_product"`
 }
 
-func (m *DemoProductSearch) GetNeedSearch() interface{} { return *m }
+// GetNeedSearch returns the tagged query parameters.
+func (m *DemoProductSearch) GetNeedSearch() any { return *m }
 
+// Bind decodes and validates request parameters.
 func (m *DemoProductSearch) Bind(ctx *gin.Context) error {
 	return ctx.ShouldBind(m)
 }
@@ -46,7 +45,7 @@ func (m *DemoProductSearch) Bind(ctx *gin.Context) error {
 // actions.Create / actions.Update get the row to write from ToModel, so the
 // model itself is not exposed; Bind validates writable fields and records which fields were supplied.
 type DemoProductControl struct {
-	Id      int     `json:"id" form:"id" uri:"id" comment:"主键"`
+	ID      int     `json:"id" form:"id" uri:"id" comment:"主键"`
 	Name    string  `json:"name" form:"name" comment:"名称"`
 	Code    string  `json:"code" form:"code" comment:"编码"`
 	Price   float64 `json:"price" form:"price" comment:"单价" binding:"gte=0"`
@@ -55,6 +54,7 @@ type DemoProductControl struct {
 	present map[string]json.RawMessage
 }
 
+// Bind decodes and validates request parameters.
 func (s *DemoProductControl) Bind(ctx *gin.Context) error {
 	if err := ctx.ShouldBind(s); err != nil {
 		return err
@@ -80,7 +80,7 @@ func (s *DemoProductControl) Bind(ctx *gin.Context) error {
 			return errors.New("name and code are required")
 		}
 	} else {
-		if s.Id <= 0 {
+		if s.ID <= 0 {
 			return errors.New("id must be positive")
 		}
 		if _, ok := s.present["name"]; ok && s.Name == "" {
@@ -125,7 +125,7 @@ func (s *DemoProductControl) UpdateFields() []string {
 // afterwards, so do not set them here.
 func (s *DemoProductControl) ToModel() (*models.DemoProduct, error) {
 	return &models.DemoProduct{
-		Model:  common.Model{Id: s.Id},
+		ID:     s.ID,
 		Name:   s.Name,
 		Code:   s.Code,
 		Price:  s.Price,
@@ -134,9 +134,9 @@ func (s *DemoProductControl) ToModel() (*models.DemoProduct, error) {
 	}, nil
 }
 
-// DemoProductById 详情与删除共用，支持单个 id 与批量 ids
-type DemoProductById struct {
-	dto.ObjectById
+// DemoProductByID carries validated administration request parameters.
+type DemoProductByID struct {
+	dto.ObjectByID
 }
 
 // Bind 与 GetId 由内嵌的 dto.ObjectById 提供：它已处理好 uri 绑定、

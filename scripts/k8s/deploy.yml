@@ -2,24 +2,24 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: go-admin
+  name: motor
   labels:
-    app: go-admin
-    service: go-admin
+    app: motor
+    service: motor
 spec:
   ports:
   - port: 8000
     name: http
     protocol: TCP
   selector:
-    app: go-admin
+    app: motor
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: go-admin-v1
+  name: motor-v1
   labels:
-    app: go-admin
+    app: motor
     version: v1
 spec:
   # One replica, and the drain window below buys nothing at one replica: there
@@ -38,17 +38,17 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: go-admin
+      app: motor
       version: v1
   template:
     metadata:
       labels:
-        app: go-admin
+        app: motor
         version: v1
     spec:
       containers:
-      - name: go-admin
-        image: registry.cn-shanghai.aliyuncs.com/go-admin-team/go-admin
+      - name: motor
+        image: ghcr.io/gatework/motor:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -87,11 +87,11 @@ spec:
           periodSeconds: 10
           failureThreshold: 3
         volumeMounts:
-        - name: go-admin
+        - name: motor
           mountPath: /temp
-        - name: go-admin
+        - name: motor
           mountPath: /static
-        - name: go-admin-config
+        - name: motor-config
           mountPath: /config/
           readOnly: true
       # SIGKILL arrives when this is up, so it has to be longer than what the
@@ -107,10 +107,10 @@ spec:
       # above rather than replacing any of it.
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: go-admin
+      - name: motor
         persistentVolumeClaim:
-          claimName: go-admin
-      - name: go-admin-config
+          claimName: motor
+      - name: motor-config
         configMap:
           name: settings-admin
 ---

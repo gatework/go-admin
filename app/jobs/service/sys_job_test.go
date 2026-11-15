@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
-	coreservice "github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 
-	"go-admin/app/jobs/models"
-	"go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
+
+	"github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/common/dto"
 )
 
 func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
@@ -31,34 +31,32 @@ func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := cronjob.NewWithSeconds()
-	s := SysJob{Service: coreservice.Service{Orm: db}, Cron: c}
+	s := SysJob{DB: db, Cron: c}
 	for range 2 {
-		if err := s.StartJob(&dto.GeneralGetDto{Id: job.JobId}); err != nil {
+		if err := s.StartJob(&dto.GetRequest{ID: job.JobID}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var starts sync.WaitGroup
 	for range 12 {
-		starts.Add(1)
-		go func() {
-			defer starts.Done()
-			if err := s.StartJob(&dto.GeneralGetDto{Id: job.JobId}); err != nil {
+		starts.Go(func() {
+			if err := s.StartJob(&dto.GetRequest{ID: job.JobID}); err != nil {
 				t.Error(err)
 			}
-		}()
+		})
 	}
 	starts.Wait()
 	if got := len(c.Entries()); got != 1 {
 		t.Errorf("repeated start registered %d entries, want 1", got)
 	}
-	if err := s.RemoveJob(&dto.GeneralDelDto{Id: job.JobId}); err != nil {
+	if err := s.RemoveJob(&dto.DeleteRequest{ID: job.JobID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(c.Entries()); got != 0 {
 		t.Errorf("stop left %d entries", got)
 	}
 	var saved models.SysJob
-	if err := db.First(&saved, job.JobId).Error; err != nil {
+	if err := db.First(&saved, job.JobID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if saved.Status != 1 {
@@ -112,12 +110,12 @@ func TestRemoveJob(t *testing.T) {
 					t.Fatal("scheduler did not start")
 				}
 			}
-			job := models.SysJob{EntryId: int(entryID)}
+			job := models.SysJob{EntryID: int(entryID)}
 			if err := db.Create(&job).Error; err != nil {
 				t.Fatal(err)
 			}
-			s := SysJob{Service: coreservice.Service{Orm: db}, Cron: c}
-			err = s.RemoveJob(&dto.GeneralDelDto{Id: job.JobId})
+			s := SysJob{DB: db, Cron: c}
+			err = s.RemoveJob(&dto.DeleteRequest{ID: job.JobID})
 			if blocked {
 				if err == nil || err.Error() != "操作超时！" {
 					t.Errorf("RemoveJob error = %v, want timeout error", err)
@@ -126,15 +124,15 @@ func TestRemoveJob(t *testing.T) {
 				t.Fatal(err)
 			}
 			var saved models.SysJob
-			if err := db.First(&saved, job.JobId).Error; err != nil {
+			if err := db.First(&saved, job.JobID).Error; err != nil {
 				t.Fatal(err)
 			}
 			wantEntryID := 0
 			if blocked {
 				wantEntryID = int(entryID)
 			}
-			if saved.EntryId != wantEntryID {
-				t.Errorf("entry_id = %d, want %d", saved.EntryId, wantEntryID)
+			if saved.EntryID != wantEntryID {
+				t.Errorf("entry_id = %d, want %d", saved.EntryID, wantEntryID)
 			}
 		})
 	}

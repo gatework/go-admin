@@ -14,16 +14,16 @@ import (
 // CONCAT() only recently. A dialect where that assumption were wrong would
 // otherwise only be discovered the first time an operator's install hit a
 // genuine sys_api duplicate on PostgreSQL in production.
-func TestSeedNaturalKeysRefusesDuplicateApisOnPostgres(t *testing.T) {
+func TestSeedNaturalKeysRefusesDuplicateAPIsOnPostgres(t *testing.T) {
 	db := postgresDB(t)
-	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{}) })
-	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{})
-	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedApi{}); err != nil {
+	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{}) })
+	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{})
+	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedAPI{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
-		if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	for i := range 2 {
+		if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 			t.Fatalf("seed duplicate %d: %v", i, err)
 		}
 	}
@@ -35,7 +35,7 @@ func TestSeedNaturalKeysRefusesDuplicateApisOnPostgres(t *testing.T) {
 	if !contains(err.Error(), "order") || !contains(err.Error(), "/api/v1/order") {
 		t.Errorf("the error does not name the offending row: %v", err)
 	}
-	if db.Migrator().HasIndex(&oldSeedApi{}, "uk_sys_api_app_path_action_del") {
+	if db.Migrator().HasIndex(&oldSeedAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the unique index was built despite the migration refusing")
 	}
 }
@@ -51,13 +51,13 @@ func TestSeedNaturalKeysRefusesDuplicateApisOnPostgres(t *testing.T) {
 // an install the unique index itself would accept without complaint.
 func TestSeedNaturalKeysDoesNotFlagWhatTheIndexWouldAcceptOnPostgres(t *testing.T) {
 	db := postgresDB(t)
-	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{}) })
-	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{})
-	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedApi{}); err != nil {
+	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{}) })
+	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{})
+	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedAPI{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := db.Exec(
 			"INSERT INTO sys_api (app_code, path, action, deleted_at) VALUES ('order', NULL, NULL, 0)",
 		).Error; err != nil {
@@ -68,7 +68,7 @@ func TestSeedNaturalKeysDoesNotFlagWhatTheIndexWouldAcceptOnPostgres(t *testing.
 	if err := seedNaturalKeys(db); err != nil {
 		t.Fatalf("seedNaturalKeys refused a library the unique index itself accepts on PostgreSQL: %v", err)
 	}
-	if !db.Migrator().HasIndex(&oldSeedApi{}, "uk_sys_api_app_path_action_del") {
+	if !db.Migrator().HasIndex(&oldSeedAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the unique index was not built on PostgreSQL even though seedNaturalKeys reported success")
 	}
 }
@@ -78,16 +78,16 @@ func TestSeedNaturalKeysDoesNotFlagWhatTheIndexWouldAcceptOnPostgres(t *testing.
 // out on SQLite. Mirrors TestSeedNaturalKeysIsRepeatable's SQLite coverage.
 func TestSeedNaturalKeysBuildsOnPostgres(t *testing.T) {
 	db := postgresDB(t)
-	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{}) })
-	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedApi{})
-	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedApi{}); err != nil {
+	t.Cleanup(func() { db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{}) })
+	db.Migrator().DropTable(&oldSeedMenu{}, &oldSeedAPI{})
+	if err := db.AutoMigrate(&oldSeedMenu{}, &oldSeedAPI{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
-	if err := db.Create(&oldSeedApi{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
+	if err := db.Create(&oldSeedAPI{AppCode: "order", Path: "/api/v1/order", Action: "GET"}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := seedNaturalKeys(db); err != nil {
 			t.Fatalf("migrate %d: %v", i, err)
 		}
@@ -99,7 +99,7 @@ func TestSeedNaturalKeysBuildsOnPostgres(t *testing.T) {
 	if !db.Migrator().HasIndex(&oldSeedMenu{}, "uk_sys_menu_app_seed_code_del") {
 		t.Error("the sys_menu unique index was not built on PostgreSQL")
 	}
-	if !db.Migrator().HasIndex(&oldSeedApi{}, "uk_sys_api_app_path_action_del") {
+	if !db.Migrator().HasIndex(&oldSeedAPI{}, "uk_sys_api_app_path_action_del") {
 		t.Error("the sys_api unique index was not built on PostgreSQL")
 	}
 }

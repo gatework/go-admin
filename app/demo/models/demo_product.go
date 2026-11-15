@@ -1,7 +1,7 @@
 package models
 
 import (
-	"go-admin/common/models"
+	"github.com/gatework/motor/common/models"
 )
 
 // DemoProduct 示例模型
@@ -10,21 +10,21 @@ import (
 // 数据权限（actions.Permission）正是按 create_by 过滤，缺少 ControlBy 会使其失效。
 type DemoProduct struct {
 	models.Model
-
+	models.ControlBy
+	models.ModelTime
 	Name   string  `json:"name" gorm:"size:128;comment:名称"`
 	Code   string  `json:"code" gorm:"size:64;comment:编码"`
 	Price  float64 `json:"price" gorm:"comment:单价"`
 	Status string  `json:"status" gorm:"size:4;comment:状态"`
 	Remark string  `json:"remark" gorm:"size:255;comment:备注"`
-
-	models.ControlBy
-	models.ModelTime
 }
 
-func (DemoProduct) TableName() string {
+// TableName returns the explicit persistence table name.
+func (*DemoProduct) TableName() string {
 	return "demo_product"
 }
 
-func (e *DemoProduct) GetId() interface{} {
-	return e.Id
+// GetID returns the selected resource identity.
+func (e *DemoProduct) GetID() any {
+	return e.ID
 }

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 func at(s string) *time.Time {

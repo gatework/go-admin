@@ -1,4 +1,4 @@
-FROM golang:1.27.3-bookworm
+FROM golang:1.27.4-bookworm
 
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 update \
@@ -13,9 +13,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -ldflags="-s -w -X github.com/nxtrace/NTrace-core/config.Version=${NEXTTRACE_VERSION}" github.com/nxtrace/NTrace-core@${NEXTTRACE_VERSION} \
     && mv /usr/local/bin/NTrace-core /usr/local/bin/nexttrace
 
-WORKDIR /workspace/go-admin
+WORKDIR /workspace/motor
 ENV GOTOOLCHAIN=local GOWORK=off
 EXPOSE 8000
 
 # Keep the server itself as PID 1 so Docker's stop signal reaches it.
-CMD ["sh", "-ec", "go build -o /tmp/go-admin . && exec /tmp/go-admin server -c config/settings.docker.yml"]
+CMD ["sh", "-ec", "go build -o /tmp/motor . && exec /tmp/motor server -c config/settings.docker.yml"]

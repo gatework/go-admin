@@ -7,7 +7,7 @@ import (
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
 )
 
 // sqlserverDSNEnv points these tests at a database. They skip without it, so
@@ -20,7 +20,7 @@ import (
 // permits one. A suite that never pointed at SQL Server reported success for
 // a migration that could not be applied to any SQL Server database at all,
 // new or old.
-const sqlserverDSNEnv = "GO_ADMIN_TEST_SQLSERVER_DSN"
+const sqlserverDSNEnv = "MOTOR_TEST_SQLSERVER_DSN"
 
 func sqlserverDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -46,14 +46,14 @@ func sqlserverDB(t *testing.T) *gorm.DB {
 // touches, so a rerun does not inherit the previous run's index.
 func freshSQLServerTables(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	for _, m := range []any{&adminmodels.SysMenu{}, &adminmodels.SysApi{}} {
+	for _, m := range []any{&adminmodels.SysMenu{}, &adminmodels.SysAPI{}} {
 		if db.Migrator().HasTable(m) {
 			if err := db.Migrator().DropTable(m); err != nil {
 				t.Fatalf("dropping: %v", err)
 			}
 		}
 	}
-	if err := db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysApi{}); err != nil {
+	if err := db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 }
@@ -81,7 +81,7 @@ func TestSeedNaturalKeysOnSQLServer(t *testing.T) {
 	// collide, so both shapes are here. Two rows missing both, and two more
 	// that have a path and no action: a filter naming only path would let
 	// that second pair back into the index, where their equal NULLs collide.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := db.Exec("INSERT INTO sys_api (app_code, deleted_at) VALUES ('', 0)").Error; err != nil {
 			t.Fatalf("seeding sys_api: %v", err)
 		}
@@ -98,7 +98,7 @@ func TestSeedNaturalKeysOnSQLServer(t *testing.T) {
 	for _, name := range []string{"uk_sys_menu_app_seed_code_del", "uk_sys_api_app_path_action_del"} {
 		var model any = &adminmodels.SysMenu{}
 		if name == "uk_sys_api_app_path_action_del" {
-			model = &adminmodels.SysApi{}
+			model = &adminmodels.SysAPI{}
 		}
 		if !db.Migrator().HasIndex(model, name) {
 			t.Errorf("%s was not created", name)

@@ -1,57 +1,61 @@
 package dto
 
 import (
-	"go-admin/app/admin/models"
-	"go-admin/common/dto"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/common/dto"
+	common "github.com/gatework/motor/common/models"
 )
 
 // SysConfigGetPageReq 列表或者搜索使用结构体
 type SysConfigGetPageReq struct {
 	dto.Pagination `search:"-"`
-	ConfigName     string `form:"configName" search:"type:contains;column:config_name;table:sys_config"`
-	ConfigKey      string `form:"configKey" search:"type:contains;column:config_key;table:sys_config"`
-	ConfigType     string `form:"configType" search:"type:exact;column:config_type;table:sys_config"`
-	IsFrontend     string `form:"isFrontend" search:"type:exact;column:is_frontend;table:sys_config"`
 	SysConfigOrder
+	ConfigName string `form:"configName" search:"type:contains;column:config_name;table:sys_config"`
+	ConfigKey  string `form:"configKey" search:"type:contains;column:config_key;table:sys_config"`
+	ConfigType string `form:"configType" search:"type:exact;column:config_type;table:sys_config"`
+	IsFrontend string `form:"isFrontend" search:"type:exact;column:is_frontend;table:sys_config"`
 }
 
+// SysConfigOrder carries validated administration request parameters.
 type SysConfigOrder struct {
-	IdOrder         string `search:"type:order;column:id;table:sys_config" form:"idOrder"`
+	IDOrder         string `search:"type:order;column:id;table:sys_config" form:"idOrder"`
 	ConfigNameOrder string `search:"type:order;column:config_name;table:sys_config" form:"configNameOrder"`
 	ConfigKeyOrder  string `search:"type:order;column:config_key;table:sys_config" form:"configKeyOrder"`
 	ConfigTypeOrder string `search:"type:order;column:config_type;table:sys_config" form:"configTypeOrder"`
 	CreatedAtOrder  string `search:"type:order;column:created_at;table:sys_config" form:"createdAtOrder"`
 }
 
-func (m *SysConfigGetPageReq) GetNeedSearch() interface{} {
+// GetNeedSearch returns the tagged query parameters.
+func (m *SysConfigGetPageReq) GetNeedSearch() any {
 	return *m
 }
 
+// SysConfigGetToSysAppReq carries validated administration request parameters.
 type SysConfigGetToSysAppReq struct {
 	IsFrontend string `form:"isFrontend" search:"type:exact;column:is_frontend;table:sys_config"`
 }
 
-func (m *SysConfigGetToSysAppReq) GetNeedSearch() interface{} {
+// GetNeedSearch returns the tagged query parameters.
+func (m *SysConfigGetToSysAppReq) GetNeedSearch() any {
 	return *m
 }
 
 // SysConfigControl 增、改使用的结构体
 type SysConfigControl struct {
-	Id          int    `uri:"id" json:"-" comment:"编码"` // 编码
+	common.ControlBy
+	ID          int    `uri:"id" json:"-" comment:"编码"` // 编码
 	ConfigName  string `json:"configName" comment:""`
 	ConfigKey   string `uri:"configKey" json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
 	ConfigType  string `json:"configType" comment:""`
 	IsFrontend  string `json:"isFrontend"`
 	Remark      string `json:"remark" comment:""`
-	common.ControlBy
 }
 
 // Generate 结构体数据转化 从 SysConfigControl 至 system.SysConfig 对应的模型
 func (s *SysConfigControl) Generate(model *models.SysConfig) {
-	if s.Id != 0 {
-		model.Model = common.Model{Id: s.Id}
+	if s.ID != 0 {
+		model.Model = common.Model{ID: s.ID}
 	}
 	model.ConfigName = s.ConfigName
 	model.ConfigKey = s.ConfigKey
@@ -62,9 +66,9 @@ func (s *SysConfigControl) Generate(model *models.SysConfig) {
 
 }
 
-// GetId 获取数据对应的ID
-func (s *SysConfigControl) GetId() interface{} {
-	return s.Id
+// GetID returns the selected resource identity.
+func (s *SysConfigControl) GetID() any {
+	return s.ID
 }
 
 // GetSetSysConfigReq 增、改使用的结构体
@@ -78,6 +82,7 @@ func (s *GetSetSysConfigReq) Generate(model *models.SysConfig) {
 	model.ConfigValue = s.ConfigValue
 }
 
+// UpdateSetSysConfigReq carries validated administration request parameters.
 type UpdateSetSysConfigReq map[string]string
 
 // SysConfigByKeyReq 根据Key获取配置
@@ -85,28 +90,34 @@ type SysConfigByKeyReq struct {
 	ConfigKey string `uri:"configKey" search:"type:contains;column:config_key;table:sys_config"`
 }
 
-func (m *SysConfigByKeyReq) GetNeedSearch() interface{} {
+// GetNeedSearch returns the tagged query parameters.
+func (m *SysConfigByKeyReq) GetNeedSearch() any {
 	return *m
 }
 
+// GetSysConfigByKEYForServiceResp carries validated administration request parameters.
 type GetSysConfigByKEYForServiceResp struct {
 	ConfigKey   string `json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
 }
 
+// SysConfigGetReq carries validated administration request parameters.
 type SysConfigGetReq struct {
-	Id int `uri:"id"`
+	ID int `uri:"id"`
 }
 
-func (s *SysConfigGetReq) GetId() interface{} {
-	return s.Id
+// GetID returns the selected resource identity.
+func (s *SysConfigGetReq) GetID() any {
+	return s.ID
 }
 
+// SysConfigDeleteReq carries validated administration request parameters.
 type SysConfigDeleteReq struct {
-	Ids []int `json:"ids"`
 	common.ControlBy
+	IDs []int `json:"ids"`
 }
 
-func (s *SysConfigDeleteReq) GetId() interface{} {
-	return s.Ids
+// GetID returns the selected resource identity.
+func (s *SysConfigDeleteReq) GetID() any {
+	return s.IDs
 }

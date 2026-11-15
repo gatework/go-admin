@@ -12,10 +12,10 @@ func TestRedactDSNKeepsThePasswordOut(t *testing.T) {
 	const secret = "s3cr3t-do-not-log"
 
 	cases := map[string]string{
-		"mysql":         "goadmin:" + secret + "@tcp(db.example.com:3306)/go-admin?charset=utf8mb4&parseTime=True",
-		"postgres":      "postgres://goadmin:" + secret + "@db.example.com:5432/go-admin?sslmode=disable",
-		"sqlserver":     "sqlserver://goadmin:" + secret + "@db.example.com:1433?database=go-admin",
-		"empty-ish pwd": "goadmin:@tcp(db.example.com:3306)/go-admin",
+		"mysql":         "motor:" + secret + "@tcp(db.example.com:3306)/motor?charset=utf8mb4&parseTime=True",
+		"postgres":      "postgres://motor:" + secret + "@db.example.com:5432/motor?sslmode=disable",
+		"sqlserver":     "sqlserver://motor:" + secret + "@db.example.com:1433?database=motor",
+		"empty-ish pwd": "motor:@tcp(db.example.com:3306)/motor",
 	}
 
 	for name, dsn := range cases {
@@ -28,7 +28,7 @@ func TestRedactDSNKeepsThePasswordOut(t *testing.T) {
 			if !strings.Contains(got, "db.example.com") {
 				t.Errorf("host was lost, the line no longer says anything: %s", got)
 			}
-			if !strings.Contains(got, "goadmin") {
+			if !strings.Contains(got, "motor") {
 				t.Errorf("username was lost: %s", got)
 			}
 		})
@@ -37,7 +37,7 @@ func TestRedactDSNKeepsThePasswordOut(t *testing.T) {
 
 // sqlite has no credential to hide, and its path is the useful part.
 func TestRedactDSNLeavesAPathAlone(t *testing.T) {
-	const path = "./go-admin-db.db"
+	const path = "./motor-db.db"
 	if got := redactDSN(path); got != path {
 		t.Errorf("redactDSN(%q) = %q, want it unchanged", path, got)
 	}

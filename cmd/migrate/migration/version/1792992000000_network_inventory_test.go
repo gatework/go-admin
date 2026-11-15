@@ -9,8 +9,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 func TestNetworkInventoryAdvancesLegacySequencesOnPostgres(t *testing.T) {
@@ -68,7 +68,7 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysApi{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}, &common.Migration{}); err != nil {
+	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}, &common.Migration{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT, v0 TEXT, v1 TEXT, v2 TEXT, v3 TEXT, v4 TEXT, v5 TEXT)`).Error; err != nil {
@@ -79,7 +79,7 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err = seedNetworkInventory(db); err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +90,7 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 		}
 	}
 	var menus []adminmodels.SysMenu
-	if err = db.Preload("SysApi").Where("app_code = ?", "network").Find(&menus).Error; err != nil {
+	if err = db.Preload("SysAPI").Where("app_code = ?", "network").Find(&menus).Error; err != nil {
 		t.Fatal(err)
 	}
 	byName := map[string]adminmodels.SysMenu{}
@@ -101,11 +101,11 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 		t.Fatalf("menus = %d, want 7", len(menus))
 	}
 	dir, page := byName["NetworkManagement"], byName["NetworkDeviceManage"]
-	if dir.Title != "网络管理" || dir.MenuType != "M" || dir.Path != "/network" || page.ParentId != dir.MenuId || page.Title != "设备管理" || page.Component != "/network/device/index" || page.Path != "/network/device" {
+	if dir.Title != "网络管理" || dir.MenuType != "M" || dir.Path != "/network" || page.ParentID != dir.MenuID || page.Title != "设备管理" || page.Component != "/network/device/index" || page.Path != "/network/device" {
 		t.Fatalf("invalid menu hierarchy: dir=%+v page=%+v", dir, page)
 	}
 	pageAPIs := map[string]bool{}
-	for _, a := range page.SysApi {
+	for _, a := range page.SysAPI {
 		pageAPIs[a.Action+" "+a.Path] = true
 	}
 	if len(pageAPIs) != 3 || !pageAPIs["GET /api/v1/network-device"] || !pageAPIs["GET /api/v1/network-device/options"] || !pageAPIs["GET /api/v1/network-device/sync-status"] {
@@ -123,7 +123,7 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 			if m.Permission != permission {
 				continue
 			}
-			if m.MenuType != "F" || m.ParentId != page.MenuId || len(m.SysApi) != 1 || m.SysApi[0].Action+" "+m.SysApi[0].Path != endpoint {
+			if m.MenuType != "F" || m.ParentID != page.MenuID || len(m.SysAPI) != 1 || m.SysAPI[0].Action+" "+m.SysAPI[0].Path != endpoint {
 				t.Fatalf("incorrect action binding: %+v", m)
 			}
 			found = true
@@ -156,20 +156,20 @@ func TestNetworkInventoryMigrationSeedsHierarchyAndScopedActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	edit := byName["NetworkDeviceEdit"]
-	if err = db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", editor.RoleId, edit.MenuId).Error; err != nil {
+	if err = db.Exec("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", editor.RoleID, edit.MenuID).Error; err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err = db.Transaction(bindNetworkInventoryEditRead); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var readBack adminmodels.SysMenu
-	if err = db.Preload("SysApi").First(&readBack, edit.MenuId).Error; err != nil {
+	if err = db.Preload("SysAPI").First(&readBack, edit.MenuID).Error; err != nil {
 		t.Fatal(err)
 	}
 	methods := map[string]bool{}
-	for _, endpoint := range readBack.SysApi {
+	for _, endpoint := range readBack.SysAPI {
 		methods[endpoint.Action+" "+endpoint.Path] = true
 	}
 	if len(methods) != 2 || !methods["GET /api/v1/network-device/:id"] || !methods["PUT /api/v1/network-device/:id"] {

@@ -1,34 +1,41 @@
 package router_test
 
 import (
-	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service"
-	"go-admin/app/admin/service/dto"
-	"go-admin/common/actions"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
+	gormadapter "github.com/casbin/gorm-adapter/v3"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	accountsecurity "go-admin/common/account"
-	"go-admin/common/middleware"
-	"go-admin/common/middleware/handler"
+
+	"github.com/gatework/motor-core/sdk/config"
+	accountsecurity "github.com/gatework/motor/common/account"
+	"github.com/gatework/motor/common/middleware"
+	"github.com/gatework/motor/common/middleware/handler"
 )
 
 func TestJWTConfigurationReloadKeepsOneKeySnapshot(t *testing.T) {
 	mw := auth(t)
 	db := dbFor(t, "snapshot.test", "snapshot-admin")
 	token := tokenFor(t, mw, db, "snapshot-admin", "snapshot.test")
-	config.JwtConfig.Secret = "replacement-test-key"
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			JWT.Secret = "replacement-test-key"
+	})
 	if w := request(userRouter(mw), "snapshot.test", token); !strings.Contains(w.Body.String(), "snapshot-admin") {
 		t.Fatalf("config reload split signer and credential stamp: %s", w.Body.String())
 	}
@@ -51,7 +58,7 @@ func TestLogoutRevokesAllUserSessionsDurably(t *testing.T) {
 	first := tokenFor(t, mw, db, "logout-admin", "logout.test")
 	second := tokenFor(t, mw, db, "logout-admin", "logout.test")
 	r := gin.New()
-	r.Use(middleware.WithContextDb)
+	r.Use(middleware.WithContextDB)
 	r.POST("/logout", mw.MiddlewareFunc(), handler.LogOut)
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.Host = "logout.test"
@@ -82,27 +89,27 @@ func TestDisableEnableDoesNotReviveTokens(t *testing.T) {
 			mw := auth(t)
 			db := dbFor(t, "lifecycle.test", "lifecycle-admin")
 			token := tokenFor(t, mw, db, "lifecycle-admin", "lifecycle.test")
-			users := service.SysUser{}
-			users.Orm = db
-			users.Log = logger.NewHelper(logger.DefaultLogger)
-			roles := service.SysRole{}
-			roles.Orm = db
-			roles.Log = users.Log
+			users := service.SysUser{
+				DB:     db,
+				Logger: logger.NewHelper(logger.Default())}
+			roles := service.SysRole{
+				DB:     db,
+				Logger: users.Logger}
 			set := func(status string) {
 				t.Helper()
 				var err error
 				switch kind {
 				case "user status":
-					err = users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserId: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll})
+					err = users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll})
 				case "user update":
-					err = users.Update(&dto.SysUserUpdateReq{UserId: 1, Username: "lifecycle-admin", RoleId: 1, DeptId: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99)
+					err = users.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "lifecycle-admin", RoleID: 1, DeptID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99)
 				case "role status":
-					err = roles.UpdateStatus(&dto.UpdateStatusReq{RoleId: 1, Status: status})
+					err = roles.UpdateStatus(&dto.UpdateStatusReq{RoleID: 1, Status: status})
 				case "role update":
-					if migrationErr := db.AutoMigrate(&models.SysApi{}, &models.SysMenu{}, &gormadapter.CasbinRule{}); migrationErr != nil {
+					if migrationErr := db.AutoMigrate(&models.SysAPI{}, &models.SysMenu{}, &gormadapter.CasbinRule{}); migrationErr != nil {
 						t.Fatal(migrationErr)
 					}
-					err = roles.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: status}, nil)
+					err = roles.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: status}, nil)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -132,10 +139,10 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := tokenFor(t, mw, db, "profile-admin", "profile-session.test")
-	users := service.SysUser{}
-	users.Orm = db
-	users.Log = logger.NewHelper(logger.DefaultLogger)
-	if err := users.Update(&dto.SysUserUpdateReq{UserId: 1, Username: "profile-admin", NickName: "Updated"}, nil, 1); err != nil {
+	users := service.SysUser{
+		DB:     db,
+		Logger: logger.NewHelper(logger.Default())}
+	if err := users.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "profile-admin", NickName: "Updated"}, nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	if w := request(userRouter(mw), "profile-session.test", token); !strings.Contains(w.Body.String(), "profile-admin") {
@@ -160,9 +167,9 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 	auth(t)
 	db := dbFor(t, "reset-delete.test", "deleted-during-reset")
-	users := service.SysUser{}
-	users.Orm = db
-	users.Log = logger.NewHelper(logger.DefaultLogger)
+	users := service.SysUser{
+		DB:     db,
+		Logger: logger.NewHelper(logger.Default())}
 	var deleted bool
 	if err := db.Callback().Query().After("gorm:query").Register("delete-account-after-read", func(tx *gorm.DB) {
 		if deleted || tx.Statement.Table != "sys_user" {
@@ -175,7 +182,7 @@ func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserId: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
+	err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
 	if err == nil {
 		t.Fatal("reset reported success after account was deleted")
 	}
@@ -189,9 +196,9 @@ func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 }
 
 func TestPostgresSessionRevocation(t *testing.T) {
-	dsn := os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("MOTOR_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("GO_ADMIN_TEST_POSTGRES_DSN is required")
+		t.Skip("MOTOR_TEST_POSTGRES_DSN is required")
 	}
 	mw := auth(t)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -221,24 +228,24 @@ func TestPostgresSessionRevocation(t *testing.T) {
 	if err := db.AutoMigrate(&accountsecurity.State{}, &models.SysDept{}, &models.SysRole{}, &models.SysPost{}, &models.SysUser{}); err != nil {
 		t.Fatal(err)
 	}
-	role := models.SysRole{RoleId: 1, RoleName: "admin", RoleKey: "admin", Status: "2", DataScope: "1"}
+	role := models.SysRole{RoleID: 1, RoleName: "admin", RoleKey: "admin", Status: "2", DataScope: "1"}
 	if err := db.Create(&role).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.SysDept{DeptId: 1, DeptName: "Test department"}).Error; err != nil {
+	if err := db.Create(&models.SysDept{DeptID: 1, DeptName: "Test department"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	account := models.SysUser{UserId: 1, Username: "postgres-admin", Password: "Audit-password-1", RoleId: 1, DeptId: 1, Status: "2"}
+	account := models.SysUser{UserID: 1, Username: "postgres-admin", Password: "Audit-password-1", RoleID: 1, DeptID: 1, Status: "2"}
 	if err := db.Create(&account).Error; err != nil {
 		t.Fatal(err)
 	}
-	sdk.Runtime.SetDbByTenant("postgres.test", db)
+	sdk.Runtime.SetDB("postgres.test", db)
 	token := tokenFor(t, mw, db, "postgres-admin", "postgres.test")
-	users := service.SysUser{}
-	users.Orm = db
-	users.Log = logger.NewHelper(logger.DefaultLogger)
+	users := service.SysUser{
+		DB:     db,
+		Logger: logger.NewHelper(logger.Default())}
 	for _, status := range []string{"1", "2"} {
-		if err := users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserId: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+		if err := users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -250,7 +257,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 		t.Fatalf("fresh token failed: %s", w.Body.String())
 	}
 	r := gin.New()
-	r.Use(middleware.WithContextDb)
+	r.Use(middleware.WithContextDB)
 	r.POST("/logout", mw.MiddlewareFunc(), handler.LogOut)
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.Host = "postgres.test"
@@ -271,10 +278,10 @@ func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
 	if err := db.Table("sys_user").Where("user_id=1").UpdateColumn("auth_version", 7).Error; err != nil {
 		t.Fatal(err)
 	}
-	users := service.SysUser{}
-	users.Orm = db
-	users.Log = logger.NewHelper(logger.DefaultLogger)
-	if err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserId: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+	users := service.SysUser{
+		DB:     db,
+		Logger: logger.NewHelper(logger.Default())}
+	if err := users.ResetPwd(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 		t.Fatal(err)
 	}
 	var account models.SysUser
@@ -292,15 +299,15 @@ func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
 func TestRoleReassignmentDoesNotReviveOldToken(t *testing.T) {
 	mw := auth(t)
 	db := dbFor(t, "reassign.test", "reassign-admin")
-	if err := db.Create(&models.SysRole{RoleId: 2, RoleKey: "temporary", RoleName: "temporary", Status: "2", DataScope: "1"}).Error; err != nil {
+	if err := db.Create(&models.SysRole{RoleID: 2, RoleKey: "temporary", RoleName: "temporary", Status: "2", DataScope: "1"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	token := tokenFor(t, mw, db, "reassign-admin", "reassign.test")
 	s := &service.SysUser{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
 	for _, roleID := range []int{2, 1} {
-		if err := s.Update(&dto.SysUserUpdateReq{UserId: 1, Username: "reassign-admin", RoleId: roleID, DeptId: 1, Status: "2"}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99); err != nil {
+		if err := s.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "reassign-admin", RoleID: roleID, DeptID: 1, Status: "2"}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -327,9 +334,9 @@ func TestUserUpdateRechecksPermissionAtWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &service.SysUser{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
-	err := s.Update(&dto.SysUserUpdateReq{UserId: 1, Username: "scope-user", NickName: "outside-scope", RoleId: 1, DeptId: 1, Status: "1"}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserId: 10}, 99)
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
+	err := s.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "scope-user", NickName: "outside-scope", RoleID: 1, DeptID: 1, Status: "1"}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 10}, 99)
 	var got models.SysUser
 	if readErr := db.First(&got, 1).Error; readErr != nil {
 		t.Fatal(readErr)
@@ -344,29 +351,29 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			mw := auth(t)
 			db := dbFor(t, "identity.test", "identity-admin")
-			if err := db.AutoMigrate(&models.SysApi{}, &models.SysMenu{}, &models.SysDept{}, &gormadapter.CasbinRule{}); err != nil {
+			if err := db.AutoMigrate(&models.SysAPI{}, &models.SysMenu{}, &models.SysDept{}, &gormadapter.CasbinRule{}); err != nil {
 				t.Fatal(err)
 			}
-			if err := db.Create(&[]models.SysDept{{DeptId: 1, DeptName: "original"}, {DeptId: 2, DeptName: "alternate"}}).Error; err != nil {
+			if err := db.Create(&[]models.SysDept{{DeptID: 1, DeptName: "original"}, {DeptID: 2, DeptName: "alternate"}}).Error; err != nil {
 				t.Fatal(err)
 			}
-			users := service.SysUser{}
-			users.Orm = db
-			users.Log = logger.NewHelper(logger.DefaultLogger)
-			roles := service.SysRole{}
-			roles.Orm = db
-			roles.Log = users.Log
+			users := service.SysUser{
+				DB:     db,
+				Logger: logger.NewHelper(logger.Default())}
+			roles := service.SysRole{
+				DB:     db,
+				Logger: users.Logger}
 			apply := func(alternate bool) {
 				t.Helper()
 				var err error
 				switch kind {
 				case "username", "department":
-					d := dto.SysUserUpdateReq{UserId: 1, Username: "identity-admin", RoleId: 1, DeptId: 1, Status: "2"}
+					d := dto.SysUserUpdateReq{UserID: 1, Username: "identity-admin", RoleID: 1, DeptID: 1, Status: "2"}
 					if alternate {
 						if kind == "username" {
 							d.Username = "temporary-name"
 						} else {
-							d.DeptId = 2
+							d.DeptID = 2
 						}
 					}
 					caller := 99
@@ -375,7 +382,7 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 					}
 					err = users.Update(&d, &actions.DataPermission{DataScope: actions.DataScopeAll}, caller)
 				case "role key", "role scope":
-					d := dto.SysRoleUpdateReq{RoleId: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: "2"}
+					d := dto.SysRoleUpdateReq{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: "2"}
 					if alternate {
 						if kind == "role key" {
 							d.RoleKey = "temporary-admin"
@@ -385,18 +392,17 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 					}
 					err = roles.Update(&d, nil)
 				default:
-					d := dto.RoleDataScopeReq{RoleId: 1, DataScope: "1"}
+					d := dto.RoleDataScopeReq{RoleID: 1, DataScope: "1"}
 					if kind == "custom departments" {
 						d.DataScope = "2"
-						d.DeptIds = []int{1}
+						d.DeptIDs = []int{1}
 						if alternate {
-							d.DeptIds = []int{2}
+							d.DeptIDs = []int{2}
 						}
 					} else if alternate {
 						d.DataScope = "5"
 					}
-					roles.UpdateDataScope(&d)
-					err = roles.Error
+					err = roles.UpdateDataScope(&d)
 				}
 				if err != nil {
 					t.Fatal(err)

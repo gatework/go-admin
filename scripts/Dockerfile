@@ -1,6 +1,6 @@
 FROM alpine
 
-COPY ./go-admin /
+COPY ./motor /
 EXPOSE 8000
 
-CMD ["/go-admin","server","-c", "/config/settings.yml"]
+CMD ["/motor","server","-c", "/config/settings.yml"]

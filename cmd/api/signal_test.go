@@ -16,9 +16,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
 
-	otherrouter "go-admin/app/other/router"
+	"github.com/gatework/motor-core/sdk"
+
+	otherrouter "github.com/gatework/motor/app/other/router"
 )
 
 // The signal path cannot be exercised in-process: delivering a signal to the
@@ -36,11 +37,11 @@ import (
 // no database its checks fail - so the assertions below are on the draining
 // answer specifically, not on the status code alone.
 const (
-	childEnv         = "GO_ADMIN_SIGNAL_CHILD"
-	childStuckEnv    = "GO_ADMIN_SIGNAL_CHILD_STUCK"
-	childHangConn    = "GO_ADMIN_SIGNAL_CHILD_HANGCONN"
-	childSlowCleanup = "GO_ADMIN_SIGNAL_CHILD_SLOWCLEANUP"
-	childDrainMS     = "GO_ADMIN_SIGNAL_CHILD_DRAIN_MS"
+	childEnv         = "MOTOR_SIGNAL_CHILD"
+	childStuckEnv    = "MOTOR_SIGNAL_CHILD_STUCK"
+	childHangConn    = "MOTOR_SIGNAL_CHILD_HANGCONN"
+	childSlowCleanup = "MOTOR_SIGNAL_CHILD_SLOWCLEANUP"
+	childDrainMS     = "MOTOR_SIGNAL_CHILD_DRAIN_MS"
 	markerAddr       = "CHILD-ADDR"
 	markerReady      = "CHILD-READY"
 	markerSignal     = "CHILD-SIGNAL"
@@ -229,13 +230,13 @@ func startChild(t *testing.T, stuck bool, extraEnv ...string) (*exec.Cmd, chan s
 				acc.Write(buf[:n])
 				for {
 					s := acc.String()
-					i := strings.IndexByte(s, '\n')
-					if i < 0 {
+					before, after, ok := strings.Cut(s, "\n")
+					if !ok {
 						break
 					}
-					lines <- s[:i]
+					lines <- before
 					acc.Reset()
-					acc.WriteString(s[i+1:])
+					acc.WriteString(after)
 				}
 			}
 			if err != nil {
@@ -371,30 +372,6 @@ func watch(addr string, paths ...string) *watcher {
 		}
 	}()
 	return w
-}
-
-// sawDraining reports whether /ready has answered "draining" yet.
-func (w *watcher) sawDraining() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, s := range w.samples {
-		if s.path == readyPath && s.draining {
-			return true
-		}
-	}
-	return false
-}
-
-func (w *watcher) wait(t *testing.T, d time.Duration) []sample {
-	t.Helper()
-	select {
-	case <-w.done:
-	case <-time.After(d):
-		t.Fatal("the child never stopped accepting connections")
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.samples
 }
 
 func describe(samples []sample) string {
@@ -736,4 +713,28 @@ func TestASecondSignalEndsTheDrainWindowEarly(t *testing.T) {
 	if err := cmd.Wait(); err != nil {
 		t.Fatalf("child exited with %v; a second signal inside the window must end the window, not the process", err)
 	}
+}
+
+// sawDraining reports whether /ready has answered "draining" yet.
+func (w *watcher) sawDraining() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, s := range w.samples {
+		if s.path == readyPath && s.draining {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *watcher) wait(t *testing.T, d time.Duration) []sample {
+	t.Helper()
+	select {
+	case <-w.done:
+	case <-time.After(d):
+		t.Fatal("the child never stopped accepting connections")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.samples
 }

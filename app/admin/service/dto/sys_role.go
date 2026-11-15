@@ -1,16 +1,17 @@
 package dto
 
 import (
-	"go-admin/app/admin/models"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 
-	"go-admin/common/dto"
+	"github.com/gatework/motor/common/dto"
 )
 
+// SysRoleGetPageReq carries validated administration request parameters.
 type SysRoleGetPageReq struct {
 	dto.Pagination `search:"-"`
 
-	RoleId    int    `form:"roleId" search:"type:exact;column:role_id;table:sys_role" comment:"角色编码"`     // 角色编码
+	RoleID    int    `form:"roleId" search:"type:exact;column:role_id;table:sys_role" comment:"角色编码"`     // 角色编码
 	RoleName  string `form:"roleName" search:"type:exact;column:role_name;table:sys_role" comment:"角色名称"` // 角色名称
 	Status    string `form:"status" search:"type:exact;column:status;table:sys_role" comment:"状态"`        // 状态
 	RoleKey   string `form:"roleKey" search:"type:exact;column:role_key;table:sys_role" comment:"角色代码"`   // 角色代码
@@ -21,20 +22,24 @@ type SysRoleGetPageReq struct {
 	DataScope string `form:"dataScope" search:"type:exact;column:data_scope;table:sys_role" comment:"是否管理员"`
 }
 
+// SysRoleOrder carries validated administration request parameters.
 type SysRoleOrder struct {
-	RoleIdOrder    string `search:"type:order;column:role_id;table:sys_role" form:"roleIdOrder"`
+	RoleIDOrder    string `search:"type:order;column:role_id;table:sys_role" form:"roleIdOrder"`
 	RoleNameOrder  string `search:"type:order;column:role_name;table:sys_role" form:"roleNameOrder"`
 	RoleSortOrder  string `search:"type:order;column:role_sort;table:sys_role" form:"usernameOrder"`
 	StatusOrder    string `search:"type:order;column:status;table:sys_role" form:"statusOrder"`
 	CreatedAtOrder string `search:"type:order;column:created_at;table:sys_role" form:"createdAtOrder"`
 }
 
-func (m *SysRoleGetPageReq) GetNeedSearch() interface{} {
+// GetNeedSearch returns the tagged query parameters.
+func (m *SysRoleGetPageReq) GetNeedSearch() any {
 	return *m
 }
 
+// SysRoleInsertReq carries validated administration request parameters.
 type SysRoleInsertReq struct {
-	RoleId    int              `uri:"id" comment:"角色编码"`        // 角色编码
+	common.ControlBy
+	RoleID    int              `uri:"id" comment:"角色编码"`        // 角色编码
 	RoleName  string           `form:"roleName" comment:"角色名称"` // 角色名称
 	Status    string           `form:"status" comment:"状态"`     // 状态 1禁用 2正常
 	RoleKey   string           `form:"roleKey" comment:"角色代码"`  // 角色代码
@@ -44,15 +49,15 @@ type SysRoleInsertReq struct {
 	Admin     bool             `form:"admin" comment:"是否管理员"`
 	DataScope string           `form:"dataScope" vd:"$=='1'||$=='2'||$=='3'||$=='4'||$=='5'"` // must be one of actions.DataScope{All,Custom,Dept,DeptTree,Self}; PRD 006 F14/H2
 	SysMenu   []models.SysMenu `form:"sysMenu"`
-	MenuIds   []int            `form:"menuIds"`
+	MenuIDs   []int            `form:"menuIds"`
 	SysDept   []models.SysDept `form:"sysDept"`
-	DeptIds   []int            `form:"deptIds"`
-	common.ControlBy
+	DeptIDs   []int            `form:"deptIds"`
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (s *SysRoleInsertReq) Generate(model *models.SysRole) {
-	if s.RoleId != 0 {
-		model.RoleId = s.RoleId
+	if s.RoleID != 0 {
+		model.RoleID = s.RoleID
 	}
 	model.RoleName = s.RoleName
 	model.Status = s.Status
@@ -66,12 +71,15 @@ func (s *SysRoleInsertReq) Generate(model *models.SysRole) {
 	model.SysDept = s.SysDept
 }
 
-func (s *SysRoleInsertReq) GetId() interface{} {
-	return s.RoleId
+// GetID returns the selected resource identity.
+func (s *SysRoleInsertReq) GetID() any {
+	return s.RoleID
 }
 
+// SysRoleUpdateReq carries validated administration request parameters.
 type SysRoleUpdateReq struct {
-	RoleId    int              `uri:"id" comment:"角色编码"`        // 角色编码
+	common.ControlBy
+	RoleID    int              `uri:"id" comment:"角色编码"`        // 角色编码
 	RoleName  string           `form:"roleName" comment:"角色名称"` // 角色名称
 	Status    string           `form:"status" comment:"状态"`     // 状态
 	RoleKey   string           `form:"roleKey" comment:"角色代码"`  // 角色代码
@@ -81,15 +89,15 @@ type SysRoleUpdateReq struct {
 	Admin     bool             `form:"admin" comment:"是否管理员"`
 	DataScope string           `form:"dataScope" vd:"$=='1'||$=='2'||$=='3'||$=='4'||$=='5'"` // must be one of actions.DataScope{All,Custom,Dept,DeptTree,Self}; PRD 006 F14/H2
 	SysMenu   []models.SysMenu `form:"sysMenu"`
-	MenuIds   []int            `form:"menuIds"`
+	MenuIDs   []int            `form:"menuIds"`
 	SysDept   []models.SysDept `form:"sysDept"`
-	DeptIds   []int            `form:"deptIds"`
-	common.ControlBy
+	DeptIDs   []int            `form:"deptIds"`
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (s *SysRoleUpdateReq) Generate(model *models.SysRole) {
-	if s.RoleId != 0 {
-		model.RoleId = s.RoleId
+	if s.RoleID != 0 {
+		model.RoleID = s.RoleID
 	}
 	model.RoleName = s.RoleName
 	model.Status = s.Status
@@ -103,58 +111,68 @@ func (s *SysRoleUpdateReq) Generate(model *models.SysRole) {
 	model.SysDept = s.SysDept
 }
 
-func (s *SysRoleUpdateReq) GetId() interface{} {
-	return s.RoleId
+// GetID returns the selected resource identity.
+func (s *SysRoleUpdateReq) GetID() any {
+	return s.RoleID
 }
 
+// UpdateStatusReq carries validated administration request parameters.
 type UpdateStatusReq struct {
-	RoleId int    `form:"roleId" comment:"角色编码"` // 角色编码
-	Status string `form:"status" comment:"状态"`   // 状态
 	common.ControlBy
+	RoleID int    `form:"roleId" comment:"角色编码"` // 角色编码
+	Status string `form:"status" comment:"状态"`   // 状态
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (s *UpdateStatusReq) Generate(model *models.SysRole) {
-	if s.RoleId != 0 {
-		model.RoleId = s.RoleId
+	if s.RoleID != 0 {
+		model.RoleID = s.RoleID
 	}
 	model.Status = s.Status
 }
 
-func (s *UpdateStatusReq) GetId() interface{} {
-	return s.RoleId
+// GetID returns the selected resource identity.
+func (s *UpdateStatusReq) GetID() any {
+	return s.RoleID
 }
 
+// SysRoleGetReq carries validated administration request parameters.
 type SysRoleGetReq struct {
-	Id int `uri:"id"`
+	ID int `uri:"id"`
 }
 
-func (s *SysRoleGetReq) GetId() interface{} {
-	return s.Id
+// GetID returns the selected resource identity.
+func (s *SysRoleGetReq) GetID() any {
+	return s.ID
 }
 
+// SysRoleDeleteReq carries validated administration request parameters.
 type SysRoleDeleteReq struct {
-	Ids []int `json:"ids"`
+	IDs []int `json:"ids"`
 }
 
-func (s *SysRoleDeleteReq) GetId() interface{} {
-	return s.Ids
+// GetID returns the selected resource identity.
+func (s *SysRoleDeleteReq) GetID() any {
+	return s.IDs
 }
 
 // RoleDataScopeReq 角色数据权限修改
 type RoleDataScopeReq struct {
-	RoleId    int    `json:"roleId" binding:"required"`
+	RoleID    int    `json:"roleId" binding:"required"`
 	DataScope string `json:"dataScope" binding:"required" vd:"$=='1'||$=='2'||$=='3'||$=='4'||$=='5'"` // must be one of actions.DataScope{All,Custom,Dept,DeptTree,Self}; PRD 006 F14/H2
-	DeptIds   []int  `json:"deptIds"`
+	DeptIDs   []int  `json:"deptIds"`
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (s *RoleDataScopeReq) Generate(model *models.SysRole) {
-	if s.RoleId != 0 {
-		model.RoleId = s.RoleId
+	if s.RoleID != 0 {
+		model.RoleID = s.RoleID
 	}
 	model.DataScope = s.DataScope
-	model.DeptIds = s.DeptIds
+	model.DeptIDs = s.DeptIDs
 }
 
-type DeptIdList struct {
-	DeptId int `json:"DeptId"`
+// DeptIDList carries validated administration request parameters.
+type DeptIDList struct {
+	DeptID int `json:"DeptId"`
 }

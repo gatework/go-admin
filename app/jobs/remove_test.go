@@ -12,7 +12,7 @@ import (
 // The frame the leaked goroutines park in. Remove starts it, and it is the
 // only goroutine in this package that sends on a channel the caller may have
 // walked away from.
-const removeSenderFrame = "go-admin/app/jobs.Remove.func1"
+const removeSenderFrame = "github.com/gatework/motor/app/jobs.Remove.func1"
 
 // Remove hands the caller a channel it is free to abandon: RemoveJob stops
 // waiting after a second and returns a timeout error. The send therefore has
@@ -28,7 +28,7 @@ func TestRemoveLetsItsGoroutineFinishWithNobodyReceiving(t *testing.T) {
 
 	c := cron.New()
 	ids := make([]cron.EntryID, 0, jobs)
-	for i := 0; i < jobs; i++ {
+	for range jobs {
 		id, err := c.AddFunc("@every 1h", func() {})
 		if err != nil {
 			t.Fatalf("AddFunc: %v", err)
@@ -60,13 +60,14 @@ func waitFor(d time.Duration, done func() bool) error {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return errTimeout
+			return timeoutErr
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-var errTimeout = timeoutError{}
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var timeoutErr = timeoutError{}
 
 type timeoutError struct{}
 
@@ -77,7 +78,7 @@ func parkedInRemove() int {
 }
 
 func oneParkedStack() string {
-	for _, block := range strings.Split(goroutineDump(), "\n\n") {
+	for block := range strings.SplitSeq(goroutineDump(), "\n\n") {
 		if strings.Contains(block, removeSenderFrame) {
 			return block
 		}

@@ -4,18 +4,18 @@ settings:
     enabledp: true
     host: 0.0.0.0
     mode: demo
-    name: testApp
+    name: motor
     port: 8000
     readtimeout: 10000
     writertimeout: 20000
   database:
     driver: sqlite3
-    source: ./go-admin-db.db
+    source: ./motor-db.db
   gen:
     dbname: testhhh
     frontpath: ../go-admin-ui/src
   jwt:
-    secret: go-admin
+    secret: motor
     timeout: 3600
   logger:
     # 日志存放路径

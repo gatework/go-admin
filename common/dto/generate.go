@@ -1,11 +1,14 @@
 package dto
 
-import contractdto "github.com/go-admin-team/go-admin-core/v2/sdk/contract/dto"
+import contractdto "github.com/gatework/motor-core/sdk/contract/dto"
 
 // ObjectById, ObjectGetReq and ObjectDeleteReq are thin aliases of
-// go-admin-core's sdk/contract/dto (PRD 006 F2/F5).
+// motor-core's sdk/contract/dto (PRD 006 F2/F5).
 type (
-	ObjectById      = contractdto.ObjectById
-	ObjectGetReq    = contractdto.ObjectGetReq
+	// ObjectByID uses the canonical core DTO contract.
+	ObjectByID = contractdto.ObjectByID
+	// ObjectGetReq uses the canonical core DTO contract.
+	ObjectGetReq = contractdto.ObjectGetReq
+	// ObjectDeleteReq uses the canonical core DTO contract.
 	ObjectDeleteReq = contractdto.ObjectDeleteReq
 )

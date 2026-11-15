@@ -1,7 +1,7 @@
 package test
 
 import (
-	//"go-admin/models/tools"
+	//"motor/models/tools"
 	//"os"
 	"testing"
 	//"text/template"
@@ -28,7 +28,7 @@ func TestGoModelTemplate(t *testing.T) {
 	t.Log("")
 }
 
-func TestGoApiTemplate(t *testing.T) {
+func TestGoAPITemplate(t *testing.T) {
 	//t1, err := template.ParseFiles("api.go.template")
 	//if err != nil {
 	//	t.Error(err)

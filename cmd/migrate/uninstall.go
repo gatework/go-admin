@@ -8,9 +8,9 @@ import (
 
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	commonmodels "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // policyKey is one casbin_rule row identified the way casbin_rule is unique:
@@ -26,6 +26,7 @@ type policyKey struct {
 	V5    string `gorm:"column:v5"`
 }
 
+// String handles the string operation.
 func (p policyKey) String() string {
 	return fmt.Sprintf("%s %s %s %s", p.Ptype, p.V0, p.V1, p.V2)
 }
@@ -40,7 +41,7 @@ type uninstallReport struct {
 	Found      bool
 	Version    string
 	Menus      int64
-	Apis       int64
+	APIs       int64
 	Bindings   int64
 	RoleMenus  int64
 	Policies   int64
@@ -100,86 +101,23 @@ func uninstall(db *gorm.DB, code string) (uninstallReport, error) {
 			return fmt.Errorf("reading this app's menus: %w", err)
 		}
 		var apiIDs []int
-		if err := tx.Unscoped().Model(&adminmodels.SysApi{}).
+		if err := tx.Unscoped().Model(&adminmodels.SysAPI{}).
 			Where("app_code = ?", code).Pluck("id", &apiIDs).Error; err != nil {
 			return fmt.Errorf("reading this app's apis: %w", err)
 		}
 		var apiKeys []policyKey
-		if err := tx.Unscoped().Model(&adminmodels.SysApi{}).
+		if err := tx.Unscoped().Model(&adminmodels.SysAPI{}).
 			Where("app_code = ?", code).
 			Select("path as v1, action as v2").Scan(&apiKeys).Error; err != nil {
 			return fmt.Errorf("reading this app's api paths: %w", err)
 		}
 
-		// 3. The many2many rows behind SysMenu.SysApi. Either side is enough
-		// to make a row this application's.
-		//
-		// The guard is intent, not necessity: GORM renders IN with an empty
-		// slice as a condition matching nothing rather than the empty IN
-		// list raw SQL would reject, so removing it changes no behaviour
-		// today. It says out loud that an application with no menus, or no
-		// apis, is a normal thing to uninstall.
-		if len(menuIDs) > 0 || len(apiIDs) > 0 {
-			q := tx.Table("sys_menu_api_rule")
-			switch {
-			case len(menuIDs) > 0 && len(apiIDs) > 0:
-				q = q.Where("sys_menu_menu_id IN ? OR sys_api_id IN ?", menuIDs, apiIDs)
-			case len(menuIDs) > 0:
-				q = q.Where("sys_menu_menu_id IN ?", menuIDs)
-			default:
-				q = q.Where("sys_api_id IN ?", apiIDs)
-			}
-			res := q.Delete(nil)
-			if res.Error != nil {
-				return fmt.Errorf("removing menu/api bindings: %w", res.Error)
-			}
-			rep.Bindings = res.RowsAffected
+		if err := removeAppBindings(tx, menuIDs, apiIDs, &rep); err != nil {
+			return err
 		}
 
-		// 4. Role assignments. menu_id is a surrogate key, so a row here can
-		// only have come from a menu this application wrote - there is no
-		// "looks like it but is not". That is why this needs no ledger, and
-		// why a column on sys_role_menu would have been wrong: SysRole.Update
-		// deletes a role's rows and writes them back through GORM's
-		// many2many, which does not carry extra columns, so any such column
-		// would be silently blanked the first time somebody edits a role.
-		if len(menuIDs) > 0 {
-			res := tx.Table("sys_role_menu").Where("menu_id IN ?", menuIDs).Delete(nil)
-			if res.Error != nil {
-				return fmt.Errorf("removing role assignments: %w", res.Error)
-			}
-			rep.RoleMenus = res.RowsAffected
-		}
-
-		// 5. Policies, by ledger, one at a time and by exact tuple.
-		var grants []adminmodels.SysAppCasbinGrant
-		if err := tx.Where("app_code = ?", code).Find(&grants).Error; err != nil {
-			return fmt.Errorf("reading the grant ledger: %w", err)
-		}
-		for _, g := range grants {
-			k := policyKey{Ptype: g.Ptype, V0: g.V0, V1: g.V1, V2: g.V2, V3: g.V3, V4: g.V4, V5: g.V5}
-			res := tx.Table("casbin_rule").
-				Where("ptype = ? AND v0 = ? AND v1 = ? AND v2 = ? AND v3 = ? AND v4 = ? AND v5 = ?",
-					k.Ptype, k.V0, k.V1, k.V2, k.V3, k.V4, k.V5).
-				Delete(nil)
-			if res.Error != nil {
-				return fmt.Errorf("removing policy %s: %w", k, res.Error)
-			}
-			if res.RowsAffected == 0 {
-				// Something this install created is not there any more. Not
-				// an error: the uninstall's job was to remove it and it is
-				// gone. Reported because a policy this app created and did
-				// not remove means something else rewrote casbin_rule.
-				rep.Skipped = append(rep.Skipped, k)
-				continue
-			}
-			rep.Policies += res.RowsAffected
-		}
-		// The ledger's job ends here whether or not each row matched. Left
-		// behind it would only grow, and a reinstall writes its own entries.
-		if err := tx.Where("app_code = ?", code).
-			Delete(&adminmodels.SysAppCasbinGrant{}).Error; err != nil {
-			return fmt.Errorf("clearing the grant ledger: %w", err)
+		if err := removeAppGrants(tx, code, &rep); err != nil {
+			return err
 		}
 
 		// 5b. Read-only. By now every policy the ledger could speak for has
@@ -194,37 +132,7 @@ func uninstall(db *gorm.DB, code string) (uninstallReport, error) {
 		}
 		rep.Orphans = orphans
 
-		// 6 and 7.
-		res := tx.Unscoped().Where("app_code = ?", code).Delete(&adminmodels.SysApi{})
-		if res.Error != nil {
-			return fmt.Errorf("removing this app's apis: %w", res.Error)
-		}
-		rep.Apis = res.RowsAffected
-
-		res = tx.Unscoped().Where("app_code = ?", code).Delete(&adminmodels.SysMenu{})
-		if res.Error != nil {
-			return fmt.Errorf("removing this app's menus: %w", res.Error)
-		}
-		rep.Menus = res.RowsAffected
-
-		// 8. Without this a reinstall finds every version already applied,
-		// runs no migration, seeds nothing, and reports success. It is the
-		// easiest step to leave out, because a migration record does not
-		// look like the application's data.
-		res = tx.Where("app_code = ?", code).Delete(&commonmodels.Migration{})
-		if res.Error != nil {
-			return fmt.Errorf("removing this app's migration records: %w", res.Error)
-		}
-		rep.Migrations = res.RowsAffected
-
-		// 9.
-		if found {
-			if err := tx.Where("app_code = ?", code).
-				Delete(&adminmodels.SysApp{}).Error; err != nil {
-				return fmt.Errorf("removing the sys_app row: %w", err)
-			}
-		}
-		return nil
+		return removeAppRecords(tx, code, found, &rep)
 	})
 	if err != nil {
 		return uninstallReport{Code: code}, err
@@ -243,10 +151,7 @@ func findOrphanPolicies(tx *gorm.DB, keys []policyKey) ([]policyKey, error) {
 	const chunk = 100
 	var out []policyKey
 	for start := 0; start < len(keys); start += chunk {
-		end := start + chunk
-		if end > len(keys) {
-			end = len(keys)
-		}
+		end := min(start+chunk, len(keys))
 		clauses := make([]string, 0, end-start)
 		args := make([]any, 0, (end-start)*2)
 		for _, k := range keys[start:end] {
@@ -277,7 +182,7 @@ func reportUninstall(w io.Writer, rep uninstallReport) {
 		fmt.Fprintf(w, "uninstalled %s %s\n", rep.Code, rep.Version)
 	}
 	fmt.Fprintf(w, "removed: %d menu(s), %d api(s), %d binding(s), %d role assignment(s), %d policy(ies), %d migration record(s)\n",
-		rep.Menus, rep.Apis, rep.Bindings, rep.RoleMenus, rep.Policies, rep.Migrations)
+		rep.Menus, rep.APIs, rep.Bindings, rep.RoleMenus, rep.Policies, rep.Migrations)
 	fmt.Fprintln(w, "the application's own tables were not touched.")
 
 	if len(rep.Skipped) > 0 {
@@ -293,4 +198,115 @@ func reportUninstall(w io.Writer, rep uninstallReport) {
 		}
 		fmt.Fprintln(w, "they now point at APIs that no longer exist. Harmless to the running server, and yours to clear up.")
 	}
+}
+
+func removeAppBindings(tx *gorm.DB, menuIDs, apiIDs []int, rep *uninstallReport) error {
+	// 3. The many2many rows behind SysMenu.SysApi. Either side is enough
+	// to make a row this application's.
+	//
+	// The guard is intent, not necessity: GORM renders IN with an empty
+	// slice as a condition matching nothing rather than the empty IN
+	// list raw SQL would reject, so removing it changes no behaviour
+	// today. It says out loud that an application with no menus, or no
+	// apis, is a normal thing to uninstall.
+	if len(menuIDs) > 0 || len(apiIDs) > 0 {
+		q := tx.Table("sys_menu_api_rule")
+		switch {
+		case len(menuIDs) > 0 && len(apiIDs) > 0:
+			q = q.Where("sys_menu_menu_id IN ? OR sys_api_id IN ?", menuIDs, apiIDs)
+		case len(menuIDs) > 0:
+			q = q.Where("sys_menu_menu_id IN ?", menuIDs)
+		default:
+			q = q.Where("sys_api_id IN ?", apiIDs)
+		}
+		res := q.Delete(nil)
+		if res.Error != nil {
+			return fmt.Errorf("removing menu/api bindings: %w", res.Error)
+		}
+		rep.Bindings = res.RowsAffected
+	}
+
+	// 4. Role assignments. menu_id is a surrogate key, so a row here can
+	// only have come from a menu this application wrote - there is no
+	// "looks like it but is not". That is why this needs no ledger, and
+	// why a column on sys_role_menu would have been wrong: SysRole.Update
+	// deletes a role's rows and writes them back through GORM's
+	// many2many, which does not carry extra columns, so any such column
+	// would be silently blanked the first time somebody edits a role.
+	if len(menuIDs) > 0 {
+		res := tx.Table("sys_role_menu").Where("menu_id IN ?", menuIDs).Delete(nil)
+		if res.Error != nil {
+			return fmt.Errorf("removing role assignments: %w", res.Error)
+		}
+		rep.RoleMenus = res.RowsAffected
+	}
+
+	return nil
+}
+func removeAppGrants(tx *gorm.DB, code string, rep *uninstallReport) error {
+	// 5. Policies, by ledger, one at a time and by exact tuple.
+	var grants []adminmodels.SysAppCasbinGrant
+	if err := tx.Where("app_code = ?", code).Find(&grants).Error; err != nil {
+		return fmt.Errorf("reading the grant ledger: %w", err)
+	}
+	for _, g := range grants {
+		k := policyKey{Ptype: g.Ptype, V0: g.V0, V1: g.V1, V2: g.V2, V3: g.V3, V4: g.V4, V5: g.V5}
+		res := tx.Table("casbin_rule").
+			Where("ptype = ? AND v0 = ? AND v1 = ? AND v2 = ? AND v3 = ? AND v4 = ? AND v5 = ?",
+				k.Ptype, k.V0, k.V1, k.V2, k.V3, k.V4, k.V5).
+			Delete(nil)
+		if res.Error != nil {
+			return fmt.Errorf("removing policy %s: %w", k, res.Error)
+		}
+		if res.RowsAffected == 0 {
+			// Something this install created is not there any more. Not
+			// an error: the uninstall's job was to remove it and it is
+			// gone. Reported because a policy this app created and did
+			// not remove means something else rewrote casbin_rule.
+			rep.Skipped = append(rep.Skipped, k)
+			continue
+		}
+		rep.Policies += res.RowsAffected
+	}
+	// The ledger's job ends here whether or not each row matched. Left
+	// behind it would only grow, and a reinstall writes its own entries.
+	if err := tx.Where("app_code = ?", code).
+		Delete(&adminmodels.SysAppCasbinGrant{}).Error; err != nil {
+		return fmt.Errorf("clearing the grant ledger: %w", err)
+	}
+
+	return nil
+}
+func removeAppRecords(tx *gorm.DB, code string, found bool, rep *uninstallReport) error {
+	// 6 and 7.
+	res := tx.Unscoped().Where("app_code = ?", code).Delete(&adminmodels.SysAPI{})
+	if res.Error != nil {
+		return fmt.Errorf("removing this app's apis: %w", res.Error)
+	}
+	rep.APIs = res.RowsAffected
+
+	res = tx.Unscoped().Where("app_code = ?", code).Delete(&adminmodels.SysMenu{})
+	if res.Error != nil {
+		return fmt.Errorf("removing this app's menus: %w", res.Error)
+	}
+	rep.Menus = res.RowsAffected
+
+	// 8. Without this a reinstall finds every version already applied,
+	// runs no migration, seeds nothing, and reports success. It is the
+	// easiest step to leave out, because a migration record does not
+	// look like the application's data.
+	res = tx.Where("app_code = ?", code).Delete(&commonmodels.Migration{})
+	if res.Error != nil {
+		return fmt.Errorf("removing this app's migration records: %w", res.Error)
+	}
+	rep.Migrations = res.RowsAffected
+
+	// 9.
+	if found {
+		if err := tx.Where("app_code = ?", code).
+			Delete(&adminmodels.SysApp{}).Error; err != nil {
+			return fmt.Errorf("removing the sys_app row: %w", err)
+		}
+	}
+	return nil
 }

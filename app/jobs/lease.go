@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	models2 "go-admin/app/jobs/models"
+	models2 "github.com/gatework/motor/app/jobs/models"
 )
 
 // nowExprMs is the dialect's expression for the current time as
@@ -24,7 +24,7 @@ import (
 //
 // Milliseconds rather than a timestamp, because a timestamp does not survive
 // the trip through a driver unchanged. MySQL's UTC_TIMESTAMP read over
-// go-admin's own `parseTime=True&loc=Local` DSN arrives labelled as local
+// motor's own `parseTime=True&loc=Local` DSN arrives labelled as local
 // time: on a UTC+8 host every lease is eight hours out, and a test that only
 // checked the lease logic against itself passes anyway. An epoch integer has
 // no timezone for a driver to apply.
@@ -67,7 +67,7 @@ func nowExprMs(dialect string) (string, error) {
 // it to every instance, and restore the defect this lease fixes with a lease
 // table sitting on top of it.
 func dbNowMs(db *gorm.DB) (int64, error) {
-	expr, err := nowExprMs(db.Dialector.Name())
+	expr, err := nowExprMs(db.Name())
 	if err != nil {
 		return 0, err
 	}

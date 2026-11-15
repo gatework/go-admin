@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
-	dm "go-admin/app/delivery/models"
-	"go-admin/app/network/lease"
 	"gorm.io/gorm"
+
+	dm "github.com/gatework/motor/app/net/models/delivery"
+	"github.com/gatework/motor/app/net/models/lease"
+	ds "github.com/gatework/motor/app/net/service/delivery"
 )
 
 func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
@@ -27,7 +29,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 			<-start
 			_, err := lease.Acquire(db, 10, 0, time.Minute)
 			result <- err == nil
-			if errors.Is(err, lease.ErrBusy) {
+			if errors.Is(err, lease.BusyErr) {
 				err = nil
 			}
 			failures <- err
@@ -74,7 +76,7 @@ func TestConcurrentAcquisitionAndTransactionRollback(t *testing.T) {
 	}); !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	if _, err := lease.Acquire(b, 20, 0, time.Minute); !errors.Is(err, lease.ErrBusy) {
+	if _, err := lease.Acquire(b, 20, 0, time.Minute); !errors.Is(err, lease.BusyErr) {
 		t.Fatal("rolled-back release escaped", err)
 	}
 }
@@ -350,6 +352,9 @@ func TestWorkersRacePastCandidateSelection(t *testing.T) {
 				if err == nil && target != nil {
 					worker.RunTarget(ctx, *target)
 				}
+				if errors.Is(err, ds.NoWorkErr) {
+					err = nil
+				}
 				finished <- err
 			}()
 			go func() { defer workers.Done(); finished <- peer(ctx) }()
@@ -447,13 +452,13 @@ func TestReleaseRejectsLeaseThatExpiresWhileWaitingForOwnerLock(t *testing.T) {
 	}
 	select {
 	case err := <-finished:
-		if !errors.Is(err, lease.ErrLost) {
+		if !errors.Is(err, lease.LostErr) {
 			t.Fatalf("late release returned %v, want lease.ErrLost", err)
 		}
 	case <-ctx.Done():
 		t.Fatal("late release did not finish")
 	}
-	if _, err := lease.Acquire(a, 1, 0, time.Minute); !errors.Is(err, lease.ErrQuarantined) {
+	if _, err := lease.Acquire(a, 1, 0, time.Minute); !errors.Is(err, lease.QuarantinedErr) {
 		t.Fatalf("late release freed expired device: %v", err)
 	}
 }

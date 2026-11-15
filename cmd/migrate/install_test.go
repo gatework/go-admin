@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/app"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
+	"github.com/gatework/motor-core/sdk/contract/app"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 func newInstallDB(t *testing.T) *gorm.DB {
@@ -38,7 +39,7 @@ type fakeEngine struct {
 	calls    []string
 }
 
-func (f *fakeEngine) SetDb(*gorm.DB) {}
+func (f *fakeEngine) SetDB(*gorm.DB) {}
 
 func (f *fakeEngine) Status() ([]migration.StatusEntry, error) {
 	out := make([]migration.StatusEntry, len(f.entries))
@@ -65,7 +66,7 @@ func orderManifest(version string) app.Manifest {
 		Name:        "Orders",
 		Version:     version,
 		Description: "order management",
-		Author:      "go-admin",
+		Author:      "motor",
 		// No dependency by default: these tests are about installing, and a
 		// declared requirement would make every one of them set up a second
 		// application first. requiresInstalled has its own tests below.
@@ -130,7 +131,7 @@ func TestInstallRecordsAFirstInstall(t *testing.T) {
 	if row.InstalledAt == nil {
 		t.Error("installed_at was not set")
 	}
-	if row.Name != "Orders" || row.Author != "go-admin" || row.Description != "order management" {
+	if row.Name != "Orders" || row.Author != "motor" || row.Description != "order management" {
 		t.Errorf("descriptive columns not copied from the manifest: %+v", row)
 	}
 	if row.Pricing != "free" || row.License != "MIT" {
@@ -271,7 +272,7 @@ func TestInstallRecordsAFailure(t *testing.T) {
 		entries: []migration.StatusEntry{
 			{Version: "order-1786800001000", AppCode: "order", Registered: true},
 		},
-		failWith: &migration.VersionFailure{Version: "order-1786800001000", Err: boom},
+		failWith: &migration.VersionError{Version: "order-1786800001000", Err: boom},
 	}
 
 	_, err := install(db, eng, orderManifest("1.0.0"))
@@ -306,7 +307,7 @@ func TestInstallResumesAfterAFailure(t *testing.T) {
 		entries: []migration.StatusEntry{
 			{Version: "order-1786800001000", AppCode: "order", Registered: true},
 		},
-		failWith: &migration.VersionFailure{Version: "order-1786800001000", Err: errors.New("boom")},
+		failWith: &migration.VersionError{Version: "order-1786800001000", Err: errors.New("boom")},
 	}
 	if _, err := install(db, eng, orderManifest("1.0.0")); err == nil {
 		t.Fatal("the first attempt did not fail")

@@ -1,6 +1,6 @@
 ---
 name: new-business-module
-description: Scaffold a new single-table CRUD business module end to end — migration, Actions-mode model/dto/router, and the sys_menu/sys_api/casbin seed data that makes it show up in the UI with working permissions. Use when the user wants to add a new business table/module to go-admin, not for cross-table or non-CRUD business logic.
+description: Scaffold a new single-table CRUD business module end to end — migration, Actions-mode model/dto/router, and the sys_menu/sys_api/casbin seed data that makes it show up in the UI with working permissions. Use when the user wants to add a new business table/module to motor, not for cross-table or non-CRUD business logic.
 ---
 
 # 新增业务模块
@@ -14,7 +14,7 @@ description: Scaffold a new single-table CRUD business module end to end — mig
 ## 何时不适用
 
 业务超出单表 CRUD（跨表事务、外部服务调用、复杂校验）时，不要用这个 skill 硬套——
-改成手写 Handler + Service，参照 `app/admin/apis/sys_post.go` 及其 Service，遵守
+改成手写 Handler + Service，参照 `app/admin/handler/sys_post.go` 及其 Service，遵守
 `AGENTS.md` 的分层约束（Api 不碰 Orm，Service 不碰 `gin.Context`，一律用 `e.Orm`）。
 
 ## 步骤

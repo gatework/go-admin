@@ -1,14 +1,17 @@
 package version
 
 import (
-	"go-admin/cmd/migrate/migration"
-	"go-admin/common/account"
-	common "go-admin/common/models"
+	"runtime"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"runtime"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	"github.com/gatework/motor/common/account"
+	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, file, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(file), accountAccessMigration)

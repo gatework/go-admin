@@ -3,9 +3,9 @@ package storage
 import (
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/runtime"
 )
 
 // Issue #892: a configuration reload replaces the queue adapter and the
@@ -22,25 +22,25 @@ func TestSetupBumpsTheQueueGenerationOnEveryReload(t *testing.T) {
 	// and this package's own record of what it installed. Restoring all of it
 	// keeps the test from deciding what a later test in this binary sees,
 	// which is the same isolation cmd/api's freshRuntime provides.
-	prevQ, prevC := config.QueueConfig, config.CacheConfig
+	prevQ, prevC := testQueueConfig, testCacheConfig
 	prevRuntime := sdk.Runtime
 	prevInstalled, prevGen := installed, installedGen
 	t.Cleanup(func() {
-		config.QueueConfig, config.CacheConfig = prevQ, prevC
+		testQueueConfig, testCacheConfig = prevQ, prevC
 		sdk.Runtime = prevRuntime
 		queueMu.Lock()
 		installed, installedGen = prevInstalled, prevGen
 		queueMu.Unlock()
 	})
-	sdk.Runtime = runtime.NewConfig()
+	sdk.Runtime = runtime.New()
 
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
 
 	before := QueueGeneration()
-	Setup()
+	setupStorage(t)
 	first := QueueGeneration()
-	Setup()
+	setupStorage(t)
 	second := QueueGeneration()
 
 	t.Logf("before=%d first=%d second=%d", before, first, second)

@@ -1,11 +1,11 @@
-package apis
+package handler
 
 import (
 "github.com/gin-gonic/gin"
 "github.com/gin-gonic/gin/binding"
-"go-admin/models"
-"github.com/go-admin-team/go-admin-core/sdk/pkg"
-"go-admin/utils"
+"motor/models"
+"github.com/gatework/motor-core/sdk/pkg"
+"motor/utils"
 "net/http"
 )
 
@@ -66,7 +66,7 @@ c.JSON(http.StatusOK, res.ReturnOK())
 // @Security Bearer
 func Get{{.ClassName}}(c *gin.Context) {
 var data models.{{.ClassName}}
-data.{{.PkGoField}}, _ = utils.StringToInt(c.Param("{{.PkJsonField}}"))
+data.{{.PKGoField}}, _ = utils.StringToInt(c.Param("{{.PKJSONField}}"))
 result, err := data.Get()
 pkg.HasError(err, "抱歉未找到相关信息", -1)
 
@@ -105,7 +105,7 @@ var data models.{{.ClassName}}
 err := c.BindWith(&data, binding.JSON)
 pkg.HasError(err, "数据解析失败", -1)
 data.UpdateBy = utils.GetUserIdStr(c)
-result, err := data.Update(data.{{.PkGoField}})
+result, err := data.Update(data.{{.PKGoField}})
 pkg.HasError(err, "", -1)
 
 var res app.Response
@@ -115,7 +115,7 @@ c.JSON(http.StatusOK, res.ReturnOK())
 
 func Delete{{.ClassName}}(c *gin.Context) {
 var data models.{{.ClassName}}
-id, err := utils.StringToInt(c.Param("{{.PkJsonField}}"))
+id, err := utils.StringToInt(c.Param("{{.PKJSONField}}"))
 data.UpdateBy = utils.GetUserIdStr(c)
 _, err = data.Delete(id)
 pkg.HasError(err, "修改失败", 500)

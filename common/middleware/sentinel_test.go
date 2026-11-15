@@ -9,7 +9,7 @@ import (
 	"github.com/alibaba/sentinel-golang/core/system"
 	"github.com/gin-gonic/gin"
 
-	"go-admin/config"
+	"github.com/gatework/motor/config"
 )
 
 // serve builds a router with the limiter in front of a handler that always
@@ -45,7 +45,7 @@ func TestSentinelRejectsWithTooManyRequests(t *testing.T) {
 	r := serve(t)
 
 	var rejected *httptest.ResponseRecorder
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if w := get(t, r); w.Code != http.StatusOK {
 			rejected = w
 			break
@@ -99,7 +99,7 @@ func TestSentinelDisabledByZero(t *testing.T) {
 		t.Errorf("limiter disabled but %d rule(s) were loaded: %+v", len(rules), rules)
 	}
 
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		if w := get(t, r); w.Code != http.StatusOK {
 			t.Fatalf("request %d got %d with the limiter disabled", i, w.Code)
 		}

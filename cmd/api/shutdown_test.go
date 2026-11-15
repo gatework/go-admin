@@ -10,14 +10,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/storage/cache"
 	"gorm.io/gorm"
 
-	otherrouter "go-admin/app/other/router"
-	"go-admin/common/health"
-	ext "go-admin/config"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/storage/cache"
+
+	otherrouter "github.com/gatework/motor/app/other/router"
+	"github.com/gatework/motor/common/health"
+	ext "github.com/gatework/motor/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // The seconds in the configuration and the durations the sequence waits on are
@@ -148,33 +150,36 @@ func TestHealthStaysUpWhileDraining(t *testing.T) {
 func TestNamedTenantProbesBypassRequestDatabaseSelection(t *testing.T) {
 	// Draining is intentionally irreversible. Exercise readiness in a fresh
 	// process so this test does not depend on the order of shutdown tests.
-	if os.Getenv("GO_ADMIN_PROBE_CHILD") != "1" {
+	if os.Getenv("MOTOR_PROBE_CHILD") != "1" {
 		child := exec.Command(os.Args[0], "-test.run=^TestNamedTenantProbesBypassRequestDatabaseSelection$")
-		child.Env = append(os.Environ(), "GO_ADMIN_PROBE_CHILD=1")
+		child.Env = append(os.Environ(), "MOTOR_PROBE_CHILD=1")
 		if output, err := child.CombinedOutput(); err != nil {
 			t.Fatalf("probe child: %v\n%s", err, output)
 		}
 		return
 	}
 	freshRuntime(t)
-	savedSecret := config.JwtConfig.Secret
-	config.JwtConfig.Secret = "probe-test-secret"
-	t.Cleanup(func() { config.JwtConfig.Secret = savedSecret })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			JWT.Secret = "probe-test-secret"
+	})
+
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	pool, _ := db.DB()
 	t.Cleanup(func() { pool.Close() })
-	sdk.Runtime.SetDbByTenant("tenant.example", db)
-	cache := cache.NewMemoryWithCleanupInterval(0)
+	sdk.Runtime.SetDB("tenant.example", db)
+	cache := cache.New(cache.Options{SweepInterval: 0})
 	t.Cleanup(func() { cache.Close() })
-	sdk.Runtime.SetCacheAdapter(cache)
+	sdk.Runtime.SetCache(cache)
 	initRouter()
-	r := sdk.Runtime.GetEngine().(*gin.Engine)
+	r := sdk.Runtime.Engine().(*gin.Engine)
 	otherrouter.RegisterMonitorRouter(r.Group(otherrouter.APIPrefix))
 	for _, path := range []string{"/api/v1/health", "/api/v1/ready"} {
-		req := httptest.NewRequest("GET", path, nil)
+		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Host = "127.0.0.1:8000"
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -183,7 +188,7 @@ func TestNamedTenantProbesBypassRequestDatabaseSelection(t *testing.T) {
 		}
 	}
 	pool.Close()
-	req := httptest.NewRequest("GET", "/api/v1/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ready", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != 503 {

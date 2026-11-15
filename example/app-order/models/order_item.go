@@ -16,8 +16,8 @@ const orderItemTable = "app_order_item"
 // been inserted in the same transaction, proving the rollback actually
 // undoes both writes rather than leaving the Order behind.
 type OrderItem struct {
-	Id          int    `json:"id" gorm:"primaryKey;autoIncrement;comment:primary key"`
-	OrderId     int    `json:"orderId" gorm:"uniqueIndex:uk_app_order_item_product;comment:parent order id"`
+	ID          int    `json:"id" gorm:"primaryKey;autoIncrement;comment:primary key"`
+	OrderID     int    `json:"orderId" gorm:"uniqueIndex:uk_app_order_item_product;comment:parent order id"`
 	ProductName string `json:"productName" gorm:"type:varchar(255);uniqueIndex:uk_app_order_item_product;comment:product name"`
 	Quantity    int    `json:"quantity" gorm:"comment:quantity"`
 	PriceCents  int64  `json:"priceCents" gorm:"comment:unit price in cents"`

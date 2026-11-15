@@ -1,19 +1,23 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
 
+	"github.com/gatework/motor-core/config/source/memory"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	coreservice "github.com/go-admin-team/go-admin-core/v2/sdk/service"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/contract/actions"
+	coreservice "github.com/gatework/motor-core/sdk/service"
 
-	"github.com/go-admin-team/example-app-order/models"
-	orderdto "github.com/go-admin-team/example-app-order/service/dto"
+	"github.com/gatework/motor/example/app-order/models"
+	orderdto "github.com/gatework/motor/example/app-order/service/dto"
 )
 
 // testDB returns a fresh, isolated in-memory sqlite database with
@@ -39,14 +43,29 @@ func testDB(t *testing.T) *gorm.DB {
 // sdk/contract/actions/permission_test.go uses.
 func enableDataPermission(t *testing.T) {
 	t.Helper()
-	previous := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = true
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = previous })
+	old := config.Current()
+	next := config.Current()
+	next.Settings.Application.EnableDP = true
+	publish := func(settings *config.Settings) {
+		data, err := json.Marshal(settings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		watcher, err := config.Setup(context.Background(), memory.NewSource(memory.WithJSON(data)), config.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := watcher.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish(next)
+	t.Cleanup(func() { publish(old) })
 }
 
 func newOrderService(t *testing.T, db *gorm.DB) *Order {
 	t.Helper()
-	return &Order{Service: coreservice.Service{Orm: db}}
+	return &Order{Service: coreservice.Service{DB: db}}
 }
 
 // -- cross-table transaction ------------------------------------------------
@@ -75,7 +94,7 @@ func TestCreate_CommitsOrderAndItemsTogether(t *testing.T) {
 	}
 
 	var itemCount int64
-	db.Model(&models.OrderItem{}).Where("order_id = ?", order.Id).Count(&itemCount)
+	db.Model(&models.OrderItem{}).Where("order_id = ?", order.ID).Count(&itemCount)
 	if itemCount != 2 {
 		t.Errorf("persisted %d items, want 2", itemCount)
 	}
@@ -86,8 +105,8 @@ func TestCreate_EmptyItemsReturnsErrorAndWritesNothing(t *testing.T) {
 	s := newOrderService(t, db)
 
 	_, err := s.Create(&orderdto.OrderCreateReq{}, 1)
-	if !errors.Is(err, ErrOrderEmpty) {
-		t.Fatalf("got error %v, want ErrOrderEmpty", err)
+	if !errors.Is(err, OrderEmptyErr) {
+		t.Fatalf("got error %v, want OrderEmptyErr", err)
 	}
 
 	var count int64
@@ -130,7 +149,7 @@ func TestCreate_MidTransactionFailureRollsBackEverything(t *testing.T) {
 // cleanly as a returned error does. This is not testing app-order's own
 // code so much as the primitive Create is built on: gorm's db.Transaction
 // recovers a panic, rolls back, and re-panics, which is what makes it safe
-// to use in place of go-admin's hand-rolled Begin/defer pattern (see
+// to use in place of motor's hand-rolled Begin/defer pattern (see
 // Create's doc comment) - a pattern that, on a panic, commits whatever the
 // transaction had written so far instead of undoing it.
 func TestCreate_PanicInsideTransactionRollsBackEverything(t *testing.T) {
@@ -159,11 +178,11 @@ func TestCreate_PanicInsideTransactionRollsBackEverything(t *testing.T) {
 
 // -- status transition / concurrency guard ----------------------------------
 
-func createPendingOrder(t *testing.T, s *Order, userId int) *models.Order {
+func createPendingOrder(t *testing.T, s *Order, userID int) *models.Order {
 	t.Helper()
 	order, err := s.Create(&orderdto.OrderCreateReq{Items: []orderdto.OrderItemReq{
 		{ProductName: "widget", Quantity: 1, PriceCents: 100},
-	}}, userId)
+	}}, userID)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -175,28 +194,28 @@ func TestPay_TransitionsPendingToPaid(t *testing.T) {
 	s := newOrderService(t, db)
 	order := createPendingOrder(t, s, 1)
 
-	if err := s.Pay(order.Id, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+	if err := s.Pay(order.ID, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 		t.Fatalf("Pay: %v", err)
 	}
 
 	var got models.Order
-	db.First(&got, order.Id)
+	db.First(&got, order.ID)
 	if got.Status != models.StatusPaid {
 		t.Errorf("Status = %q, want paid", got.Status)
 	}
 }
 
-func TestPay_AlreadyPaidReturnsErrOrderNotPending(t *testing.T) {
+func TestPay_AlreadyPaidReturnsOrderNotPendingErr(t *testing.T) {
 	db := testDB(t)
 	s := newOrderService(t, db)
 	order := createPendingOrder(t, s, 1)
 	all := &actions.DataPermission{DataScope: actions.DataScopeAll}
 
-	if err := s.Pay(order.Id, all); err != nil {
+	if err := s.Pay(order.ID, all); err != nil {
 		t.Fatalf("first Pay: %v", err)
 	}
-	if err := s.Pay(order.Id, all); !errors.Is(err, ErrOrderNotPending) {
-		t.Fatalf("second Pay returned %v, want ErrOrderNotPending", err)
+	if err := s.Pay(order.ID, all); !errors.Is(err, OrderNotPendingErr) {
+		t.Fatalf("second Pay returned %v, want OrderNotPendingErr", err)
 	}
 }
 
@@ -228,7 +247,7 @@ func TestPay_ConcurrentPaymentsOnlyOneSucceeds(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			errs[i] = s.Pay(order.Id, all)
+			errs[i] = s.Pay(order.ID, all)
 		}(i)
 	}
 	wg.Wait()
@@ -238,7 +257,7 @@ func TestPay_ConcurrentPaymentsOnlyOneSucceeds(t *testing.T) {
 		switch {
 		case err == nil:
 			successes++
-		case errors.Is(err, ErrOrderNotPending):
+		case errors.Is(err, OrderNotPendingErr):
 			failures++
 		default:
 			t.Fatalf("unexpected error from a concurrent Pay: %v", err)
@@ -262,7 +281,7 @@ func TestGetPage_SelfScopeOnlySeesOwnOrders(t *testing.T) {
 	var list []models.Order
 	count, err := s.GetPage(&orderdto.OrderSearchReq{}, &actions.DataPermission{
 		DataScope: actions.DataScopeSelf,
-		UserId:    1,
+		UserID:    1,
 	}, &list)
 	if err != nil {
 		t.Fatalf("GetPage: %v", err)
@@ -270,8 +289,8 @@ func TestGetPage_SelfScopeOnlySeesOwnOrders(t *testing.T) {
 	if count != 1 || len(list) != 1 {
 		t.Fatalf("got %d orders, want exactly the 1 belonging to user 1", count)
 	}
-	if list[0].UserId != 1 {
-		t.Errorf("returned order belongs to user %d, not the caller", list[0].UserId)
+	if list[0].UserID != 1 {
+		t.Errorf("returned order belongs to user %d, not the caller", list[0].UserID)
 	}
 }
 
@@ -325,7 +344,7 @@ func TestGet_ReturnsOrderWithItemsPreloaded(t *testing.T) {
 	created := createPendingOrder(t, s, 1)
 
 	var got models.Order
-	err := s.Get(created.Id, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserId: 1}, &got)
+	err := s.Get(created.ID, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 1}, &got)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -345,7 +364,7 @@ func TestGet_ScopedOutOrderReportsNotFoundNotForbidden(t *testing.T) {
 	other := createPendingOrder(t, s, 2)
 
 	var got models.Order
-	err := s.Get(other.Id, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserId: 1}, &got)
+	err := s.Get(other.ID, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 1}, &got)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("Get on another user's order returned %v, want gorm.ErrRecordNotFound", err)
 	}

@@ -75,7 +75,7 @@ func TestSysTablesUpdateWritesAllColumnsOrNone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	edited, err := (&SysTables{TableId: created.TableId}).Get(db, false)
+	edited, err := (&SysTables{TableID: created.TableID}).Get(db, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestSysTablesUpdateWritesAllColumnsOrNone(t *testing.T) {
 		t.Fatal("Update reported success although a column was rejected")
 	}
 
-	stored, err := (&SysTables{TableId: created.TableId}).Get(db, false)
+	stored, err := (&SysTables{TableID: created.TableID}).Get(db, false)
 	if err != nil {
 		t.Fatal(err)
 	}

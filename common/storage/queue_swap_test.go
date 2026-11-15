@@ -1,17 +1,17 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
-	"github.com/go-admin-team/go-admin-core/v2/storage/queue"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/runtime"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 // sampleSize is how many publishes have to land inside the reload before the
@@ -19,11 +19,8 @@ import (
 // the window the test covers the same on a loaded runner as on an idle one.
 const sampleSize = 200
 
-func swapMsg() corestorage.Messager {
-	m := new(queue.Message)
-	m.SetStream("t")
-	m.SetValues(map[string]interface{}{"a": "b"})
-	return m
+func swapMsg() corestorage.Message {
+	return corestorage.Message{Topic: "t", Values: map[string]any{"a": "b"}}
 }
 
 // A reload must never leave producers holding a queue that has stopped
@@ -50,39 +47,45 @@ func swapMsg() corestorage.Messager {
 // calls can straddle the swap - which is what makes "more than one" the line
 // between the two orders rather than a tolerance.
 func TestAReloadNeverPointsProducersAtAClosedQueue(t *testing.T) {
-	prevQ, prevC := config.QueueConfig, config.CacheConfig
+	isolate(t)
+	prevQ, prevC := testQueueConfig, testCacheConfig
 	prevRuntime := sdk.Runtime
 	prevInstalled, prevGen := installed, installedGen
 	t.Cleanup(func() {
-		config.QueueConfig, config.CacheConfig = prevQ, prevC
+		testQueueConfig, testCacheConfig = prevQ, prevC
 		sdk.Runtime = prevRuntime
 		queueMu.Lock()
 		installed, installedGen = prevInstalled, prevGen
 		queueMu.Unlock()
 	})
-	sdk.Runtime = runtime.NewConfig()
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
+	sdk.Runtime = runtime.New()
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
 	// Sized so the buffer cannot fill while the consumer is held: a full queue
 	// returns an error of its own, and this test needs every error other than
 	// ErrQueueClosed to mean something it does not model has happened.
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 4096}}
-
-	Setup()
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 4096}}
 
 	// A consumer that will not finish until this test lets it, so the reload's
 	// Shutdown has something to wait for.
 	release := make(chan struct{})
 	consuming := make(chan struct{})
 	var picked sync.Once
-	first := sdk.Runtime.GetQueuePrefix("")
-	first.Register("t", func(corestorage.Messager) error {
-		picked.Do(func() { close(consuming) })
-		<-release
-		return nil
-	})
-	go first.Run()
-	for i := 0; i < 4; i++ {
-		if err := first.Append(swapMsg()); err != nil {
+	firstGeneration := true
+	testSubscribe = func(ctx context.Context, q corestorage.Queue) error {
+		if !firstGeneration {
+			return q.Subscribe(ctx, "t", func(context.Context, corestorage.Message) error { return nil })
+		}
+		firstGeneration = false
+		return q.Subscribe(ctx, "t", func(context.Context, corestorage.Message) error {
+			picked.Do(func() { close(consuming) })
+			<-release
+			return nil
+		})
+	}
+	setupStorage(t)
+	first := sdk.Runtime.QueueForTenant("")
+	for i := range 4 {
+		if err := first.Publish(t.Context(), swapMsg()); err != nil {
 			t.Fatalf("seed append %d: %v", i, err)
 		}
 	}
@@ -93,7 +96,7 @@ func TestAReloadNeverPointsProducersAtAClosedQueue(t *testing.T) {
 	}
 
 	reloaded := make(chan struct{})
-	go func() { Setup(); close(reloaded) }()
+	go func() { setupStorage(t); close(reloaded) }()
 
 	// Publish continuously while the reload is in progress.
 	var refused atomic.Int64
@@ -113,7 +116,7 @@ func TestAReloadNeverPointsProducersAtAClosedQueue(t *testing.T) {
 			default:
 			}
 			attempts.Add(1)
-			err := sdk.Runtime.GetQueuePrefix("").Append(swapMsg())
+			err := sdk.Runtime.QueueForTenant("").Publish(t.Context(), swapMsg())
 			switch {
 			case err == nil:
 			case errors.Is(err, corestorage.ErrQueueClosed):

@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	adminmodels "go-admin/app/admin/models"
-	common "go-admin/common/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	common "github.com/gatework/motor/common/models"
 )
 
 func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t *testing.T) {
@@ -16,7 +17,7 @@ func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysApi{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}, &common.Migration{}); err != nil {
+	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}, &common.Migration{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT, v0 TEXT, v1 TEXT, v2 TEXT, v3 TEXT, v4 TEXT, v5 TEXT)`).Error; err != nil {
@@ -29,7 +30,7 @@ func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t
 	if err = seedNetworkInventory(db); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err = seedNetworkCircuits(db); err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +39,7 @@ func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t
 		t.Fatal("missing circuit table")
 	}
 	var menus []adminmodels.SysMenu
-	if err = db.Preload("SysApi").Where("app_code = ? AND seed_code LIKE ?", "network", "circuit-%").Find(&menus).Error; err != nil {
+	if err = db.Preload("SysAPI").Where("app_code = ? AND seed_code LIKE ?", "network", "circuit-%").Find(&menus).Error; err != nil {
 		t.Fatal(err)
 	}
 	byCode := map[string]adminmodels.SysMenu{}
@@ -53,14 +54,14 @@ func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t
 	}
 	for _, operation := range []string{"list", "query", "add", "edit", "remove", "export", "traffic"} {
 		m := byCode["circuit-"+operation]
-		if m.Permission != "network:circuit:"+operation || m.MenuType != "F" || m.ParentId != page.MenuId {
+		if m.Permission != "network:circuit:"+operation || m.MenuType != "F" || m.ParentID != page.MenuID {
 			t.Fatalf("missing action: %+v", m)
 		}
 	}
 	for _, action := range []string{"add", "edit"} {
 		m := byCode["circuit-"+action]
 		apis := map[string]bool{}
-		for _, a := range m.SysApi {
+		for _, a := range m.SysAPI {
 			apis[a.Action+" "+a.Path] = true
 		}
 		for _, path := range []string{"/api/v1/network-circuit/zabbix/hosts", "/api/v1/network-circuit/zabbix/items", "/api/v1/network-circuit/options", "/api/v1/network-device"} {
@@ -77,15 +78,15 @@ func TestNetworkCircuitMigrationSeedsScopedActionsAndBackfillsRoleDependencies(t
 		t.Fatal(err)
 	}
 	edit := byCode["circuit-edit"]
-	if err = db.Exec("INSERT INTO sys_role_menu(role_id,menu_id) VALUES (?,?)", editor.RoleId, edit.MenuId).Error; err != nil {
+	if err = db.Exec("INSERT INTO sys_role_menu(role_id,menu_id) VALUES (?,?)", editor.RoleID, edit.MenuID).Error; err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err = seedNetworkCircuits(db); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, endpoint := range edit.SysApi {
+	for _, endpoint := range edit.SysAPI {
 		var count int64
 		if err = db.Table("casbin_rule").Where("v0 = ? AND v1 = ? AND v2 = ?", editor.RoleKey, endpoint.Path, endpoint.Action).Count(&count).Error; err != nil || count != 1 {
 			t.Fatalf("dependency missing/duplicated: %s %s %d %v", endpoint.Action, endpoint.Path, count, err)

@@ -6,7 +6,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
+	"github.com/gatework/motor/app/admin/models"
 )
 
 // The admin branch of getByRoleName carried "deleted_at is null" in its
@@ -40,7 +40,7 @@ func TestSoftDeletedMenusAreNotReturned(t *testing.T) {
 	// says what it is supposed to, which is what the first version of this
 	// test did.
 	e := &SysMenu{}
-	e.Orm = db
+	e.DB = db
 	got, err := e.getByRoleName("admin")
 	if err != nil {
 		t.Fatalf("getByRoleName: %v", err)

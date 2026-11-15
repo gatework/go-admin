@@ -1,19 +1,22 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
 
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/storage"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/storage"
 
-	"go-admin/common/models"
+	"github.com/gatework/motor/common/models"
 )
 
+// SysLoginLog describes persisted administration data.
 type SysLoginLog struct {
 	models.Model
+	models.ControlBy
 	Username      string    `json:"username" gorm:"size:128;comment:用户名"`
 	Status        string    `json:"status" gorm:"size:4;comment:状态"`
 	Ipaddr        string    `json:"ipaddr" gorm:"size:255;comment:ip地址"`
@@ -26,46 +29,50 @@ type SysLoginLog struct {
 	Msg           string    `json:"msg" gorm:"size:255;comment:信息"`
 	CreatedAt     time.Time `json:"createdAt" gorm:"comment:创建时间"`
 	UpdatedAt     time.Time `json:"updatedAt" gorm:"comment:最后更新时间"`
-	models.ControlBy
 }
 
+// TableName returns the explicit persistence table name.
 func (*SysLoginLog) TableName() string {
 	return "sys_login_log"
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (e *SysLoginLog) Generate() models.ActiveRecord {
 	o := *e
 	return &o
 }
 
-func (e *SysLoginLog) GetId() interface{} {
-	return e.Id
+// GetID returns the selected resource identity.
+func (e *SysLoginLog) GetID() any {
+	return e.ID
 }
 
 // SaveLoginLog 从队列中获取登录日志
-func SaveLoginLog(message storage.Messager) (err error) {
+func SaveLoginLog(ctx context.Context, message storage.Message) (err error) {
 	//准备db
-	db := sdk.Runtime.GetDbByTenant(message.GetPrefix())
+	tenant, ok := message.Values[storage.PrefixKey].(string)
+	if !ok {
+		return errors.New("log message has no tenant")
+	}
+	db := sdk.Runtime.DB(tenant)
 	if db == nil {
 		err = errors.New("db not exist")
-		log.Errorf("host[%s]'s %s", message.GetPrefix(), err.Error())
+		log.NewHelper(log.Default()).Errorf("host[%s]'s %s", tenant, err.Error())
 		return err
 	}
-	var rb []byte
-	rb, err = json.Marshal(message.GetValues())
-	if err != nil {
-		log.Errorf("json Marshal error, %s", err.Error())
-		return err
+	payload, ok := message.Values["payload"].(string)
+	if !ok {
+		return errors.New("log message has no payload")
 	}
 	var l SysLoginLog
-	err = json.Unmarshal(rb, &l)
+	err = json.Unmarshal([]byte(payload), &l)
 	if err != nil {
-		log.Errorf("json Unmarshal error, %s", err.Error())
+		log.NewHelper(log.Default()).Errorf("json Unmarshal error, %s", err.Error())
 		return err
 	}
-	err = db.Create(&l).Error
+	err = db.WithContext(ctx).Create(&l).Error
 	if err != nil {
-		log.Errorf("db create error, %s", err.Error())
+		log.NewHelper(log.Default()).Errorf("db create error, %s", err.Error())
 		return err
 	}
 	return nil

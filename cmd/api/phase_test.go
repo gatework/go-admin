@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/runtime"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // freePort returns a port nothing is listening on. It is inherently a guess -
@@ -113,28 +114,35 @@ func TestAfterListenIsAnnouncedOnlyOnceThePortIsBound(t *testing.T) {
 // armed after the readiness banner in the same file.
 func TestBeforeRouterRunsWhileThereIsNoEngine(t *testing.T) {
 	freshRuntime(t)
+	testconfig.
 
-	// AuthInit reads these two package-level values and nothing else. No
-	// database is involved in building a router: the handlers are registered,
-	// not called.
-	config.ApplicationConfig.Mode = "dev"
-	config.JwtConfig.Secret = "test-secret-for-the-router-build"
+		// AuthInit reads these two package-level values and nothing else. No
+		// database is involved in building a router: the handlers are registered,
+		// not called.
+		Apply(t, func(settings *config.Config) {
+			settings.
+				Application.Mode = "dev"
+		})
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			JWT.Secret = "test-secret-for-the-router-build"
+	})
 
 	type observation struct {
 		ran        int
-		engineWas  interface{}
+		engineWas  any
 		engineSeen bool
 	}
 	var phase, before observation
 
 	sdk.Runtime.SetPhase(runtime.BeforeRouter, func() {
 		phase.ran++
-		phase.engineWas = sdk.Runtime.GetEngine()
+		phase.engineWas = sdk.Runtime.Engine()
 		phase.engineSeen = true
 	})
 	sdk.Runtime.SetBefore(func() {
 		before.ran++
-		before.engineWas = sdk.Runtime.GetEngine()
+		before.engineWas = sdk.Runtime.Engine()
 		before.engineSeen = true
 	})
 
@@ -154,7 +162,7 @@ func TestBeforeRouterRunsWhileThereIsNoEngine(t *testing.T) {
 		t.Error("a before callback saw no engine; that registry is meant to run after initRouter, and describing it as equivalent to BeforeRouter is the error this asserts against")
 	}
 
-	if sdk.Runtime.GetEngine() == nil {
+	if sdk.Runtime.Engine() == nil {
 		t.Error("buildRouter returned with no engine built")
 	}
 }

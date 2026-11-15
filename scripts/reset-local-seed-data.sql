@@ -23,7 +23,7 @@ DELETE FROM sys_dept WHERE dept_id <> 1;
 DELETE FROM sys_post WHERE post_id <> 1;
 UPDATE sys_dept SET parent_id = 0, dept_path = '/0/1/', dept_name = '默认部门', leader = 'admin', phone = '', email = '' WHERE dept_id = 1;
 UPDATE sys_post SET post_name = '管理员', post_code = 'admin', remark = '默认管理岗位' WHERE post_id = 1;
-UPDATE sys_config SET config_value = '' WHERE config_key = 'sys_app_logo' AND config_value IN ('https://doc-image.zhangwj.com/img/go-admin.png', 'https://gitee.com/mydearzwj/image/raw/master/img/go-admin.png');
+UPDATE sys_config SET config_value = '' WHERE config_key = 'sys_app_logo' AND config_value IN ('https://doc-image.zhangwj.com/img/motor.png', 'https://gitee.com/mydearzwj/image/raw/master/img/motor.png');
 INSERT INTO sys_job_lease (name, owner, acquired_at_ms, expires_at_ms)
 VALUES ('scheduler', '', 0, 0) ON CONFLICT (name) DO NOTHING;
 DELETE FROM sys_job;

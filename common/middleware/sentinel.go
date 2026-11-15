@@ -7,9 +7,9 @@ import (
 	sentinel "github.com/alibaba/sentinel-golang/pkg/adapters/gin"
 	"github.com/gin-gonic/gin"
 
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
+	log "github.com/gatework/motor-core/logger"
 
-	"go-admin/config"
+	"github.com/gatework/motor/config"
 )
 
 // Sentinel 限流
@@ -19,7 +19,7 @@ import (
 func Sentinel() gin.HandlerFunc {
 	qps := config.ExtConfig.RateLimit.Threshold()
 	if qps <= 0 {
-		log.Info("rate limit disabled by extend.ratelimit.inboundqps")
+		log.NewHelper(log.Default()).Info("rate limit disabled by extend.ratelimit.inboundqps")
 		return func(c *gin.Context) { c.Next() }
 	}
 
@@ -34,10 +34,10 @@ func Sentinel() gin.HandlerFunc {
 			Strategy: system.NoAdaptive,
 		},
 	}); err != nil {
-		log.Fatalf("Unexpected error: %+v", err)
+		log.NewHelper(log.Default()).Fatalf("Unexpected error: %+v", err)
 	}
 
-	log.Infof("rate limit: %.0f inbound req/s", qps)
+	log.NewHelper(log.Default()).Infof("rate limit: %.0f inbound req/s", qps)
 
 	return sentinel.SentinelMiddleware(
 		sentinel.WithBlockFallback(func(ctx *gin.Context) {
@@ -46,7 +46,7 @@ func Sentinel() gin.HandlerFunc {
 			// client-side retry, and load tests - a benchmark against the old
 			// behaviour reported the limiter's own rejections as successful
 			// traffic and overstated throughput by more than tenfold.
-			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
+			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]any{
 				"msg":  "too many request; the quota used up!",
 				"code": http.StatusTooManyRequests,
 			})

@@ -33,39 +33,7 @@ func keyed(key, value string) string {
 func Stamp(key, password string, version int64) string {
 	return keyed(key, fmt.Sprintf("session:%s:%d", password, version))
 }
-func (s Service) aead() (cipher.AEAD, error) {
-	if len(s.Key) != 32 {
-		return nil, ErrUnavailable
-	}
-	b, e := aes.NewCipher([]byte(s.Key))
-	if e != nil {
-		return nil, e
-	}
-	return cipher.NewGCM(b)
-}
-func (s Service) seal(value string) (string, error) {
-	a, e := s.aead()
-	if e != nil {
-		return "", e
-	}
-	n := make([]byte, a.NonceSize())
-	if _, e = rand.Read(n); e != nil {
-		return "", e
-	}
-	return base64.RawStdEncoding.EncodeToString(a.Seal(n, n, []byte(value), []byte("motor-account-v1"))), nil
-}
-func (s Service) open(value string) (string, error) {
-	a, e := s.aead()
-	if e != nil {
-		return "", e
-	}
-	b, e := base64.RawStdEncoding.DecodeString(value)
-	if e != nil || len(b) < a.NonceSize() {
-		return "", errors.New("invalid encrypted secret")
-	}
-	p, e := a.Open(nil, b[:a.NonceSize()], b[a.NonceSize():], []byte("motor-account-v1"))
-	return string(p), e
-}
+
 func otpCode(secret string, now time.Time) (string, error) { return totp.GenerateCode(secret, now) }
 func verifyStep(secret, code string, now time.Time, last int64) int64 {
 	if len(code) != 6 {
@@ -82,4 +50,40 @@ func verifyStep(secret, code string, now time.Time, last int64) int64 {
 		}
 	}
 	return 0
+}
+
+func (s Service) aead() (cipher.AEAD, error) {
+	if len(s.Key) != 32 {
+		return nil, UnavailableErr
+	}
+	b, e := aes.NewCipher([]byte(s.Key))
+	if e != nil {
+		return nil, e
+	}
+	return cipher.NewGCM(b)
+}
+
+func (s Service) seal(value string) (string, error) {
+	a, e := s.aead()
+	if e != nil {
+		return "", e
+	}
+	n := make([]byte, a.NonceSize())
+	if _, e = rand.Read(n); e != nil {
+		return "", e
+	}
+	return base64.RawStdEncoding.EncodeToString(a.Seal(n, n, []byte(value), []byte("motor-account-v1"))), nil
+}
+
+func (s Service) open(value string) (string, error) {
+	a, e := s.aead()
+	if e != nil {
+		return "", e
+	}
+	b, e := base64.RawStdEncoding.DecodeString(value)
+	if e != nil || len(b) < a.NonceSize() {
+		return "", errors.New("invalid encrypted secret")
+	}
+	p, e := a.Open(nil, b[:a.NonceSize()], b[a.NonceSize():], []byte("motor-account-v1"))
+	return string(p), e
 }

@@ -1,12 +1,14 @@
 package version
 
 import (
-	"github.com/glebarez/sqlite"
-	adminmodels "go-admin/app/admin/models"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"path/filepath"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
 )
 
 func TestNetworkDeliverySeedsSchemaPermissionsAndDependencies(t *testing.T) {
@@ -14,7 +16,7 @@ func TestNetworkDeliverySeedsSchemaPermissionsAndDependencies(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysApi{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}); e != nil {
+	if e = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}); e != nil {
 		t.Fatal(e)
 	}
 	if e = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; e != nil {
@@ -23,7 +25,7 @@ func TestNetworkDeliverySeedsSchemaPermissionsAndDependencies(t *testing.T) {
 	if e = db.Create(&adminmodels.SysRole{RoleName: "Admin", RoleKey: "admin"}).Error; e != nil {
 		t.Fatal(e)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if e = seedNetworkDelivery(db); e != nil {
 			t.Fatal(e)
 		}
@@ -42,15 +44,15 @@ func TestNetworkDeliverySeedsSchemaPermissionsAndDependencies(t *testing.T) {
 	}
 	for _, action := range []string{"list", "query", "add", "edit", "execute", "cancel", "retry", "connection"} {
 		var m adminmodels.SysMenu
-		if e = db.Preload("SysApi").Where("permission = ?", "network:delivery:"+action).First(&m).Error; e != nil {
+		if e = db.Preload("SysAPI").Where("permission = ?", "network:delivery:"+action).First(&m).Error; e != nil {
 			t.Fatal(action, e)
 		}
-		if len(m.SysApi) == 0 {
+		if len(m.SysAPI) == 0 {
 			t.Fatal(action)
 		}
 		if action == "edit" || action == "add" || action == "connection" {
 			paths := map[string]bool{}
-			for _, a := range m.SysApi {
+			for _, a := range m.SysAPI {
 				paths[a.Action+" "+a.Path] = true
 			}
 			if !paths["GET /api/v1/network-delivery/options"] || !paths["GET /api/v1/network-delivery/devices"] {

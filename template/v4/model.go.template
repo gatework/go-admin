@@ -20,27 +20,27 @@ import (
     "time"
     {{- end }}
 
-	"go-admin/common/models"
+	"github.com/gatework/motor/common/models"
 
 )
 
 {{/*
   models.Model supplies an int primary key named Id, so it stands in for the
   key column only when that is exactly the key the table has. Any other key -
-  a different name, or a string - is declared as its own field, or GetId below
+  a different name, or a string - is declared as its own field, or GetID below
   would name a field that does not exist.
 */ -}}
 {{- $embed := false -}}
-{{- range .Columns -}}{{- if and .Pk (eq .ColumnName "id") (eq .GoField "Id") (eq .GoType "int") (ne .IsIncrement "0") -}}{{- $embed = true -}}{{- end -}}{{- end -}}
+{{- range .Columns -}}{{- if and .PK (eq .ColumnName "id") (eq .GoField "Id") (eq .GoType "int") (ne .IsIncrement "0") -}}{{- $embed = true -}}{{- end -}}{{- end -}}
 type {{.ClassName}} struct {
     {{- if $embed }}
     models.Model
     {{- end }}
     {{ range .Columns -}}
-    {{$x := .Pk}}
+    {{$x := .PK}}
     {{- if ($x) }}
     {{- if not $embed }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};primaryKey;autoIncrement:{{if eq .IsIncrement "0"}}false{{else if eq .IsIncrement "1"}}true{{else if or (eq .GoType "int") (eq .GoType "int64")}}true{{else}}false{{end}};type:{{.ColumnType}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"`
+    {{.GoField}} {{.GoType}} `json:"{{.JSONField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};primaryKey;autoIncrement:{{if eq .IsIncrement "0"}}false{{else if eq .IsIncrement "1"}}true{{else if or (eq .GoType "int") (eq .GoType "int64")}}true{{else}}false{{end}};type:{{.ColumnType}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"`
     {{- end }}
     {{- else if eq .GoField "CreatedAt" -}}
     {{- else if eq .GoField "UpdatedAt" -}}
@@ -48,7 +48,7 @@ type {{.ClassName}} struct {
     {{- else if eq .GoField "CreateBy" -}}
     {{- else if eq .GoField "UpdateBy" -}}
     {{- else }}
-    {{.GoField}} {{.GoType}} `json:"{{.JsonField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};type:{{.ColumnType}}{{if and (eq .IsInsert "0") (eq .IsEdit "0")}};->{{end}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"` {{end -}}
+    {{.GoField}} {{.GoType}} `json:"{{.JSONField}}{{if or (eq .GoType "int64") (eq .GoType "*int64")}},string{{end}}" gorm:"column:{{.ColumnName}};type:{{.ColumnType}}{{if and (eq .IsInsert "0") (eq .IsEdit "0")}};->{{end}};comment:{{- if eq .ColumnComment "" -}}{{.GoField}}{{- else -}}{{.ColumnComment}}{{end -}}"` {{end -}}
     {{- end }}
     models.ModelTime
     models.ControlBy
@@ -63,6 +63,6 @@ func (e *{{.ClassName}}) Generate() models.ActiveRecord {
 	return &o
 }
 
-func (e *{{.ClassName}}) GetId() interface{} {
-	return e.{{.PkGoField}}
+func (e *{{.ClassName}}) GetID() interface{} {
+	return e.{{.PKGoField}}
 }

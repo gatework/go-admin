@@ -13,7 +13,7 @@ const docTemplateadmin = `{
         "contact": {},
         "license": {
             "name": "MIT",
-            "url": "https://github.com/go-admin-team/go-admin/blob/master/LICENSE.md"
+            "url": "https://github.com/gatework/motor/blob/master/LICENSE.md"
         },
         "version": "{{.Version}}"
     },
@@ -1679,7 +1679,7 @@ const docTemplateadmin = `{
                                                         "list": {
                                                             "type": "array",
                                                             "items": {
-                                                                "$ref": "#/definitions/models.SysApi"
+                                                                "$ref": "#/definitions/models.SysAPI"
                                                             }
                                                         }
                                                     }
@@ -1726,7 +1726,7 @@ const docTemplateadmin = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.SysApi"
+                                            "$ref": "#/definitions/models.SysAPI"
                                         }
                                     }
                                 }
@@ -1756,7 +1756,7 @@ const docTemplateadmin = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.SysApiUpdateReq"
+                            "$ref": "#/definitions/dto.SysAPIUpdateReq"
                         }
                     }
                 ],
@@ -1842,7 +1842,7 @@ const docTemplateadmin = `{
                                                         "list": {
                                                             "type": "array",
                                                             "items": {
-                                                                "$ref": "#/definitions/models.SysApi"
+                                                                "$ref": "#/definitions/models.SysAPI"
                                                             }
                                                         }
                                                     }
@@ -2820,7 +2820,7 @@ const docTemplateadmin = `{
                 }
             }
         },
-        "dto.SysApiUpdateReq": {
+        "dto.SysAPIUpdateReq": {
             "type": "object",
             "properties": {
                 "action": {
@@ -3277,7 +3277,7 @@ const docTemplateadmin = `{
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {
@@ -3364,7 +3364,7 @@ const docTemplateadmin = `{
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {
@@ -3776,7 +3776,7 @@ const docTemplateadmin = `{
                 }
             }
         },
-        "models.SysApi": {
+        "models.SysAPI": {
             "type": "object",
             "properties": {
                 "action": {
@@ -3991,7 +3991,7 @@ const docTemplateadmin = `{
                 "sysApi": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SysApi"
+                        "$ref": "#/definitions/models.SysAPI"
                     }
                 },
                 "title": {
@@ -4320,7 +4320,7 @@ var SwaggerInfoadmin = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "go-admin API",
+	Title:            "motor API",
 	Description:      "基于Gin + Vue + Element UI的前后端分离权限管理系统的接口文档\n添加qq群: 521386980 进入技术交流群 请先star，谢谢！",
 	InfoInstanceName: "admin",
 	SwaggerTemplate:  docTemplateadmin,

@@ -7,11 +7,12 @@ import (
 	"time"
 
 	glebarez "github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
 	"gorm.io/gorm"
 
-	models2 "go-admin/app/jobs/models"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
+
+	models2 "github.com/gatework/motor/app/jobs/models"
 )
 
 // The scheduler had never been stopped. `defer crontab.Stop()` sat directly
@@ -37,7 +38,7 @@ func TestTheSchedulerIsStoppedAndTheLeaseHandedBackOnTheWayOut(t *testing.T) {
 	if _, err := c.AddFunc("* * * * * *", func() { ticks.Add(1) }); err != nil {
 		t.Fatalf("AddFunc: %v", err)
 	}
-	sdk.Runtime.SetCrontabByTenant(tenant, c)
+	sdk.Runtime.SetCrontab(tenant, c)
 
 	s := newSupervisor(tenant, db, "instance-under-test")
 	s.start()

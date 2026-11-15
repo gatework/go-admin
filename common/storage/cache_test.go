@@ -12,41 +12,41 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
-	corecache "github.com/go-admin-team/go-admin-core/v2/storage/cache"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
+	corecache "github.com/gatework/motor-core/storage/cache"
 
-	"go-admin/common/health"
+	"github.com/gatework/motor/common/health"
 )
 
-func TestOwnedCachePreservesLegacyOperationsAndPrefixes(t *testing.T) {
+func TestOwnedCacheOperationsAndPrefixes(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	setupCache()
-	cache := sdk.Runtime.GetCacheAdapterPrefix("tenant:")
-	if err := cache.Set("count", "2", 60); err != nil {
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	setupStorage(t)
+	cache := corestorage.WithPrefix(sdk.Runtime.Cache(), "tenant:")
+	if err := cache.Set(t.Context(), "count", "2", time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if err := cache.Increase("count"); err != nil {
+	if _, err := cache.Incr(t.Context(), "count", 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := cache.Decrease("count"); err != nil {
+	if _, err := cache.Incr(t.Context(), "count", -1); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := cache.Get("count"); err != nil || got != "2" {
+	if got, err := cache.Get(t.Context(), "count"); err != nil || got != "2" {
 		t.Fatalf("counter: %q %v", got, err)
 	}
-	if got, err := sdk.Runtime.GetCacheAdapter().HashGet("tenant:", "count"); err != nil || got != "2" {
+	if got, err := sdk.Runtime.Cache().Get(t.Context(), "tenant:count"); err != nil || got != "2" {
 		t.Fatalf("hash: %q %v", got, err)
 	}
-	if err := cache.Expire("count", time.Minute); err != nil {
+	if err := cache.Expire(t.Context(), "count", time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if err := cache.HashDel("", "count"); err != nil {
+	if err := cache.Del(t.Context(), "count"); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := cache.Get("count"); err != nil || got != "" {
+	if got, err := cache.Get(t.Context(), "count"); !errors.Is(err, corestorage.ErrCacheMiss) || got != "" {
 		t.Fatalf("miss: %q %v", got, err)
 	}
 }
@@ -56,17 +56,17 @@ type blockingMemory struct {
 	entered, release chan struct{}
 }
 
-func (c *blockingMemory) Set(key string, value any, ttl int) error {
+func (c *blockingMemory) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	close(c.entered)
 	<-c.release
-	return c.Memory.Set(key, value, ttl)
+	return c.Memory.Set(ctx, key, value, ttl)
 }
 func TestCacheRetirementWaitsForActiveOperationAndBoundsCaller(t *testing.T) {
-	memory := &blockingMemory{Memory: corecache.NewMemory(), entered: make(chan struct{}), release: make(chan struct{})}
+	memory := &blockingMemory{Memory: corecache.New(corecache.Options{SweepInterval: time.Minute}), entered: make(chan struct{}), release: make(chan struct{})}
 	var closes atomic.Int64
-	cache := &ownedCache{legacy: memory, closeResource: func() error { closes.Add(1); return memory.Close() }}
+	cache := &ownedCache{native: memory, closeResource: func() error { closes.Add(1); return memory.Close() }}
 	work := make(chan error, 1)
-	go func() { work <- cache.Set("key", "value", 60) }()
+	go func() { work <- cache.Set(t.Context(), "key", "value", time.Minute) }()
 	<-memory.entered
 	for range 5 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
@@ -79,7 +79,7 @@ func TestCacheRetirementWaitsForActiveOperationAndBoundsCaller(t *testing.T) {
 	if closes.Load() != 0 {
 		t.Fatal("client closed during an active operation")
 	}
-	if _, err := cache.Get("key"); !errors.Is(err, corestorage.ErrCacheClosed) {
+	if _, err := cache.Get(t.Context(), "key"); !errors.Is(err, corestorage.ErrCacheClosed) {
 		t.Fatalf("retired cache accepted a new operation: %v", err)
 	}
 	close(memory.release)
@@ -121,9 +121,7 @@ func replyProxy(t *testing.T, upstream string) (string, *atomic.Bool) {
 				continue
 			}
 			connections.Store(client, server)
-			workers.Add(1)
-			go func() {
-				defer workers.Done()
+			workers.Go(func() {
 				defer connections.Delete(client)
 				defer client.Close()
 				defer server.Close()
@@ -147,7 +145,7 @@ func replyProxy(t *testing.T, upstream string) (string, *atomic.Bool) {
 				client.Close()
 				server.Close()
 				<-copied
-			}()
+			})
 		}
 	}()
 	t.Cleanup(func() {
@@ -162,7 +160,7 @@ func replyProxy(t *testing.T, upstream string) (string, *atomic.Bool) {
 
 func TestRedisReadinessHonorsSocketDeadline(t *testing.T) {
 	addr, pause := replyProxy(t, redisAddr(t))
-	cache, err := openCache(&config.Cache{Redis: &config.RedisOptions{Addr: addr, MaxRetries: -1}})
+	cache, err := openCache(t.Context(), &config.Cache{Redis: &config.RedisOptions{Addr: addr, MaxRetries: -1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,11 +188,11 @@ func TestRedisReadinessHonorsSocketDeadline(t *testing.T) {
 
 func TestRedisCacheGenerationsHaveIndependentClients(t *testing.T) {
 	options := &config.Cache{Redis: &config.RedisOptions{Addr: redisAddr(t)}}
-	first, err := openCache(options)
+	first, err := openCache(t.Context(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := openCache(options)
+	second, err := openCache(t.Context(), options)
 	if err != nil {
 		first.Close()
 		t.Fatal(err)
@@ -221,17 +219,17 @@ func TestRetiredRedisResourcesCloseTheirClientConnections(t *testing.T) {
 			options := config.RedisOptions{URL: "redis://" + addr + "/0?client_name=" + name}
 			var closeResource func()
 			if kind == "cache" {
-				resource, err := openCache(&config.Cache{Redis: &options})
+				resource, err := openCache(t.Context(), &config.Cache{Redis: &options})
 				if err != nil {
 					t.Fatal(err)
 				}
 				closeResource = func() { resource.Close() }
 			} else {
-				resource, err := openQueue(&config.Queue{Redis: &config.RedisQueue{RedisOptions: options}})
+				resource, err := openQueue(t.Context(), &config.Queue{Redis: &config.RedisQueue{RedisOptions: options}})
 				if err != nil {
 					t.Fatal(err)
 				}
-				closeResource = resource.Shutdown
+				closeResource = func() { _ = resource.Shutdown(t.Context()) }
 			}
 			defer closeResource()
 			list, err := observer.ClientList(t.Context()).Result()
@@ -262,17 +260,17 @@ func TestRetiredRedisResourcesCloseTheirClientConnections(t *testing.T) {
 
 func TestShutdownAccountsForCacheAlreadyRetiringDuringReload(t *testing.T) {
 	isolate(t)
-	memory := &blockingMemory{Memory: corecache.NewMemory(), entered: make(chan struct{}), release: make(chan struct{})}
-	previous := &ownedCache{legacy: memory, closeResource: memory.Close}
+	memory := &blockingMemory{Memory: corecache.New(corecache.Options{SweepInterval: time.Minute}), entered: make(chan struct{}), release: make(chan struct{})}
+	previous := &ownedCache{native: memory, closeResource: memory.Close}
 	cacheMu.Lock()
 	installedCache = previous
 	cacheMu.Unlock()
 	operation := make(chan error, 1)
-	go func() { operation <- previous.Set("key", "value", 60) }()
+	go func() { operation <- previous.Set(t.Context(), "key", "value", time.Minute) }()
 	<-memory.entered
-	config.CacheConfig = &config.Cache{}
+	testCacheConfig = &config.Cache{}
 	reloaded := make(chan struct{})
-	go func() { defer close(reloaded); setupCache() }()
+	go func() { defer close(reloaded); setupStorage(t) }()
 	deadline := time.Now().Add(time.Second)
 	for {
 		previous.mu.Lock()
@@ -300,5 +298,42 @@ func TestShutdownAccountsForCacheAlreadyRetiringDuringReload(t *testing.T) {
 	<-reloaded
 	if err := shutdownCache(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestShutdownRetainsCurrentCacheUntilActiveOperationCompletes(t *testing.T) {
+	isolate(t)
+	memory := &blockingMemory{Memory: corecache.New(corecache.Options{SweepInterval: time.Minute}), entered: make(chan struct{}), release: make(chan struct{})}
+	current := &ownedCache{native: memory, closeResource: memory.Close}
+	cacheMu.Lock()
+	installedCache = current
+	cacheMu.Unlock()
+	work := make(chan error, 1)
+	go func() { work <- current.Set(t.Context(), "key", "value", time.Minute) }()
+	<-memory.entered
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	err := shutdownCache(ctx)
+	cancel()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("shutdown=%v", err)
+	}
+	cacheMu.Lock()
+	held := installedCache
+	cacheMu.Unlock()
+	if held != current {
+		t.Fatal("shutdown dropped active cache")
+	}
+	close(memory.release)
+	if err := <-work; err != nil {
+		t.Fatal(err)
+	}
+	if err := shutdownCache(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	cacheMu.Lock()
+	held = installedCache
+	cacheMu.Unlock()
+	if held != nil {
+		t.Fatal("completed shutdown retained cache")
 	}
 }

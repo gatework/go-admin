@@ -1,7 +1,10 @@
 package models
 
-type SysApi struct {
-	Id     int    `json:"id" gorm:"primaryKey;autoIncrement;comment:主键编码"`
+// SysAPI defines the sysapi contract.
+//
+//nolint:embeddedstructfieldcheck // Frozen migration field order defines historical positional SQL seed columns.
+type SysAPI struct {
+	ID     int    `json:"id" gorm:"primaryKey;autoIncrement;comment:主键编码"`
 	Handle string `json:"handle" gorm:"size:128;comment:handle"`
 	Title  string `json:"title" gorm:"size:128;comment:标题"`
 	Path   string `json:"path" gorm:"size:128;comment:地址"`
@@ -11,6 +14,7 @@ type SysApi struct {
 	ControlBy
 }
 
-func (SysApi) TableName() string {
+// TableName returns the explicit persistence table name.
+func (SysAPI) TableName() string {
 	return "sys_api"
 }

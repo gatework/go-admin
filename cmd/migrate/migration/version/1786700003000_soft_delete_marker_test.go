@@ -17,7 +17,7 @@ import (
 // deleted_at carries an index, which SQLite will not let a column be dropped
 // out from under.
 type oldUser struct {
-	UserId    int64 `gorm:"column:user_id;primaryKey;autoIncrement"`
+	UserID    int64 `gorm:"column:user_id;primaryKey;autoIncrement"`
 	Username  string
 	DeletedAt *time.Time `gorm:"index"`
 }
@@ -82,7 +82,7 @@ func TestConversionIsRepeatable(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := convertDeletedAt(db, "sys_user"); err != nil {
 			t.Fatalf("convert %d: %v", i, err)
 		}
@@ -130,7 +130,7 @@ func TestUniqueIndexBindsLiveRowsOnly(t *testing.T) {
 // migration says which values rather than letting the index fail.
 func TestRefusesWhenDuplicatesAlreadyExist(t *testing.T) {
 	db := openWithOldSchema(t)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := db.Create(&oldUser{Username: "alice"}).Error; err != nil {
 			t.Fatalf("seed: %v", err)
 		}
@@ -169,7 +169,7 @@ func TestTheIndexOverANullableMarkerEnforcesNothing(t *testing.T) {
 		t.Fatalf("index: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := db.Create(&oldUser{Username: "alice"}).Error; err != nil {
 			t.Fatalf("the nullable marker rejected a duplicate after all, which would make this migration unnecessary: %v", err)
 		}

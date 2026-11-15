@@ -1,13 +1,15 @@
 package version
 
 import (
-	"github.com/glebarez/sqlite"
-	admin "go-admin/app/admin/models"
-	"go-admin/app/firewall/models"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"path/filepath"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	admin "github.com/gatework/motor/app/admin/models"
+	models "github.com/gatework/motor/app/net/models/firewall"
 )
 
 func TestFirewallCollectionMigrationAddsSeparateReadCapabilities(t *testing.T) {
@@ -15,7 +17,7 @@ func TestFirewallCollectionMigrationAddsSeparateReadCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&admin.SysMenu{}, &admin.SysApi{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); err != nil {
+	if err = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; err != nil {
@@ -24,7 +26,7 @@ func TestFirewallCollectionMigrationAddsSeparateReadCapabilities(t *testing.T) {
 	if err = seedNetworkFirewall(db); err != nil {
 		t.Fatal(err)
 	}
-	for n := 0; n < 2; n++ {
+	for range 2 {
 		if err = seedFirewallCollection(db); err != nil {
 			t.Fatal(err)
 		}
@@ -36,11 +38,11 @@ func TestFirewallCollectionMigrationAddsSeparateReadCapabilities(t *testing.T) {
 	}
 	for _, capability := range []string{"collect", "connection", "list"} {
 		var menu admin.SysMenu
-		if err = db.Where("permission = ?", "network:firewall:"+capability).Preload("SysApi").First(&menu).Error; err != nil {
+		if err = db.Where("permission = ?", "network:firewall:"+capability).Preload("SysAPI").First(&menu).Error; err != nil {
 			t.Fatal(err)
 		}
 		found := false
-		for _, api := range menu.SysApi {
+		for _, api := range menu.SysAPI {
 			if capability == "list" && api.Action != "GET" {
 				t.Fatal("reader can mutate")
 			}

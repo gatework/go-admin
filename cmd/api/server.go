@@ -3,61 +3,68 @@ package api
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync/atomic"
 	"syscall"
 	"time"
 
+	"errors"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/config/source/file"
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/bootstrap"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/router"
-	"go-admin/app/jobs"
-	otherrouter "go-admin/app/other/router"
-	"go-admin/common/database"
-	"go-admin/common/global"
-	"go-admin/common/health"
-	common "go-admin/common/middleware"
-	"go-admin/common/middleware/handler"
-	"go-admin/common/storage"
-	ext "go-admin/config"
+	"github.com/gatework/motor-core/config/source/file"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/runtime"
+	corestorage "github.com/gatework/motor-core/storage"
+	"github.com/gatework/motor/common/settings"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/router"
+	adminservice "github.com/gatework/motor/app/admin/service"
+	"github.com/gatework/motor/app/jobs"
+	otherrouter "github.com/gatework/motor/app/other/router"
+	"github.com/gatework/motor/common/database"
+	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/health"
+	common "github.com/gatework/motor/common/middleware"
+	"github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/common/storage"
+	ext "github.com/gatework/motor/config"
 )
 
 var (
 	configYml string
 	apiCheck  bool
-	StartCmd  = &cobra.Command{
+	// StartCmd exposes this command to the host CLI.
+	StartCmd *cobra.Command
+)
+
+// AppRouters holds the configured approuters value.
+var AppRouters = make([]func(), 0)
+
+//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
+func init() {
+	// StartCmd exposes this command to the host CLI.
+	StartCmd = &cobra.Command{
 		Use:          "server",
 		Short:        "Start API server",
-		Example:      "go-admin server -c config/settings.yml",
+		Example:      "motor server -c config/settings.yml",
 		SilenceUsage: true,
-		PreRun: func(cmd *cobra.Command, args []string) {
-			setup()
-		},
+		PreRunE:      func(cmd *cobra.Command, args []string) error { return setup() },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run()
 		},
 	}
-)
 
-var AppRouters = make([]func(), 0)
-
-func init() {
 	StartCmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
 	StartCmd.PersistentFlags().BoolVarP(&apiCheck, "api", "a", false, "Start server with check api data")
 
@@ -65,15 +72,14 @@ func init() {
 	AppRouters = append(AppRouters, router.InitRouter)
 }
 
-func setup() {
+func setup() error {
+	resetApplicationLifetime()
 	// 注入配置扩展项
-	config.ExtendConfig = &ext.ExtConfig
 
 	// Registered before the configuration is read. SetupConfig announces
 	// AfterResource as soon as the callbacks that build the resources have
 	// run, so a hook added after that call would miss the first round and the
 	// queue would have no consumers until somebody edited the config file.
-	sdk.Runtime.SetPhase(runtime.AfterResource, attachQueueConsumers)
 
 	// On AfterListen rather than on a bare goroutine from run(). Two reasons:
 	// the phase runs behind core's panic guard, which does not reach across a
@@ -88,14 +94,18 @@ func setup() {
 	registerSchemaCheck()
 
 	//1. 读取配置
-	bootstrap.SetupConfig(
-		file.NewSource(file.WithPath(configYml)),
-		database.Setup,
-		storage.Setup,
-	)
+	var err error
+	configurationWatcher, err = settings.Load(lifecycleContext(), sdk.Runtime, file.NewSource(file.WithPath(configYml)), database.Setup, func(candidate *config.Settings) error {
+		return storage.Setup(lifecycleContext(), candidate.Settings, subscribeQueue)
+	})
+	if err != nil {
+		stopApplication()
+		return err
+	}
 
 	usageStr := `starting api server...`
-	log.Info(usageStr)
+	log.NewHelper(log.Default()).Info(usageStr)
+	return nil
 }
 
 // startCronJobs registers the job implementations and starts a scheduler for
@@ -107,63 +117,42 @@ func setup() {
 // a goroutine is outside the panic guard.
 func startCronJobs() {
 	jobs.InitJob()
-	jobs.Setup(sdk.Runtime.GetAllDb())
+	jobs.Setup(sdk.Runtime.Databases())
 }
 
-// attachedQueue is the queue generation the consumers are attached to, plus
-// one, so that the zero value means "attached to nothing yet". Written from
-// the goroutine running the phase, read from the next one - rounds never
-// overlap, but they are not the same goroutine.
-var attachedQueue atomic.Uint64
+var (
+	applicationContext   = context.Background()
+	stopApplication      = context.CancelFunc(func() {})
+	configurationWatcher *settings.Watcher
+)
 
-// attachQueueConsumers registers the log consumers against the queue that is
-// current, and starts it.
-//
-// It runs on AfterResource, so it runs again after every configuration reload
-// - and it has to. A reload rebuilds the queue adapter, and consumers
-// registered against the one that existed at start-up are attached to an
-// adapter nobody publishes to any more, so the login and operation logs stop
-// being written with nothing said about it.
-//
-// It is therefore idempotent with respect to a given queue rather than "does
-// nothing the second time": a new adapter gets a fresh set of consumers, the
-// same one gets none. Registering twice on the same queue would give every
-// message two consumers and write every log row twice.
-//
-// Generation 0 means storage.Setup has not installed an adapter yet. Once
-// setup runs, even empty queue configuration installs an owned memory queue,
-// whose consumers are drained on shutdown and replaced on configuration reload.
-// The zero-generation case still supports callers that explicitly attach the
-// runtime fallback before storage setup; each generation is registered once.
-func attachQueueConsumers() {
-	attachConsumersOnce(storage.QueueGeneration(), sdk.Runtime.GetQueuePrefix(""))
-}
+func lifecycleContext() context.Context { return applicationContext }
 
-// attachConsumersOnce puts the log consumers on q and starts it, unless gen
-// says this queue already has them.
-//
-// Split out from attachQueueConsumers so that the order and the once-ness can
-// be checked against a queue the test controls: the sequence that matters here
-// cannot be read back out of a real adapter.
-func attachConsumersOnce(gen uint64, q corestorage.AdapterQueue) {
-	if attachedQueue.Load() == gen+1 {
-		return
+// subscribeQueue prepares every topic before storage publishes the queue.
+func subscribeQueue(ctx context.Context, q corestorage.Queue) error {
+	for _, topic := range []struct {
+		name    string
+		handler corestorage.Handler
+	}{
+		{global.LoginLog, models.SaveLoginLog}, {global.OperateLog, models.SaveOperaLog}, {global.APICheck, adminservice.SyncAPIs},
+	} {
+		if err := q.Subscribe(ctx, topic.name, topic.handler); err != nil {
+			return err
+		}
 	}
-	attachedQueue.Store(gen + 1)
-
-	//注册监听函数
-	q.Register(global.LoginLog, models.SaveLoginLog)
-	q.Register(global.OperateLog, models.SaveOperaLog)
-	q.Register(global.ApiCheck, models.SaveSysApi)
-
-	// Started only now, and by whoever registered. setupQueue deliberately
-	// leaves it stopped: a queue that is already running refuses further
-	// registration, and the adapter in this path drops that error on the
-	// floor, so starting first loses consumers without a word.
-	go q.Run()
+	return nil
 }
 
 func run() error {
+	defer stopApplication()
+	defer func() {
+		if err := settings.CloseLogger(); err != nil {
+			fmt.Fprintf(os.Stderr, "close logger: %v\n", err)
+		}
+	}()
+	if configurationWatcher != nil {
+		defer configurationWatcher.Close()
+	}
 	// Resolved first, and used both for the line it prints and for the
 	// shutdown that spends it. Reading the configuration again at signal time
 	// would let the two disagree, and the sum that gets printed is the whole
@@ -178,33 +167,26 @@ func run() error {
 	}
 	reportShutdownBudget(seconds)
 
-	if config.ApplicationConfig.Mode == pkg.ModeProd.String() {
+	if config.Current().Settings.Application.Mode == pkg.ModeProd.String() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	buildRouter()
 	reportGeneratorWriteRoutes()
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", config.ApplicationConfig.Host, config.ApplicationConfig.Port),
-		Handler:      sdk.Runtime.GetEngine(),
-		ReadTimeout:  time.Duration(config.ApplicationConfig.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(config.ApplicationConfig.WriterTimeout) * time.Second,
+		Addr:         fmt.Sprintf("%s:%d", config.Current().Settings.Application.Host, config.Current().Settings.Application.Port),
+		Handler:      sdk.Runtime.Engine(),
+		ReadTimeout:  time.Duration(config.Current().Settings.Application.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(config.Current().Settings.Application.WriterTimeout) * time.Second,
 	}
 
 	if apiCheck {
-		var routers = sdk.Runtime.GetRouter()
-		q := sdk.Runtime.GetQueuePrefix("")
-		mp := make(map[string]interface{})
-		mp["List"] = routers
-		message, err := sdk.Runtime.GetStreamMessage("", global.ApiCheck, mp)
+		routes, err := json.Marshal(sdk.Runtime.Routers())
 		if err != nil {
-			log.Infof("GetStreamMessage error, %s \n", err.Error())
-			//日志报错错误，不中断请求
-		} else {
-			err = q.Append(message)
-			if err != nil {
-				log.Infof("Append message error, %s \n", err.Error())
-			}
+			return fmt.Errorf("encode api registry: %w", err)
+		}
+		if err = sdk.Runtime.QueueForTenant("").Publish(lifecycleContext(), corestorage.Message{Topic: global.APICheck, Values: map[string]any{"routes": string(routes)}}); err != nil {
+			return fmt.Errorf("publish api registry: %w", err)
 		}
 	}
 
@@ -215,18 +197,18 @@ func run() error {
 	// arming is separate from waiting.
 	quit, disarmStopSignals := armStopSignals()
 
-	if err := startServing(srv, config.SslConfig.Enable, config.SslConfig.Pem, config.SslConfig.KeyStr); err != nil {
+	if err := startServing(srv, config.Current().Settings.SSL.Enable, config.Current().Settings.SSL.Pem, config.Current().Settings.SSL.KeyStr); err != nil {
 		return err
 	}
 
 	fmt.Println(pkg.Red(string(global.LogoContent)))
 	tip()
 	fmt.Println(pkg.Green("Server run at:"))
-	fmt.Printf("-  Local:   %s://localhost:%d/ \r\n", "http", config.ApplicationConfig.Port)
-	fmt.Printf("-  Network: %s://%s:%d/ \r\n", "http", pkg.GetLocalHost(), config.ApplicationConfig.Port)
+	fmt.Printf("-  Local:   %s://localhost:%d/ \r\n", "http", config.Current().Settings.Application.Port)
+	fmt.Printf("-  Network: %s://%s:%d/ \r\n", "http", pkg.GetLocalHost(), config.Current().Settings.Application.Port)
 	fmt.Println(pkg.Green("Swagger run at:"))
-	fmt.Printf("-  Local:   http://localhost:%d/swagger/admin/index.html \r\n", config.ApplicationConfig.Port)
-	fmt.Printf("-  Network: %s://%s:%d/swagger/admin/index.html \r\n", "http", pkg.GetLocalHost(), config.ApplicationConfig.Port)
+	fmt.Printf("-  Local:   http://localhost:%d/swagger/admin/index.html \r\n", config.Current().Settings.Application.Port)
+	fmt.Printf("-  Network: %s://%s:%d/swagger/admin/index.html \r\n", "http", pkg.GetLocalHost(), config.Current().Settings.Application.Port)
 	fmt.Printf("%s Enter Control + C Shutdown Server \r\n", pkg.GetCurrentTimeStr())
 
 	<-quit
@@ -235,10 +217,10 @@ func run() error {
 		// Not log.Fatal: that is an unconditional os.Exit(1), and Shutdown
 		// reports an error exactly when connections were still in flight -
 		// which is when the cleanup that ran after it mattered most.
-		log.Error("Server Shutdown: ", serverErr)
+		log.NewHelper(log.Default()).Error("Server Shutdown: ", serverErr)
 	}
 	if cleanupErr != nil {
-		log.Error("Cleanup: ", cleanupErr)
+		log.NewHelper(log.Default()).Error("Cleanup: ", cleanupErr)
 	}
 
 	return nil
@@ -322,13 +304,17 @@ func gracefulShutdown(srv *http.Server, quit <-chan os.Signal, disarm func(), b 
 	// interrupted.
 	disarm()
 
-	log.Info("Shutdown Server ... ")
+	log.NewHelper(log.Default()).Info("Shutdown Server ... ")
 	serverErr = shutdownServer(srv, b.server)
 	// Runs whether or not the wait above failed, and deliberately so: Shutdown
 	// reports an error exactly when connections were still in flight, which is
 	// when there is most left to clean up after.
+	if configurationWatcher != nil {
+		_ = configurationWatcher.Close()
+	}
+	stopApplication()
 	cleanupErr = runShutdownHooks(b.cleanup)
-	log.Info("Server exiting")
+	log.NewHelper(log.Default()).Info("Server exiting")
 
 	return serverErr, cleanupErr
 }
@@ -342,13 +328,13 @@ func drain(quit <-chan os.Signal, d time.Duration) {
 	if d <= 0 {
 		return
 	}
-	log.Infof("Draining for %s: still serving, /ready answers 503 from here", d)
+	log.NewHelper(log.Default()).Infof("Draining for %s: still serving, /ready answers 503 from here", d)
 
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
 	case <-quit:
-		log.Info("Second signal during the drain window, closing the listener now")
+		log.NewHelper(log.Default()).Info("Second signal during the drain window, closing the listener now")
 	case <-timer.C:
 	}
 }
@@ -376,13 +362,13 @@ func reportGeneratorWriteRoutes() {
 	if !generatorWriteRoutesNeedWarning() {
 		return
 	}
-	log.Warnf("the code generator's writing endpoints are served in mode %q: "+
+	log.NewHelper(log.Default()).Warnf("the code generator's writing endpoints are served in mode %q: "+
 		"/api/v1/gen/{toproject,apitofile,todb} write Go and Vue source onto this host and rows "+
 		"into this database, and they are in CasbinExclude, so any account that can log in may "+
 		"call them. Set application.mode to prod or test on anything that is not a workstation, "+
 		"then restart: these routes were registered at start-up and a configuration reload does "+
 		"not rebuild them.",
-		config.ApplicationConfig.Mode)
+		config.Current().Settings.Application.Mode)
 }
 
 // generatorWriteRoutesNeedWarning reports whether there is an exposure to warn
@@ -392,7 +378,7 @@ func reportGeneratorWriteRoutes() {
 // make fire is indistinguishable from no warning at all, and this one exists
 // precisely for the case nobody is looking at.
 func generatorWriteRoutesNeedWarning() bool {
-	return otherrouter.GenWriteRoutesEnabled() && config.ApplicationConfig.Mode != "demo"
+	return otherrouter.GenWriteRoutesEnabled() && config.Current().Settings.Application.Mode != "demo"
 }
 
 // reportShutdownBudget states what a shutdown will spend and whether it fits.
@@ -402,11 +388,11 @@ func generatorWriteRoutesNeedWarning() bool {
 // what was written down understates the budget by exactly the fields nobody
 // wrote.
 func reportShutdownBudget(s ext.ShutdownBudget) {
-	log.Infof("shutdown budget: drain %ds + server %ds + cleanup %ds = %ds",
+	log.NewHelper(log.Default()).Infof("shutdown budget: drain %ds + server %ds + cleanup %ds = %ds",
 		s.Drain, s.Server, s.Cleanup, s.Total())
 
 	if s.Grace <= 0 {
-		log.Infof("shutdown budget: extend.shutdown.grace is not set, so nothing is compared against it - "+
+		log.NewHelper(log.Default()).Infof("shutdown budget: extend.shutdown.grace is not set, so nothing is compared against it - "+
 			"for reference `docker stop` allows %ds and Kubernetes terminationGracePeriodSeconds defaults to %ds",
 			dockerStopGraceSeconds, kubernetesGraceSeconds)
 		return
@@ -416,13 +402,13 @@ func reportShutdownBudget(s ext.ShutdownBudget) {
 		// constraints this process cannot see, so the honest thing to state is
 		// how much is missing - the repository's own files are where there is
 		// standing to ask for headroom on top, and checksilent does that.
-		log.Warnf("shutdown budget of %ds does not fit inside the %ds of extend.shutdown.grace: "+
+		log.NewHelper(log.Default()).Warnf("shutdown budget of %ds does not fit inside the %ds of extend.shutdown.grace: "+
 			"SIGKILL arrives while the cleanup callbacks are still running, and the work they "+
 			"were about to finish is lost. It needs at least %ds more, or %ds less budget.",
 			s.Total(), s.Grace, over, over)
 		return
 	}
-	log.Infof("shutdown budget of %ds fits inside the %ds of extend.shutdown.grace", s.Total(), s.Grace)
+	log.NewHelper(log.Default()).Infof("shutdown budget of %ds fits inside the %ds of extend.shutdown.grace", s.Total(), s.Grace)
 }
 
 // The budgets a shutdown spends when extend.shutdown configures nothing:
@@ -493,13 +479,13 @@ func startServing(srv *http.Server, useTLS bool, pem, key string) error {
 		// tls.Listener: that is what sets up HTTP/2 negotiation, and taking it
 		// over here would quietly drop h2 for every TLS deployment.
 		if _, err := tls.LoadX509KeyPair(pem, key); err != nil {
-			return errors.Wrap(err, "tls certificate")
+			return fmt.Errorf("tls certificate: %w", err)
 		}
 	}
 
-	ln, err := net.Listen("tcp", srv.Addr)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", srv.Addr)
 	if err != nil {
-		return errors.Wrap(err, "listen")
+		return fmt.Errorf("listen: %w", err)
 	}
 
 	go func() {
@@ -516,7 +502,7 @@ func startServing(srv *http.Server, useTLS bool, pem, key string) error {
 			// above, on the caller's goroutine. What is left is a serve that
 			// failed after the port was taken, and carrying on would park the
 			// process on <-quit with nothing serving.
-			log.Fatal("serve: ", err)
+			log.NewHelper(log.Default()).Fatal("serve: ", err)
 		}
 	}()
 
@@ -588,33 +574,33 @@ func runStartupHooks() {
 //var Router runtime.Router
 
 func tip() {
-	usageStr := `欢迎使用 ` + pkg.Green(`go-admin `+global.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
+	usageStr := `欢迎使用 ` + pkg.Green(`motor `+global.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
 	fmt.Printf("%s \n\n", usageStr)
 }
 
 func initRouter() {
 	var r *gin.Engine
-	h := sdk.Runtime.GetEngine()
+	h := sdk.Runtime.Engine()
 	if h == nil {
 		h = gin.New()
 		sdk.Runtime.SetEngine(h)
 	}
-	switch h.(type) {
+	switch h := h.(type) {
 	case *gin.Engine:
-		r = h.(*gin.Engine)
+		r = h
 	default:
-		log.Fatal("not support other engine")
+		log.NewHelper(log.Default()).Fatal("not support other engine")
 		//os.Exit(-1)
 	}
-	if config.SslConfig.Enable {
-		r.Use(handler.TlsHandler())
+	if config.Current().Settings.SSL.Enable {
+		r.Use(handler.TLSHandler())
 	}
 	//r.Use(middleware.Metrics())
 	r.Use(exemptProbes(common.Sentinel())).
-		Use(common.RequestId(pkg.TrafficKey)).
+		Use(common.RequestID(pkg.TrafficKey)).
 		Use(api.SetRequestLogger)
 
-	common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDb))
+	common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDB))
 
 }
 
@@ -644,4 +630,13 @@ func exemptProbes(h gin.HandlerFunc) gin.HandlerFunc {
 		}
 		h(c)
 	}
+}
+
+func applicationLifetime(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithCancel(parent)
+}
+
+//nolint:fatcontext // The host explicitly replaces the process lifecycle at command startup.
+func resetApplicationLifetime() {
+	applicationContext, stopApplication = applicationLifetime(StartCmd.Context())
 }

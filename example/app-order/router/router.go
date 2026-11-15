@@ -4,36 +4,16 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
-	coreruntime "github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/contract/actions"
+	coreruntime "github.com/gatework/motor-core/sdk/runtime"
 
-	"github.com/go-admin-team/example-app-order/apis"
+	"github.com/gatework/motor/example/app-order/handler"
 )
 
-// RegisterRouter mounts app-order's routes under v1.
-//
-// Its signature - (v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware)
-// - is not app-order's own invention: it is the exact shape every in-tree
-// go-admin app router package already registers into its own routerCheckRole
-// slice (see app/demo/router/demo_product.go), so a host installs this
-// exactly where it installs its own app/*/router packages: one file under
-// cmd/api/ that imports this package and appends RegisterRouter (adjusted to
-// the host's own registration slice's calling convention) - see
-// cmd/api/demo.go for the pattern.
-//
-// authMiddleware is taken as an explicit parameter rather than fetched
-// through sdk.Runtime.GetHandlerFunc(coreruntime.JwtTokenCheck). As of this
-// writing the reference host (go-admin's common/middleware/init.go) registers
-// that key with an unbound method expression -
-// sdk.Runtime.SetMiddleware(JwtTokenCheck, (*jwt.GinJWTMiddleware).MiddlewareFunc)
-// - which is exactly the shape GetHandlerFunc's own doc comment warns
-// against: the stored value's type is func(*jwt.GinJWTMiddleware)
-// gin.HandlerFunc, not gin.HandlerFunc, so GetHandlerFunc's type assertion
-// fails and it reports ok=false every time, for every caller, not just this
-// one. Taking authMiddleware directly sidesteps that live bug and matches
-// what every in-tree app already does.
+// RegisterRouter mounts application routes using the host authentication and role chain.
 func RegisterRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	roleCheck, ok := sdk.Runtime.GetHandlerFunc(coreruntime.RoleCheck)
 	if !ok {
@@ -49,7 +29,7 @@ func RegisterRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 			" middleware (sdk.Runtime.SetMiddleware); refusing to mount unauthorized order routes")
 	}
 
-	e := apis.Order{}
+	e := handler.Order{}
 	r := v1.Group("/order").
 		Use(authMiddleware.MiddlewareFunc()).
 		Use(roleCheck)
@@ -59,9 +39,9 @@ func RegisterRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 		// unlike RoleCheck's Casbin policy tables (host-owned; see
 		// contract/actions's package doc), the data-scope machinery it
 		// installs has no host-specific state at all.
-		r.GET("", actions.PermissionAction(), e.GetPage)
-		r.GET("/:id", actions.PermissionAction(), e.Get)
+		r.GET("", actions.PermissionAction(func() bool { return config.Current().Settings.Application.EnableDP }), e.List)
+		r.GET("/:id", actions.PermissionAction(func() bool { return config.Current().Settings.Application.EnableDP }), e.Get)
 		r.POST("", e.Create)
-		r.PUT("/:id/pay", actions.PermissionAction(), e.Pay)
+		r.PUT("/:id/pay", actions.PermissionAction(func() bool { return config.Current().Settings.Application.EnableDP }), e.Pay)
 	}
 }

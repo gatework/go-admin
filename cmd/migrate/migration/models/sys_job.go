@@ -1,21 +1,25 @@
 package models
 
+// SysJob defines the sysjob contract.
+//
+//nolint:embeddedstructfieldcheck // Frozen migration field order defines historical positional SQL seed columns.
 type SysJob struct {
-	JobId          int    `json:"jobId" gorm:"primaryKey;autoIncrement"` // 编码
-	JobName        string `json:"jobName" gorm:"size:255;"`              // 名称
-	JobGroup       string `json:"jobGroup" gorm:"size:255;"`             // 任务分组
-	JobType        int    `json:"jobType" gorm:"size:1;"`                // 任务类型
-	CronExpression string `json:"cronExpression" gorm:"size:255;"`       // cron表达式
-	InvokeTarget   string `json:"invokeTarget" gorm:"size:255;"`         // 调用目标
-	Args           string `json:"args" gorm:"size:255;"`                 // 目标参数
-	MisfirePolicy  int    `json:"misfirePolicy" gorm:"size:255;"`        // 执行策略
-	Concurrent     int    `json:"concurrent" gorm:"size:1;"`             // 是否并发
-	Status         int    `json:"status" gorm:"size:1;"`                 // 状态
-	EntryId        int    `json:"entry_id" gorm:"size:11;"`              // job启动时返回的id
+	JobID          int    `json:"jobId" gorm:"primaryKey;autoIncrement"`
+	JobName        string `json:"jobName" gorm:"size:255;"`
+	JobGroup       string `json:"jobGroup" gorm:"size:255;"`
+	JobType        int    `json:"jobType" gorm:"size:1;"`
+	CronExpression string `json:"cronExpression" gorm:"size:255;"`
+	InvokeTarget   string `json:"invokeTarget" gorm:"size:255;"`
+	Args           string `json:"args" gorm:"size:255;"`
+	MisfirePolicy  int    `json:"misfirePolicy" gorm:"size:255;"`
+	Concurrent     int    `json:"concurrent" gorm:"size:1;"`
+	Status         int    `json:"status" gorm:"size:1;"`
+	EntryID        int    `json:"entry_id" gorm:"size:11;"`
 	ModelTime
 	ControlBy
 }
 
+// TableName returns the explicit persistence table name.
 func (SysJob) TableName() string {
 	return "sys_job"
 }

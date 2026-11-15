@@ -1,105 +1,119 @@
 package jobs
 
 import (
+	"context"
 	"fmt"
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
+
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 )
 
-var timeFormat = "2006-01-02 15:04:05"
-var retryCount = 3
+const retryCount = 3
 
 var jobList map[string]JobExec
 
-//var lock sync.Mutex
-
+// JobCore carries job core state for this module.
 type JobCore struct {
 	InvokeTarget   string
 	Name           string
-	JobId          int
-	EntryId        int
+	JobID          int
+	EntryID        int
 	CronExpression string
 	Args           string
 }
 
-// HttpJob 任务类型 http
-type HttpJob struct {
+// HTTPJob 任务类型 http
+type HTTPJob struct {
 	JobCore
-	allowed func() bool
+	allowed   func() bool
+	execution context.Context //nolint:containedctx // Scheduler-owned lifecycle context; request contexts are never retained.
 }
 
+// ExecJob carries exec job state for this module.
 type ExecJob struct {
 	JobCore
 	allowed func() bool
 }
 
+// Run provides run for this module.
 func (e *ExecJob) Run() {
 	if e.allowed != nil && !e.allowed() {
 		return
 	}
-	startTime := time.Now()
-	var obj = jobList[e.InvokeTarget]
-	if obj == nil {
-		log.Warn("[Job] ExecJob Run job nil")
+	logger := log.NewHelper(log.Default())
+	started := time.Now()
+	job := jobList[e.InvokeTarget]
+	if job == nil {
+		logger.Warn("job: execution target is not registered")
 		return
 	}
-	err := CallExec(obj.(JobExec), e.Args)
-	if err != nil {
-		// 如果失败暂停一段时间重试
-		fmt.Println(time.Now().Format(timeFormat), " [ERROR] mission failed! ", err)
+	if err := CallExec(job, e.Args); err != nil {
+		logger.Errorf("job %s: %v", e.Name, err)
+		return
 	}
-	// 结束时间
-	endTime := time.Now()
-
-	// 执行时间
-	latencyTime := endTime.Sub(startTime)
-	//TODO: 待完善部分
-	//str := time.Now().Format(timeFormat) + " [INFO] JobCore " + string(e.EntryId) + "exec success , spend :" + latencyTime.String()
-	//ws.SendAll(str)
-	log.Infof("[Job] JobCore %s exec success , spend :%v", e.Name, latencyTime)
-	return
+	logger.Infof("job %s completed in %v", e.Name, time.Since(started))
 }
 
-// Run http 任务接口
-func (h *HttpJob) Run() {
+// Run satisfies cron.Job. Its execution lifetime belongs to the scheduler,
+// independently of requests that create or remove this registration.
+func (h *HTTPJob) Run() {
 	if h.allowed != nil && !h.allowed() {
 		return
 	}
+	ctx := h.execution
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	started := time.Now()
+	err := runHTTPJob(
+		ctx,
+		h.InvokeTarget,
+		pkg.Get,
+		func(attempt int) time.Duration { return time.Duration(attempt) * 5 * time.Second },
+	)
+	if err != nil {
+		log.NewHelper(log.Default()).Errorf("job %s failed: %v", h.Name, err)
+		return
+	}
+	log.NewHelper(log.Default()).Infof("job %s completed in %v", h.Name, time.Since(started))
+}
 
-	startTime := time.Now()
-	var count = 0
-	var err error
-	var str string
-	/* 循环 */
-LOOP:
-	if count < retryCount {
-		/* 跳过迭代 */
-		str, err = pkg.Get(h.InvokeTarget)
-		if err != nil {
-			// 如果失败暂停一段时间重试
-			log.Warnf("[Job] mission failed! %v", err)
-			log.Warnf("[Job] Retry after the task fails %d seconds! %s \n", (count+1)*5, str)
-			time.Sleep(time.Duration(count+1) * 5 * time.Second)
-			count = count + 1
-			goto LOOP
+func runHTTPJob(
+	ctx context.Context,
+	target string,
+	fetch func(context.Context, string) (string, error),
+	delay func(int) time.Duration,
+) error {
+	var last error
+	for attempt := 1; attempt <= retryCount; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		_, err := fetch(ctx, target)
+		if err == nil {
+			return nil
+		}
+		last = err
+		if attempt == retryCount {
+			break
+		}
+		timer := time.NewTimer(delay(attempt))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
 		}
 	}
-	// 结束时间
-	endTime := time.Now()
-
-	// 执行时间
-	latencyTime := endTime.Sub(startTime)
-	//TODO: 待完善部分
-
-	log.Infof("[Job] JobCore %s exec success , spend :%v", h.Name, latencyTime)
-	return
+	return fmt.Errorf("http job exhausted %d attempts: %w", retryCount, last)
 }
 
 // Setup 初始化
@@ -111,11 +125,11 @@ LOOP:
 // thing in every database it appears in.
 func Setup(dbs map[string]*gorm.DB) {
 
-	fmt.Println(time.Now().Format(timeFormat), " [INFO] JobCore Starting...")
+	log.NewHelper(log.Default()).Info("starting tenant schedulers")
 
 	owner := newOwnerID()
 	for k, db := range dbs {
-		sdk.Runtime.SetCrontabByTenant(k, cronjob.NewWithSeconds())
+		sdk.Runtime.SetCrontab(k, cronjob.NewWithSeconds())
 		newSupervisor(k, db, owner).start()
 	}
 }
@@ -123,30 +137,28 @@ func Setup(dbs map[string]*gorm.DB) {
 // AddJob 添加任务 AddJob(invokeTarget string, jobId int, jobName string, cronExpression string)
 func AddJob(c *cron.Cron, job Job) (int, error) {
 	if job == nil {
-		fmt.Println("unknown")
+		log.NewHelper(log.Default()).Warn("job implementation is missing")
 		return 0, nil
 	}
 	return job.addJob(c)
 }
 
-func (h *HttpJob) addJob(c *cron.Cron) (int, error) {
+func (h *HTTPJob) addJob(c *cron.Cron) (int, error) {
 	id, err := c.AddJob(h.CronExpression, h)
 	if err != nil {
-		fmt.Println(time.Now().Format(timeFormat), " [ERROR] JobCore AddJob error", err)
+
 		return 0, err
 	}
-	EntryId := int(id)
-	return EntryId, nil
+	return int(id), nil
 }
 
 func (e *ExecJob) addJob(c *cron.Cron) (int, error) {
 	id, err := c.AddJob(e.CronExpression, e)
 	if err != nil {
-		fmt.Println(time.Now().Format(timeFormat), " [ERROR] JobCore AddJob error", err)
+
 		return 0, err
 	}
-	EntryId := int(id)
-	return EntryId, nil
+	return int(id), nil
 }
 
 // Remove 移除任务
@@ -154,7 +166,7 @@ func Remove(c *cron.Cron, entryID int) chan bool {
 	ch := make(chan bool, 1)
 	go func() {
 		c.Remove(cron.EntryID(entryID))
-		fmt.Println(time.Now().Format(timeFormat), " [INFO] JobCore Remove success ,info entryID :", entryID)
+		log.NewHelper(log.Default()).Infof("removed scheduler entry %d", entryID)
 		ch <- true
 	}()
 	return ch

@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	admin "go-admin/app/admin/models"
-	fabric "go-admin/app/fabric/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	admin "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/net/models/fabric"
 )
 
 func TestFabricMigrationPreservesRulesAndSeedsScopedCapabilities(t *testing.T) {
@@ -16,7 +17,7 @@ func TestFabricMigrationPreservesRulesAndSeedsScopedCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&admin.SysMenu{}, &admin.SysApi{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); err != nil {
+	if err = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; err != nil {
@@ -64,14 +65,14 @@ func TestFabricMigrationPreservesRulesAndSeedsScopedCapabilities(t *testing.T) {
 	}
 	for _, action := range []string{"list", "query", "edit", "collect", "preview", "execute"} {
 		var button admin.SysMenu
-		if err = db.Preload("SysApi").Where("permission = ?", "network:fabric:"+action).First(&button).Error; err != nil {
+		if err = db.Preload("SysAPI").Where("permission = ?", "network:fabric:"+action).First(&button).Error; err != nil {
 			t.Fatal(action, err)
 		}
-		if len(button.SysApi) == 0 {
+		if len(button.SysAPI) == 0 {
 			t.Fatal("no APIs", action)
 		}
 		candidateAccess := false
-		for _, api := range button.SysApi {
+		for _, api := range button.SysAPI {
 			if api.Path == "/api/v1/network-fabrics/:id/change-candidates" && api.Action == "POST" {
 				candidateAccess = true
 			}

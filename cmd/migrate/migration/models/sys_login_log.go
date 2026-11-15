@@ -4,6 +4,9 @@ import (
 	"time"
 )
 
+// SysLoginLog defines the sysloginlog contract.
+//
+//nolint:embeddedstructfieldcheck // Frozen migration field order defines historical positional SQL seed columns.
 type SysLoginLog struct {
 	Model
 	Username      string    `json:"username" gorm:"type:varchar(128);comment:用户名"`
@@ -21,6 +24,7 @@ type SysLoginLog struct {
 	ControlBy
 }
 
+// TableName returns the explicit persistence table name.
 func (SysLoginLog) TableName() string {
 	return "sys_login_log"
 }

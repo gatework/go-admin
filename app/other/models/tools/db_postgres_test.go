@@ -9,16 +9,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 func postgresMetadataDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("MOTOR_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("set GO_ADMIN_TEST_POSTGRES_DSN to a dedicated test database")
+		t.Skip("set MOTOR_TEST_POSTGRES_DSN to a dedicated test database")
 	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -44,9 +46,12 @@ func postgresMetadataDB(t *testing.T) *gorm.DB {
 	if err := tx.AutoMigrate(&SysTables{}); err != nil {
 		t.Fatal(err)
 	}
-	previousDriver, previousName := config.DatabaseConfig.Driver, config.GenConfig.DBName
-	config.DatabaseConfig.Driver, config.GenConfig.DBName = "mysql", "not_this_tenant"
-	t.Cleanup(func() { config.DatabaseConfig.Driver, config.GenConfig.DBName = previousDriver, previousName })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Database.Driver, settings.Gen.DBName = "mysql", "not_this_tenant"
+	})
+
 	return tx
 }
 

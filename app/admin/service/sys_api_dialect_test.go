@@ -6,20 +6,19 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	"go-admin/common/global"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
-func TestSysApiTypeFilterUsesRequestDialect(t *testing.T) {
-	previousDriver, previousDP := global.Driver, config.ApplicationConfig.EnableDP
-	global.Driver, config.ApplicationConfig.EnableDP = "mysql", false
-	t.Cleanup(func() { global.Driver, config.ApplicationConfig.EnableDP = previousDriver, previousDP })
+func TestSysAPITypeFilterUsesRequestDialect(t *testing.T) {
+	testconfig.Apply(t, func(settings *config.Config) { settings.Application.EnableDP = false })
 	for _, filter := range []string{"BUS", "暂无"} {
 		t.Run(filter, func(t *testing.T) {
 			base, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -37,18 +36,18 @@ func TestSysApiTypeFilterUsesRequestDialect(t *testing.T) {
 			}
 			stopped := errors.New("captured query")
 			var sql string
-			var vars []interface{}
+			var vars []any
 			if err := db.Callback().Query().After("gorm:query").Register("api:capture", func(tx *gorm.DB) {
 				sql, vars = tx.Statement.SQL.String(), tx.Statement.Vars
 				tx.AddError(stopped)
 			}); err != nil {
 				t.Fatal(err)
 			}
-			s := SysApi{}
-			s.Orm, s.Log = db, logger.NewHelper(logger.DefaultLogger)
-			var list []models.SysApi
+			s := SysAPI{}
+			s.DB, s.Logger = db, logger.NewHelper(logger.Default())
+			var list []models.SysAPI
 			var count int64
-			if err := s.GetPage(&dto.SysApiGetPageReq{Type: filter}, nil, &list, &count); !errors.Is(err, stopped) {
+			if err := s.GetPage(&dto.SysAPIGetPageReq{Type: filter}, nil, &list, &count); !errors.Is(err, stopped) {
 				t.Fatalf("GetPage error: %v", err)
 			}
 			if strings.Contains(sql, "`") || !strings.Contains(sql, `"type" = @p`) {

@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk/config"
 )
 
 // Metadata belongs to the request's connection, not the process-wide default
@@ -19,7 +20,7 @@ func metadataTables(tx *gorm.DB) (*gorm.DB, error) {
 	if driver == "postgres" {
 		return tx.Table("(?) AS generator_tables", tx.Raw(postgresTablesSQL)), nil
 	}
-	return tx.Table("information_schema.tables").Where("table_schema = ?", config.GenConfig.DBName), nil
+	return tx.Table("information_schema.tables").Where("table_schema = ?", config.Current().Settings.Gen.DBName), nil
 }
 
 func metadataColumns(tx *gorm.DB) (*gorm.DB, error) {
@@ -30,14 +31,14 @@ func metadataColumns(tx *gorm.DB) (*gorm.DB, error) {
 	if driver == "postgres" {
 		return tx.Table("(?) AS generator_columns", tx.Raw(postgresColumnsSQL)), nil
 	}
-	return tx.Table("information_schema.columns").Where("table_schema = ?", config.GenConfig.DBName), nil
+	return tx.Table("information_schema.columns").Where("table_schema = ?", config.Current().Settings.Gen.DBName), nil
 }
 
 func metadataDriver(tx *gorm.DB) (string, error) {
 	if tx == nil || tx.Config == nil || tx.Dialector == nil {
 		return "", errors.New("code generation requires a database connection")
 	}
-	switch driver := tx.Dialector.Name(); driver {
+	switch driver := tx.Name(); driver {
 	case "mysql", "postgres":
 		return driver, nil
 	default:

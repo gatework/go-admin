@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Bind the APIs that were mounted without AuthCheckRole to the menus that
@@ -27,23 +27,25 @@ import (
 // job:sysJob:edit as well as job:sysJob:start where a deployment added one.
 //
 // Ordered after 1786700003000, so the runtime models are used.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
-	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700012000BindAuthzApis)
+	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700012000BindAuthzAPIs)
 }
 
-var authzMenuApis = []struct {
+var authzMenuAPIs = []struct {
 	permissions []string
-	api         models.SysApi
+	api         models.SysAPI
 }{
-	{[]string{"admin:sysRole:update"}, models.SysApi{Title: "角色状态修改", Path: "/api/v1/role-status", Action: "PUT"}},
-	{[]string{"job:sysJob:remove"}, models.SysApi{Title: "job移除", Path: "/api/v1/job/remove/:id", Action: "GET"}},
-	{[]string{"job:sysJob:start", "job:sysJob:edit"}, models.SysApi{Title: "job启动", Path: "/api/v1/job/start/:id", Action: "GET"}},
+	{[]string{"admin:sysRole:update"}, models.SysAPI{Title: "角色状态修改", Path: "/api/v1/role-status", Action: "PUT"}},
+	{[]string{"job:sysJob:remove"}, models.SysAPI{Title: "job移除", Path: "/api/v1/job/remove/:id", Action: "GET"}},
+	{[]string{"job:sysJob:start", "job:sysJob:edit"}, models.SysAPI{Title: "job启动", Path: "/api/v1/job/start/:id", Action: "GET"}},
 }
 
-func _1786700012000BindAuthzApis(db *gorm.DB, version string) error {
+func _1786700012000BindAuthzAPIs(db *gorm.DB, version string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := bindAuthzApis(tx); err != nil {
+		if err := bindAuthzAPIs(tx); err != nil {
 			return err
 		}
 		return tx.Create(&common.Migration{Version: version}).Error
@@ -51,8 +53,8 @@ func _1786700012000BindAuthzApis(db *gorm.DB, version string) error {
 }
 
 // bindAuthzApis is split out so tests can run it without sys_migration.
-func bindAuthzApis(tx *gorm.DB) error {
-	for _, b := range authzMenuApis {
+func bindAuthzAPIs(tx *gorm.DB) error {
+	for _, b := range authzMenuAPIs {
 		var menus []models.SysMenu
 		if err := tx.Where("permission IN ?", b.permissions).Find(&menus).Error; err != nil {
 			return err
@@ -61,7 +63,7 @@ func bindAuthzApis(tx *gorm.DB) error {
 			continue
 		}
 
-		var api models.SysApi
+		var api models.SysAPI
 		err := tx.Where("path = ? AND action = ?", b.api.Path, b.api.Action).First(&api).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			api = b.api
@@ -73,14 +75,14 @@ func bindAuthzApis(tx *gorm.DB) error {
 		}
 
 		for i := range menus {
-			if err := tx.Model(&menus[i]).Association("SysApi").Append(&api); err != nil {
+			if err := tx.Model(&menus[i]).Association("SysAPI").Append(&api); err != nil {
 				return err
 			}
 
 			var roleKeys []string
 			if err := tx.Model(&models.SysRole{}).
 				Joins("JOIN sys_role_menu ON sys_role_menu.role_id = sys_role.role_id").
-				Where("sys_role_menu.menu_id = ?", menus[i].MenuId).
+				Where("sys_role_menu.menu_id = ?", menus[i].MenuID).
 				Distinct().Pluck("sys_role.role_key", &roleKeys).Error; err != nil {
 				return err
 			}

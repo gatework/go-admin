@@ -1,19 +1,22 @@
 package middleware
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
+	"bytes"
 	"io"
+	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor-core/logger"
 )
 
 func TestAuditPasswordOperationLogRedaction(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("PUT", "/api/v1/user/pwd/set", strings.NewReader(`{"oldPassword":"audit-old-secret","newPassword":"audit-new-secret"}`))
-	body := readOperParam(c, logger.NewHelper(logger.DefaultLogger))
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/user/pwd/set", strings.NewReader(`{"oldPassword":"audit-old-secret","newPassword":"audit-new-secret"}`))
+	body := readOperParam(c, logger.NewHelper(logger.Default()))
 	fields := operaLogFields(c, "127.0.0.1", 200, c.Request.RequestURI, "PUT", 0, body, "", 200)
 	logged := fields["operParam"].(string)
 	if strings.Contains(logged, "audit-old-secret") || strings.Contains(logged, "audit-new-secret") {
@@ -30,9 +33,9 @@ func TestOperationLogScrubsNestedFieldsAndPreservesRequest(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
-			c.Request = httptest.NewRequest("PUT", "/?token=secret-value&name=visible", strings.NewReader(tc.body))
+			c.Request = httptest.NewRequest(http.MethodPut, "/?token=secret-value&name=visible", strings.NewReader(tc.body))
 			c.Request.Header.Set("Content-Type", tc.contentType)
-			got := readOperParam(c, logger.NewHelper(logger.DefaultLogger))
+			got := readOperParam(c, logger.NewHelper(logger.Default()))
 			if strings.Contains(got, "secret-value") {
 				t.Fatalf("credential retained: %s", got)
 			}
@@ -53,24 +56,16 @@ func TestOperationLogScrubsNestedFieldsAndPreservesRequest(t *testing.T) {
 }
 
 func TestCustomErrorRedactsURLCredentials(t *testing.T) {
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	original := os.Stdout
-	os.Stdout = writer
-	defer func() { os.Stdout = original; reader.Close(); writer.Close() }()
+	var output bytes.Buffer
+	original := logger.Default()
+	logger.SetDefault(logger.NewLogger(logger.WithOutput(&output)))
+	defer logger.SetDefault(original)
 	r := gin.New()
 	r.Use(CustomError)
 	r.GET("/broken", func(c *gin.Context) { panic("CustomError#422#invalid request") })
 	response := httptest.NewRecorder()
-	r.ServeHTTP(response, httptest.NewRequest("GET", "/broken?token=panic-secret&name=visible", nil))
-	writer.Close()
-	os.Stdout = original
-	logged, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/broken?token=panic-secret&name=visible", nil))
+	logged := output.Bytes()
 	if strings.Contains(string(logged), "panic-secret") || !strings.Contains(string(logged), "name=visible") {
 		t.Fatalf("unsafe or empty custom-error log: %s", logged)
 	}

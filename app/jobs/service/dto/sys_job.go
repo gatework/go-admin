@@ -8,16 +8,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
 	"github.com/robfig/cron/v3"
 
-	"go-admin/app/jobs/models"
-	"go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/api"
+
+	"github.com/gatework/motor/app/jobs/models"
+	"github.com/gatework/motor/common/dto"
 )
 
+// SysJobSearch carries sys job search state for this module.
 type SysJobSearch struct {
 	dto.Pagination `search:"-"`
-	JobId          int    `form:"jobId" search:"type:exact;column:job_id;table:sys_job"`
+	JobID          int    `form:"jobId" search:"type:exact;column:job_id;table:sys_job"`
 	JobName        string `form:"jobName" search:"type:icontains;column:job_name;table:sys_job"`
 	JobGroup       string `form:"jobGroup" search:"type:exact;column:job_group;table:sys_job"`
 	CronExpression string `form:"cronExpression" search:"type:exact;column:cron_expression;table:sys_job"`
@@ -25,10 +27,12 @@ type SysJobSearch struct {
 	Status         int    `form:"status" search:"type:exact;column:status;table:sys_job"`
 }
 
-func (m *SysJobSearch) GetNeedSearch() interface{} {
+// GetNeedSearch supplies the tagged search criteria.
+func (m *SysJobSearch) GetNeedSearch() any {
 	return *m
 }
 
+// Bind decodes and validates the request parameters.
 func (m *SysJobSearch) Bind(ctx *gin.Context) error {
 	log := api.GetRequestLogger(ctx)
 	err := ctx.ShouldBind(m)
@@ -38,9 +42,10 @@ func (m *SysJobSearch) Bind(ctx *gin.Context) error {
 	return err
 }
 
+// SysJobControl carries sys job control state for this module.
 type SysJobControl struct {
 	present        map[string]json.RawMessage
-	JobId          int    `json:"jobId" uri:"id"`
+	JobID          int    `json:"jobId" uri:"id"`
 	JobName        string `json:"jobName"`        // 名称
 	JobGroup       string `json:"jobGroup"`       // 任务分组
 	JobType        int    `json:"jobType"`        // 任务类型
@@ -50,34 +55,16 @@ type SysJobControl struct {
 	MisfirePolicy  int    `json:"misfirePolicy"`  // 执行策略
 	Concurrent     int    `json:"concurrent"`     // 是否并发
 	Status         int    `json:"status"`         // 状态
-	EntryId        int    `json:"entryId"`        // job启动时返回的id
+	EntryID        int    `json:"entryId"`        // job启动时返回的id
 }
 
+// Bind decodes supplied fields and validates job creation or partial updates.
 func (s *SysJobControl) Bind(ctx *gin.Context) error {
 	if err := ctx.ShouldBind(s); err != nil {
 		return err
 	}
 	if s.present == nil {
-		// Gin's legacy form binding accepts Go field names. Also accept the
-		// JSON names and normalize presence so both formats update the same fields.
-		values := make(map[string][]string)
-		for key, value := range ctx.Request.Form {
-			values[strings.ToLower(key)] = value
-		}
-		if ctx.Request.MultipartForm != nil {
-			for key, value := range ctx.Request.MultipartForm.Value {
-				values[strings.ToLower(key)] = value
-			}
-		}
-		s.present = make(map[string]json.RawMessage, len(values))
-		form := make(map[string][]string, len(values))
-		for _, name := range []string{"jobId", "jobName", "jobGroup", "jobType", "cronExpression", "invokeTarget", "args", "misfirePolicy", "concurrent", "status", "entryId"} {
-			if value, ok := values[strings.ToLower(name)]; ok {
-				form[name] = value
-				s.present[strings.ToLower(name)] = nil
-			}
-		}
-		if err := binding.MapFormWithTag(s, form, "json"); err != nil {
+		if err := s.bindForm(ctx.Request); err != nil {
 			return err
 		}
 	}
@@ -86,7 +73,7 @@ func (s *SysJobControl) Bind(ctx *gin.Context) error {
 			return err
 		}
 	}
-	if ctx.Request.Method != http.MethodPost && s.JobId <= 0 {
+	if ctx.Request.Method != http.MethodPost && s.JobID <= 0 {
 		return errors.New("jobId must be positive")
 	}
 	if _, ok := s.present["jobname"]; ok || ctx.Request.Method == http.MethodPost {
@@ -142,9 +129,10 @@ func (s *SysJobControl) UpdateFields() []string {
 	return fields
 }
 
+// ToModel provides to model for this module.
 func (s *SysJobControl) ToModel() (*models.SysJob, error) {
 	return &models.SysJob{
-		JobId:          s.JobId,
+		JobID:          s.JobID,
 		JobName:        s.JobName,
 		JobGroup:       s.JobGroup,
 		JobType:        s.JobType,
@@ -157,12 +145,14 @@ func (s *SysJobControl) ToModel() (*models.SysJob, error) {
 	}, nil
 }
 
-type SysJobById struct {
-	dto.ObjectById
+// SysJobByID carries sys job by id state for this module.
+type SysJobByID struct {
+	dto.ObjectByID
 }
 
+// SysJobItem carries sys job item state for this module.
 type SysJobItem struct {
-	JobId          int    `json:"jobId"`
+	JobID          int    `json:"jobId"`
 	JobName        string `json:"jobName" validate:"required"` // 名称
 	JobGroup       string `json:"jobGroup"`                    // 任务分组
 	JobType        int    `json:"jobType"`                     // 任务类型
@@ -172,5 +162,31 @@ type SysJobItem struct {
 	MisfirePolicy  int    `json:"misfirePolicy"`               // 执行策略
 	Concurrent     int    `json:"concurrent"`                  // 是否并发
 	Status         int    `json:"status"`                      // 状态
-	EntryId        int    `json:"entryId"`                     // job启动时返回的id
+	EntryID        int    `json:"entryId"`                     // job启动时返回的id
+}
+
+func (s *SysJobControl) bindForm(request *http.Request) error {
+	// Gin's legacy form binding accepts Go field names. Also accept the
+	// JSON names and normalize presence so both formats update the same fields.
+	values := make(map[string][]string)
+	for key, value := range request.Form {
+		values[strings.ToLower(key)] = value
+	}
+	if request.MultipartForm != nil {
+		for key, value := range request.MultipartForm.Value {
+			values[strings.ToLower(key)] = value
+		}
+	}
+	s.present = make(map[string]json.RawMessage, len(values))
+	form := make(map[string][]string, len(values))
+	for _, name := range []string{"jobId", "jobName", "jobGroup", "jobType", "cronExpression", "invokeTarget", "args", "misfirePolicy", "concurrent", "status", "entryId"} {
+		if value, ok := values[strings.ToLower(name)]; ok {
+			form[name] = value
+			s.present[strings.ToLower(name)] = nil
+		}
+	}
+	if err := binding.MapFormWithTag(s, form, "json"); err != nil {
+		return err
+	}
+	return nil
 }

@@ -6,46 +6,71 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
 	"gorm.io/gorm"
 
-	adminapis "go-admin/app/admin/apis"
-	"go-admin/app/admin/models"
-	fileapis "go-admin/app/other/apis"
-	accountsecurity "go-admin/common/account"
-	"go-admin/common/actions"
-	"go-admin/common/middleware"
-	"go-admin/common/middleware/handler"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/runtime"
+
+	adminhandler "github.com/gatework/motor/app/admin/handler"
+	"github.com/gatework/motor/app/admin/models"
+	filehandler "github.com/gatework/motor/app/other/handler"
+	accountsecurity "github.com/gatework/motor/common/account"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/middleware"
+	"github.com/gatework/motor/common/middleware/handler"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 func auth(t *testing.T) *jwt.GinJWTMiddleware {
 	t.Helper()
 	previousRuntime := sdk.Runtime
-	previousMode, previousDP, previousSecret, previousTimeout := config.ApplicationConfig.Mode, config.ApplicationConfig.EnableDP, config.JwtConfig.Secret, config.JwtConfig.Timeout
-	sdk.Runtime = runtime.NewConfig()
+	previousMode, previousDP, previousSecret, previousTimeout := config.Current().Settings.Application.Mode, config.Current().Settings.Application.EnableDP, config.Current().Settings.JWT.Secret, config.Current().Settings.JWT.Timeout
+	sdk.Runtime = runtime.New()
 	t.Cleanup(func() {
 		sdk.Runtime = previousRuntime
-		config.ApplicationConfig.Mode = previousMode
-		config.ApplicationConfig.EnableDP = previousDP
-		config.JwtConfig.Secret = previousSecret
-		config.JwtConfig.Timeout = previousTimeout
+		testconfig.Apply(t, func(settings *config.Config) {
+			settings.
+				Application.Mode = previousMode
+		})
+		testconfig.Apply(t, func(settings *config.Config) {
+			settings.
+				Application.EnableDP = previousDP
+		})
+		testconfig.Apply(t, func(settings *config.Config) {
+			settings.
+				JWT.Secret = previousSecret
+		})
+		testconfig.Apply(t, func(settings *config.Config) {
+			settings.
+				JWT.Timeout = previousTimeout
+		})
 	})
 	gin.SetMode(gin.TestMode)
-	config.ApplicationConfig.Mode = "prod"
-	config.ApplicationConfig.EnableDP = true
-	config.JwtConfig.Secret = "audit-test-key-not-a-real-secret"
-	config.JwtConfig.Timeout = 3600
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = "prod"
+	})
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = true
+	})
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			JWT.Secret = "audit-test-key-not-a-real-secret"
+	})
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			JWT.Timeout = 3600
+	})
 	mw, err := middleware.AuthInit()
 	if err != nil {
 		t.Fatal(err)
@@ -62,15 +87,15 @@ func dbFor(t *testing.T, host, userName string) *gorm.DB {
 	if err = db.AutoMigrate(&accountsecurity.State{}, &models.SysDept{}, &models.SysRole{}, &models.SysPost{}, &models.SysUser{}); err != nil {
 		t.Fatal(err)
 	}
-	role := models.SysRole{RoleId: 1, RoleKey: "admin", RoleName: "admin", Status: "2", DataScope: "1"}
+	role := models.SysRole{RoleID: 1, RoleKey: "admin", RoleName: "admin", Status: "2", DataScope: "1"}
 	if err = db.Create(&role).Error; err != nil {
 		t.Fatal(err)
 	}
-	u := models.SysUser{UserId: 1, Username: userName, Password: "Audit-password-1", RoleId: 1, Status: "2", DeptId: 1}
+	u := models.SysUser{UserID: 1, Username: userName, Password: "Audit-password-1", RoleID: 1, Status: "2", DeptID: 1}
 	if err = db.Create(&u).Error; err != nil {
 		t.Fatal(err)
 	}
-	sdk.Runtime.SetDbByTenant(host, db)
+	sdk.Runtime.SetDB(host, db)
 	t.Cleanup(func() { sqlDB, _ := db.DB(); sqlDB.Close() })
 	return db
 }
@@ -82,7 +107,7 @@ func tokenFor(t *testing.T, mw *jwt.GinJWTMiddleware, db *gorm.DB, username, ten
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := mw.TokenGenerator(map[string]interface{}{"user": u, "role": r, "tenant": tenant})
+	token, _, err := mw.TokenGenerator(map[string]any{"user": u, "role": r, "tenant": tenant})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,14 +116,14 @@ func tokenFor(t *testing.T, mw *jwt.GinJWTMiddleware, db *gorm.DB, username, ten
 
 func userRouter(mw *jwt.GinJWTMiddleware) *gin.Engine {
 	r := gin.New()
-	r.Use(middleware.WithContextDb, func(c *gin.Context) { c.Set(pkg.LoggerKey, logger.NewHelper(logger.DefaultLogger)); c.Next() })
-	r.GET("/api/v1/sys-user", mw.MiddlewareFunc(), middleware.AuthCheckRole(), actions.PermissionAction(), adminapis.SysUser{}.GetPage)
+	r.Use(middleware.WithContextDB, func(c *gin.Context) { c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default())); c.Next() })
+	r.GET("/api/v1/sys-user", mw.MiddlewareFunc(), middleware.AuthCheckRole(), actions.PermissionAction(), adminhandler.User{}.List)
 	return r
 }
 
 func request(r http.Handler, host, token string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/v1/sys-user", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sys-user", nil)
 	req.Host = host
 	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(w, req)
@@ -120,7 +145,7 @@ func TestDisabledAndDeletedUserTokenRejected(t *testing.T) {
 	mw := auth(t)
 	db := dbFor(t, "revocation.test", "revoked-admin")
 	token := tokenFor(t, mw, db, "revoked-admin", "revocation.test")
-	if err := db.Create(&models.SysUser{UserId: 2, Username: "protected-other-user", RoleId: 1, Status: "2"}).Error; err != nil {
+	if err := db.Create(&models.SysUser{UserID: 2, Username: "protected-other-user", RoleID: 1, Status: "2"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	r := userRouter(mw)
@@ -151,17 +176,10 @@ func TestUploadedHTMLServedAsSandboxedAttachment(t *testing.T) {
 	mw := auth(t)
 	db := dbFor(t, "upload.test", "upload-user")
 	token := tokenFor(t, mw, db, "upload-user", "upload.test")
-	prior, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.Chdir(t.TempDir()); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(prior)
+	t.Chdir(t.TempDir())
 	r := gin.New()
-	r.Use(middleware.WithContextDb, middleware.Secure, func(c *gin.Context) { c.Set(pkg.LoggerKey, logger.NewHelper(logger.DefaultLogger)); c.Next() })
-	r.POST("/api/v1/public/uploadFile", mw.MiddlewareFunc(), fileapis.File{}.UploadFile)
+	r.Use(middleware.WithContextDB, middleware.Secure, func(c *gin.Context) { c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default())); c.Next() })
+	r.POST("/api/v1/public/uploadFile", mw.MiddlewareFunc(), filehandler.File{}.UploadFile)
 	r.Static("/static", "./static")
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
@@ -172,7 +190,7 @@ func TestUploadedHTMLServedAsSandboxedAttachment(t *testing.T) {
 	content := `<!doctype html><script>document.documentElement.dataset.audit="executed"</script>`
 	part.Write([]byte(content))
 	form.Close()
-	req := httptest.NewRequest("POST", "/api/v1/public/uploadFile", &body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/public/uploadFile", &body)
 	req.Host = "upload.test"
 	req.Header.Set("Content-Type", form.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -190,7 +208,7 @@ func TestUploadedHTMLServedAsSandboxedAttachment(t *testing.T) {
 	if response.Code != 200 || !strings.HasSuffix(response.Data.Path, ".html") {
 		t.Fatalf("upload rejected: %s", w.Body.String())
 	}
-	get := httptest.NewRequest("GET", response.Data.Path, nil)
+	get := httptest.NewRequest(http.MethodGet, response.Data.Path, nil)
 	get.Host = "upload.test"
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, get)
@@ -205,7 +223,7 @@ func TestUploadedHTMLServedAsSandboxedAttachment(t *testing.T) {
 func TestAuthorizationChangesInvalidateExistingToken(t *testing.T) {
 	for _, tc := range []struct {
 		name, table, column string
-		value               interface{}
+		value               any
 	}{
 		{"password", "sys_user", "password", "replacement-password-hash"},
 		{"department", "sys_user", "dept_id", 2},

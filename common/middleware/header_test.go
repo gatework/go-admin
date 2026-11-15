@@ -135,7 +135,7 @@ func TestUploadHeadersDoNotDisableBundledApplications(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest("GET", tc.path, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tc.path, nil)
 			Secure(c)
 			if (w.Header().Get("Content-Security-Policy") != "") != tc.sandbox {
 				t.Errorf("sandbox header for %s: %v", tc.path, w.Header())

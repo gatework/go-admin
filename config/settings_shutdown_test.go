@@ -3,8 +3,8 @@ package config
 import (
 	"testing"
 
-	coreconfig "github.com/go-admin-team/go-admin-core/v2/config"
-	"github.com/go-admin-team/go-admin-core/v2/config/source/file"
+	coreconfig "github.com/gatework/motor-core/config"
+	"github.com/gatework/motor-core/config/source/file"
 )
 
 // shippedSettings is the shape the loader fills in, cut down to the part under
@@ -36,7 +36,7 @@ func TestTheShippedSettingsReachTheShutdownStruct(t *testing.T) {
 	for _, name := range []string{"settings.yml", "settings.full.yml"} {
 		t.Run(name, func(t *testing.T) {
 			var loaded shippedSettings
-			c, err := coreconfig.NewConfig(
+			c, err := coreconfig.New(
 				coreconfig.WithSource(file.NewSource(file.WithPath(name))),
 				coreconfig.WithEntity(&loaded),
 			)

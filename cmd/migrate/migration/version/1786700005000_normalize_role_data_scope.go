@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Normalize sys_role.data_scope to one of the five values
@@ -26,6 +26,8 @@ import (
 // tighter scope was never getting it under the old fail-open default either,
 // so this does not tighten anything a deployment was relying on. Whether to
 // tighten it further is left to whoever owns that role.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700005000NormalizeRoleDataScope)

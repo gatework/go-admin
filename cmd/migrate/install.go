@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/app"
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
+	"github.com/gatework/motor-core/sdk/contract/app"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
 )
 
 // engine is the part of the migration engine the installer drives.
@@ -22,9 +23,9 @@ import (
 // a package-level singleton with no exported constructor, so a test that took
 // it would be sharing one registry with every other test in the process.
 type engine interface {
-	SetDb(*gorm.DB)
+	SetDB(db *gorm.DB)
 	Status() ([]migration.StatusEntry, error)
-	MigrateApp(string) error
+	MigrateApp(code string) error
 }
 
 // installReport is what an install did, for the command to print.
@@ -76,7 +77,7 @@ func install(db *gorm.DB, eng engine, m app.Manifest) (installReport, error) {
 		return rep, errors.New("sys_app does not exist; run `migrate` first to bring the framework's own tables up to date")
 	}
 
-	eng.SetDb(db)
+	eng.SetDB(db)
 
 	row, found, err := loadApp(db, code)
 	if err != nil {
@@ -131,8 +132,7 @@ func install(db *gorm.DB, eng engine, m app.Manifest) (installReport, error) {
 	// Phase C.
 	if runErr != nil {
 		failed := ""
-		var vf *migration.VersionFailure
-		if errors.As(runErr, &vf) {
+		if vf, ok := errors.AsType[*migration.VersionError](runErr); ok {
 			failed = vf.Version
 		}
 		if err := markFailed(db, code, failed, runErr, time.Now()); err != nil {
@@ -296,7 +296,7 @@ func refuseOnDependencyCycle(manifests map[string]app.Manifest) error {
 // printed.
 func loadApps(db *gorm.DB) (map[string]adminmodels.SysApp, error) {
 	if !db.Migrator().HasTable(&adminmodels.SysApp{}) {
-		return nil, nil
+		return map[string]adminmodels.SysApp{}, nil
 	}
 	var rows []adminmodels.SysApp
 	if err := db.Find(&rows).Error; err != nil {
@@ -424,10 +424,10 @@ func reportInstall(w io.Writer, rep installReport) {
 		fmt.Fprintf(w, "%s %s is already installed; nothing to do\n", rep.Code, rep.Version)
 		return
 	}
-	switch {
-	case rep.Previous == "":
+	switch rep.Previous {
+	case "":
 		fmt.Fprintf(w, "installed %s %s\n", rep.Code, rep.Version)
-	case rep.Previous == rep.Version:
+	case rep.Version:
 		fmt.Fprintf(w, "brought %s %s the rest of the way\n", rep.Code, rep.Version)
 	default:
 		fmt.Fprintf(w, "upgraded %s from %s to %s\n", rep.Code, rep.Previous, rep.Version)

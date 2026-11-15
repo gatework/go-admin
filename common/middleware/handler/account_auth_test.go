@@ -10,26 +10,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"github.com/pquerna/otp/totp"
-	"go-admin/common/account"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
+	"github.com/gatework/motor/common/account"
 )
 
 func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("ACCOUNT_SECURITY_KEY", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))))
-	oldMode := config.ApplicationConfig.Mode
-	oldSecret := config.JwtConfig.Secret
-	config.ApplicationConfig.Mode = "dev"
-	config.JwtConfig.Secret = "test-jwt-secret"
-	t.Cleanup(func() { config.ApplicationConfig.Mode = oldMode; config.JwtConfig.Secret = oldSecret })
+
+	testconfig.Apply(t, func(s *config.Config) { s.Application.Mode = "dev" })
+	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "test-jwt-secret" })
+
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "auth.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -38,14 +40,14 @@ func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-password-123"), bcrypt.MinCost)
-	db.Create(&SysRole{RoleId: 1, RoleKey: "admin", Status: "2"})
-	db.Create(&SysUser{UserId: 1, Username: "admin", Password: string(hash), RoleId: 1, Status: "2"})
-	auth, err := jwt.New(&jwt.GinJWTMiddleware{Realm: "test", Key: []byte(config.JwtConfig.Secret), Timeout: time.Hour, PayloadFunc: PayloadFunc, IdentityHandler: IdentityHandler, Authenticator: Authenticator, Authorizator: Authorizator, Unauthorized: Unauthorized, TokenLookup: "header: Authorization", TokenHeadName: "Bearer"})
+	db.Create(&SysRole{RoleID: 1, RoleKey: "admin", Status: "2"})
+	db.Create(&SysUser{UserID: 1, Username: "admin", Password: string(hash), RoleID: 1, Status: "2"})
+	auth, err := jwt.New(&jwt.GinJWTMiddleware{Realm: "test", Key: []byte(config.Current().Settings.JWT.Secret), Timeout: time.Hour, PayloadFunc: PayloadFunc, IdentityHandler: IdentityHandler, Authenticator: Authenticator, Authorizator: Authorizator, Unauthorized: Unauthorized, TokenLookup: "header: Authorization", TokenHeadName: "Bearer"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := gin.New()
-	r.Use(func(c *gin.Context) { c.Set("db", db); c.Set(pkg.LoggerKey, logger.NewHelper(logger.DefaultLogger)) })
+	r.Use(func(c *gin.Context) { c.Set("db", db); c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default())) })
 	r.POST("/login", auth.LoginHandler)
 	r.GET("/private", auth.MiddlewareFunc(), func(c *gin.Context) { c.JSON(200, gin.H{"code": 200}) })
 	call := func(method, path, token string, data any) map[string]any {

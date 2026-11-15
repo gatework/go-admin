@@ -3,12 +3,14 @@ package version
 import (
 	"runtime"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
 	"gorm.io/gorm"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1792992300000NetworkInventoryEditRead)
@@ -30,15 +32,15 @@ func bindNetworkInventoryEditRead(tx *gorm.DB) error {
 	if err := tx.Where("app_code = ? AND seed_code = ?", "network", "device-edit").First(&menu).Error; err != nil {
 		return err
 	}
-	var endpoint adminmodels.SysApi
+	var endpoint adminmodels.SysAPI
 	if err := tx.Where("app_code = ? AND path = ? AND action = ?", "network", "/api/v1/network-device/:id", "GET").First(&endpoint).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&menu).Association("SysApi").Append(&endpoint); err != nil {
+	if err := tx.Model(&menu).Association("SysAPI").Append(&endpoint); err != nil {
 		return err
 	}
 	var roles []adminmodels.SysRole
-	if err := tx.Model(&adminmodels.SysRole{}).Joins("JOIN sys_role_menu ON sys_role_menu.role_id = sys_role.role_id").Where("sys_role_menu.menu_id = ?", menu.MenuId).Find(&roles).Error; err != nil {
+	if err := tx.Model(&adminmodels.SysRole{}).Joins("JOIN sys_role_menu ON sys_role_menu.role_id = sys_role.role_id").Where("sys_role_menu.menu_id = ?", menu.MenuID).Find(&roles).Error; err != nil {
 		return err
 	}
 	for _, role := range roles {

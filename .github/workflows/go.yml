@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [ master, dev, gatework, "fix/**", "feat/**", "sync/**" ]
+    branches: [ master, dev, gatework, "fix/**", "feat/**", "sync/**", "refactor/**" ]
     tags: [ 'v*', '[0-9]*' ]
   pull_request:
     branches: [ master, gatework ]
@@ -40,7 +40,7 @@ jobs:
         image: postgres:15-alpine
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: goadmin_test
+          POSTGRES_DB: motor_test
         ports:
           - 5432:5432
         options: >-
@@ -60,12 +60,12 @@ jobs:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: GoAdmin_Test1
+          MSSQL_SA_PASSWORD: Motor_Test1
           MSSQL_PID: Developer
         ports:
           - 1433:1433
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P GoAdmin_Test1 -C -Q 'SELECT 1'"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Motor_Test1 -C -Q 'SELECT 1'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
@@ -74,7 +74,7 @@ jobs:
       # The dialect most installations actually run, and until the
       # scheduler lease (#915) the only one with no service here. The lease
       # reads the database's clock, and the first implementation read it as
-      # a timestamp: over go-admin's own `parseTime=True&loc=Local` DSN,
+      # a timestamp: over motor's own `parseTime=True&loc=Local` DSN,
       # MySQL's UTC_TIMESTAMP comes back relabelled as local time, so on any
       # host that is not UTC every lease was one zone offset out - and every
       # assertion that compared the lease only against itself still passed.
@@ -82,38 +82,38 @@ jobs:
       mysql:
         image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: GoAdmin_Test1
-          MYSQL_DATABASE: goadmin_test
+          MYSQL_ROOT_PASSWORD: Motor_Test1
+          MYSQL_DATABASE: motor_test
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pGoAdmin_Test1"
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pMotor_Test1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
           --health-start-period 20s
 
     env:
-      GO_ADMIN_TEST_REDIS_ADDR: 127.0.0.1:6379
+      MOTOR_TEST_REDIS_ADDR: 127.0.0.1:6379
       # The soft-delete conversion drops an index, and gorm's PostgreSQL driver
       # produced unparseable SQL for that - on SQLite, where the rest of these
       # tests run, the same code works. The suite reported success for a
       # migration that failed on every PostgreSQL database it was pointed at.
-      # See go-admin#919.
-      GO_ADMIN_TEST_POSTGRES_DSN: "host=127.0.0.1 port=5432 user=postgres password=postgres dbname=goadmin_test sslmode=disable"
-      GO_ADMIN_TEST_SQLSERVER_DSN: "sqlserver://sa:GoAdmin_Test1@127.0.0.1:1433?database=goadmin_test"
+      # See motor#919.
+      MOTOR_TEST_POSTGRES_DSN: "host=127.0.0.1 port=5432 user=postgres password=postgres dbname=motor_test sslmode=disable"
+      MOTOR_TEST_SQLSERVER_DSN: "sqlserver://sa:Motor_Test1@127.0.0.1:1433?database=motor_test"
       # loc=Local on purpose: it is what config/settings.yml ships and what
       # made the timezone defect above reachable. A DSN here that quietly
       # differed from the one installations use would test a configuration
       # nobody runs.
-      GO_ADMIN_TEST_MYSQL_DSN: "root:GoAdmin_Test1@tcp(127.0.0.1:3306)/goadmin_test?charset=utf8mb4&parseTime=True&loc=Local"
+      MOTOR_TEST_MYSQL_DSN: "root:Motor_Test1@tcp(127.0.0.1:3306)/motor_test?charset=utf8mb4&parseTime=True&loc=Local"
 
     steps:
 
     - name: Set up Go 1.27
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
-        go-version: 1.27.3
+        go-version: 1.27.4
       id: go
 
     - name: Check out code into the Go module directory
@@ -124,56 +124,14 @@ jobs:
     - name: Create the SQL Server test database
       run: |
         docker exec ${{ job.services.sqlserver.id }} /opt/mssql-tools18/bin/sqlcmd \
-          -S localhost -U sa -P GoAdmin_Test1 -C \
-          -Q "IF DB_ID('goadmin_test') IS NULL CREATE DATABASE goadmin_test"
+          -S localhost -U sa -P Motor_Test1 -C \
+          -Q "IF DB_ID('motor_test') IS NULL CREATE DATABASE motor_test"
 
-    - name: Get dependencies
-      run: go mod tidy
-
-    # Before the tests rather than beside checksilent at the end: a formatting
-    # miss is a one-command fix, and finding out about it after five minutes of
-    # tests and an end-to-end install is five minutes nobody gets back.
-    - name: Vulnerability check
-      run: |
-        go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-        govulncheck ./...
-
-    - name: Formatting
-      run: make fmt-check
-
-    # go build does not compile _test.go, so building alone never ran a single
-    # test. This is the only workflow that fires on every push and pull request,
-    # which makes it the one place a test gate belongs.
-    - name: Test
-      run: make test
+    - name: Shared engineering checks
+      run: make check
 
     - name: Device lease PostgreSQL concurrency
       run: GOWORK=off go test -mod=readonly -tags integration -race -count=1 ./test/devicelease
-
-    # make test builds without the sqlite3 tag, so the tests that open a real
-    # sqlite file are skipped by it. These are the ones that prove concurrent
-    # requests wait for each other instead of failing with "database is locked".
-    - name: Test (sqlite3 driver)
-      run: go test -tags sqlite3 -count=1 ./common/database/
-
-    - name: Build
-      run: make build
-
-    # A separate module, so none of the steps above see it: the main module's
-    # go.mod, its build and its tests are all unaware of the example
-    # application. This is the only thing that exercises an application being
-    # installed at all - everything below it runs against an injected engine
-    # and a hand-built schema, and none of that can catch an application's
-    # init() reaching one registry and not the other.
-    - name: End-to-end install and uninstall
-      run: make test-e2e
-
-    # Fails the build on the silent-failure classes listed in
-    # tools/checksilent, one of which is the contract boundary: nothing under
-    # common/ may import app/. A boundary that is only written down erodes; this
-    # is what keeps it true.
-    - name: Silent-failure checks
-      run: make checksilent
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0

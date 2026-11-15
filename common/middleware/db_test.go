@@ -7,8 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk"
 )
 
 // database/sql watches the context of a query that returns rows inside a
@@ -20,12 +21,12 @@ import (
 // own context, it does not. Sequential requests are enough for the reuse,
 // and -race, which make test runs with, reports it.
 type probeRow struct {
-	Id int `gorm:"primaryKey;autoIncrement"`
+	ID int `gorm:"primaryKey;autoIncrement"`
 }
 
 func (probeRow) TableName() string { return "with_context_db_probe" }
 
-func TestWithContextDbDoesNotHandQueriesThePooledContext(t *testing.T) {
+func TestWithContextDBDoesNotHandQueriesThePooledContext(t *testing.T) {
 	const host = "with-context-db.test"
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -34,13 +35,13 @@ func TestWithContextDbDoesNotHandQueriesThePooledContext(t *testing.T) {
 	if err := db.AutoMigrate(&probeRow{}); err != nil {
 		t.Fatal(err)
 	}
-	previous := sdk.Runtime.GetDbByTenant(host)
-	sdk.Runtime.SetDbByTenant(host, db)
-	t.Cleanup(func() { sdk.Runtime.SetDbByTenant(host, previous) })
+	previous := sdk.Runtime.DB(host)
+	sdk.Runtime.SetDB(host, db)
+	t.Cleanup(func() { sdk.Runtime.SetDB(host, previous) })
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(WithContextDb)
+	r.Use(WithContextDB)
 	r.GET("/", func(c *gin.Context) {
 		if err := c.MustGet("db").(*gorm.DB).Create(&probeRow{}).Error; err != nil {
 			c.Status(http.StatusInternalServerError)
@@ -48,7 +49,7 @@ func TestWithContextDbDoesNotHandQueriesThePooledContext(t *testing.T) {
 		}
 		c.Status(http.StatusOK)
 	})
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = host
@@ -59,12 +60,12 @@ func TestWithContextDbDoesNotHandQueriesThePooledContext(t *testing.T) {
 	}
 }
 
-func TestWithContextDbRejectsUnknownTenant(t *testing.T) {
+func TestWithContextDBRejectsUnknownTenant(t *testing.T) {
 	r := gin.New()
-	r.Use(WithContextDb)
+	r.Use(WithContextDB)
 	reached := false
 	r.GET("/", func(c *gin.Context) { reached = true; c.Status(200) })
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "not-configured.test"
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

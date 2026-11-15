@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"go-admin/app/jobs/models"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 // Standalone callers retain the public service Cron field. Managed tenants
@@ -17,10 +18,14 @@ import (
 // current operation is running; timed-out callers cannot add blocked workers.
 var standaloneControl cronControl
 
+// ReconcileCron provides reconcile cron for this module.
 func ReconcileCron(ctx context.Context, db *gorm.DB, c *cron.Cron) error {
 	var managed *supervisor
 	supervisors.Range(func(_, value any) bool {
-		s := value.(*supervisor)
+		s, ok := value.(*supervisor)
+		if !ok {
+			return true
+		}
 		if s.cron == c {
 			managed = s
 			return false
@@ -49,13 +54,13 @@ func ReconcileCron(ctx context.Context, db *gorm.DB, c *cron.Cron) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			c.Remove(cron.EntryID(job.EntryId))
+			c.Remove(cron.EntryID(job.EntryID))
 		}
 		list, err := loadJobs(ctx, db)
 		if err != nil {
 			return err
 		}
-		if err = applyJobs(ctx, c, list, nil); err != nil {
+		if err = applyJobs(ctx, c, list, jobExecution{ctx: context.Background()}); err != nil {
 			return err
 		}
 		return saveEntryIDs(ctx, db, list)
@@ -69,13 +74,13 @@ func loadJobs(ctx context.Context, db *gorm.DB) ([]models.SysJob, error) {
 }
 
 func jobCore(job models.SysJob) JobCore {
-	return JobCore{JobId: job.JobId, Name: job.JobName, InvokeTarget: job.InvokeTarget,
+	return JobCore{JobID: job.JobID, Name: job.JobName, InvokeTarget: job.InvokeTarget,
 		CronExpression: job.CronExpression, Args: job.Args}
 }
 
 func entryCore(job cron.Job) (JobCore, int) {
 	switch j := job.(type) {
-	case *HttpJob:
+	case *HTTPJob:
 		return j.JobCore, 1
 	case *ExecJob:
 		return j.JobCore, 2
@@ -87,10 +92,15 @@ func entryCore(job cron.Job) (JobCore, int) {
 // applyJobs compares stable database IDs and definitions. Persisted entry_id
 // is merely a display hint; cron IDs belong to one process and are never used
 // to decide whether a job is registered or which job to remove.
-func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, allowed func() bool) error {
+type jobExecution struct {
+	ctx     context.Context //nolint:containedctx // Scheduler-owned lifecycle context; request contexts are never retained.
+	allowed func() bool
+}
+
+func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, execution jobExecution) error {
 	desired := make(map[int]*models.SysJob, len(list))
 	for i := range list {
-		desired[list[i].JobId] = &list[i]
+		desired[list[i].JobID] = &list[i]
 	}
 	retained := make(map[int]bool, len(list))
 	for _, entry := range c.Entries() {
@@ -101,25 +111,25 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, allowed 
 		if kind == 0 {
 			continue
 		}
-		job := desired[core.JobId]
-		core.EntryId = 0
-		if job != nil && job.JobType == kind && core == jobCore(*job) && !retained[core.JobId] {
-			retained[core.JobId] = true
+		job := desired[core.JobID]
+		core.EntryID = 0
+		if job != nil && job.JobType == kind && core == jobCore(*job) && !retained[core.JobID] {
+			retained[core.JobID] = true
 			continue
 		}
 		c.Remove(entry.ID)
 	}
 	// Read back retained IDs; caller-provided database entry IDs are untrusted.
 	for i := range list {
-		list[i].EntryId = 0
+		list[i].EntryID = 0
 	}
 	for _, entry := range c.Entries() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		core, kind := entryCore(entry.Job)
-		if job := desired[core.JobId]; kind != 0 && job != nil {
-			job.EntryId = int(entry.ID)
+		if job := desired[core.JobID]; kind != 0 && job != nil {
+			job.EntryID = int(entry.ID)
 		}
 	}
 	for i := range list {
@@ -127,23 +137,23 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, allowed 
 			return err
 		}
 		job := &list[i]
-		if job.EntryId != 0 {
+		if job.EntryID != 0 {
 			continue
 		}
 		var runnable Job
 		switch job.JobType {
 		case 1:
-			runnable = &HttpJob{JobCore: jobCore(*job), allowed: allowed}
+			runnable = &HTTPJob{JobCore: jobCore(*job), allowed: execution.allowed, execution: execution.ctx}
 		case 2:
-			runnable = &ExecJob{JobCore: jobCore(*job), allowed: allowed}
+			runnable = &ExecJob{JobCore: jobCore(*job), allowed: execution.allowed}
 		default:
-			return fmt.Errorf("unsupported job type %d for job %d", job.JobType, job.JobId)
+			return fmt.Errorf("unsupported job type %d for job %d", job.JobType, job.JobID)
 		}
 		id, err := AddJob(c, runnable)
 		if err != nil {
-			return fmt.Errorf("registering job %d: %w", job.JobId, err)
+			return fmt.Errorf("registering job %d: %w", job.JobID, err)
 		}
-		job.EntryId = id
+		job.EntryID = id
 	}
 	return nil
 }
@@ -151,8 +161,8 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, allowed 
 func saveEntryIDs(ctx context.Context, db *gorm.DB, list []models.SysJob) error {
 	for _, job := range list {
 		if err := db.WithContext(ctx).Model(&models.SysJob{}).
-			Where("job_id = ? AND status = ? AND entry_id <> ?", job.JobId, 2, job.EntryId).
-			UpdateColumn("entry_id", job.EntryId).Error; err != nil {
+			Where("job_id = ? AND status = ? AND entry_id <> ?", job.JobID, 2, job.EntryID).
+			UpdateColumn("entry_id", job.EntryID).Error; err != nil {
 			return err
 		}
 	}

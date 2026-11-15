@@ -44,7 +44,7 @@ type SysJobLease struct {
 	// Milliseconds since the Unix epoch, in a BIGINT, rather than a
 	// timestamp column. A timestamp crossing the driver boundary carries
 	// timezone semantics that the driver applies on the way through: with
-	// go-admin's own `parseTime=True&loc=Local` DSN, MySQL's UTC_TIMESTAMP
+	// motor's own `parseTime=True&loc=Local` DSN, MySQL's UTC_TIMESTAMP
 	// comes back labelled as local time, and a lease written in Asia/
 	// Shanghai is then eight hours out - in whichever direction makes every
 	// other instance's lease look expired. An integer has no timezone for
@@ -53,6 +53,7 @@ type SysJobLease struct {
 	ExpiresAtMs int64 `json:"expiresAtMs" gorm:"column:expires_at_ms;not null"`
 }
 
+// TableName returns the database table used for this record.
 func (*SysJobLease) TableName() string {
 	return "sys_job_lease"
 }

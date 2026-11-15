@@ -6,30 +6,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
-	corecache "github.com/go-admin-team/go-admin-core/v2/storage/cache"
-	redisstore "github.com/go-admin-team/go-admin-core/v2/storage/redis"
-	goredis "github.com/redis/go-redis/v9"
-
-	"go-admin/common/health"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
+	"github.com/gatework/motor/common/health"
 )
 
 const storageIOTimeout = 5 * time.Second
 
 var (
 	cacheMu        sync.Mutex
-	cacheSetupMu   sync.Mutex
 	installedCache *ownedCache
 	retiringCache  *ownedCache
 )
 
-// ownedCache keeps the legacy cache semantics while retaining a context-aware
-// readiness path and the resources that the legacy core wrapper hides.
-// Retirement refuses new operations and waits for already-active ones before
-// closing this generation's client. Clients are never shared across generations.
+// ownedCache rejects new operations at retirement, waits for admitted operations,
+// and closes only this generation's resource. Close callers share one waiter.
 type ownedCache struct {
-	legacy        corestorage.AdapterCache
 	native        corestorage.Cache
 	closeResource func() error
 	mu            sync.Mutex
@@ -40,54 +32,23 @@ type ownedCache struct {
 	closeDone     chan struct{}
 }
 
-func openCache(c *config.Cache) (*ownedCache, error) {
-	if c == nil || c.Redis == nil {
-		memory := corecache.NewMemory()
-		return &ownedCache{legacy: memory, closeResource: memory.Close}, nil
+func openCache(ctx context.Context, options *config.Cache) (*ownedCache, error) {
+	if options == nil {
+		options = &config.Cache{}
 	}
-	client, err := openRedisClient(c.Redis)
-	if err != nil {
-		return nil, err
-	}
-	native := redisstore.New(client)
-	return &ownedCache{legacy: corestorage.LegacyAdapter(deadlineCache{native}), native: native,
-		closeResource: func() error { return errors.Join(native.Close(), client.Close()) }}, nil
-}
-
-func openRedisClient(options *config.RedisOptions) (*goredis.Client, error) {
-	resolved, err := options.GetRedisOptions()
-	if err != nil {
-		return nil, err
-	}
-	// The Redis client otherwise discards request deadlines for socket I/O.
-	resolved.ContextTimeoutEnabled = true
-	client := goredis.NewClient(resolved)
-	ctx, cancel := context.WithTimeout(context.Background(), storageIOTimeout)
+	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
 	defer cancel()
-	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
+	native, err := options.Open(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return client, nil
+	return &ownedCache{native: native, closeResource: native.Close}, nil
 }
 
-func (c *ownedCache) acquire() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.retired {
-		return corestorage.ErrCacheClosed
-	}
-	c.active.Add(1)
-	return nil
-}
-func (c *ownedCache) use(fn func() error) error {
-	if err := c.acquire(); err != nil {
-		return err
-	}
-	defer c.active.Done()
-	return fn()
-}
+// Close handles the close operation.
 func (c *ownedCache) Close() error { return c.CloseContext(context.Background()) }
+
+// CloseContext handles the closecontext operation.
 func (c *ownedCache) CloseContext(ctx context.Context) error {
 	c.closeOnce.Do(func() {
 		c.mu.Lock()
@@ -101,114 +62,72 @@ func (c *ownedCache) CloseContext(ctx context.Context) error {
 	}
 	return c.closeErr
 }
-func (c *ownedCache) String() string { return c.legacy.String() }
-func (c *ownedCache) Get(key string) (value string, err error) {
-	err = c.use(func() error { var e error; value, e = c.legacy.Get(key); return e })
-	return
-}
-func (c *ownedCache) Set(key string, value any, ttl int) error {
-	return c.use(func() error { return c.legacy.Set(key, value, ttl) })
-}
-func (c *ownedCache) Del(key string) error { return c.use(func() error { return c.legacy.Del(key) }) }
-func (c *ownedCache) HashGet(hash, key string) (value string, err error) {
-	err = c.use(func() error { var e error; value, e = c.legacy.HashGet(hash, key); return e })
-	return
-}
-func (c *ownedCache) HashDel(hash, key string) error {
-	return c.use(func() error { return c.legacy.HashDel(hash, key) })
-}
-func (c *ownedCache) Increase(key string) error {
-	return c.use(func() error { return c.legacy.Increase(key) })
-}
-func (c *ownedCache) Decrease(key string) error {
-	return c.use(func() error { return c.legacy.Decrease(key) })
-}
-func (c *ownedCache) Expire(key string, ttl time.Duration) error {
-	return c.use(func() error { return c.legacy.Expire(key, ttl) })
-}
-func (c *ownedCache) probe(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return c.use(func() error {
-		if c.native != nil {
-			return health.ProbeCache(ctx, c.native)
-		}
-		return health.ProbeCache(ctx, memoryProbe{c.legacy})
-	})
+
+// Get returns the selected data.
+func (c *ownedCache) Get(ctx context.Context, key string) (string, error) {
+	var value string
+	err := c.use(ctx, func() error { var err error; value, err = c.native.Get(ctx, key); return err })
+	return value, err
 }
 
-// Memory operations remain on the original adapter, including miss, hash,
-// counter and expiry behavior. They perform no remote I/O.
-type memoryProbe struct{ corestorage.AdapterCache }
-
-func (c memoryProbe) Get(ctx context.Context, key string) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	return c.AdapterCache.Get(key)
-}
-func (c memoryProbe) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return c.AdapterCache.Set(key, value, int(ttl/time.Second))
-}
-func (c memoryProbe) Del(ctx context.Context, keys ...string) error {
-	for _, key := range keys {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := c.AdapterCache.Del(key); err != nil {
-			return err
-		}
-	}
-	return nil
+// Set updates the corresponding value.
+func (c *ownedCache) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	return c.use(ctx, func() error { return c.native.Set(ctx, key, value, ttl) })
 }
 
-// Legacy calls have no caller context. Bound their Redis I/O so retirement
-// cannot wait forever on a caller that captured the previous runtime wrapper.
-type deadlineCache struct{ corestorage.Cache }
+// Del handles the del operation.
+func (c *ownedCache) Del(ctx context.Context, keys ...string) error {
+	return c.use(ctx, func() error { return c.native.Del(ctx, keys...) })
+}
 
-func (c deadlineCache) String() string { return "redis" }
+// Incr handles the incr operation.
+func (c *ownedCache) Incr(ctx context.Context, key string, delta int64) (int64, error) {
+	var value int64
+	err := c.use(ctx, func() error { var err error; value, err = c.native.Incr(ctx, key, delta); return err })
+	return value, err
+}
 
-func (c deadlineCache) Get(ctx context.Context, key string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
-	defer cancel()
-	return c.Cache.Get(ctx, key)
-}
-func (c deadlineCache) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
-	defer cancel()
-	return c.Cache.Set(ctx, key, value, ttl)
-}
-func (c deadlineCache) Del(ctx context.Context, keys ...string) error {
-	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
-	defer cancel()
-	return c.Cache.Del(ctx, keys...)
-}
-func (c deadlineCache) Incr(ctx context.Context, key string, delta int64) (int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
-	defer cancel()
-	return c.Cache.Incr(ctx, key, delta)
-}
-func (c deadlineCache) Expire(ctx context.Context, key string, ttl time.Duration) error {
-	ctx, cancel := context.WithTimeout(ctx, storageIOTimeout)
-	defer cancel()
-	return c.Cache.Expire(ctx, key, ttl)
+// Expire handles the expire operation.
+func (c *ownedCache) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return c.use(ctx, func() error { return c.native.Expire(ctx, key, ttl) })
 }
 
 func shutdownCache(ctx context.Context) error {
 	cacheMu.Lock()
 	current, retiring := installedCache, retiringCache
-	installedCache = nil
 	cacheMu.Unlock()
 	var currentErr, retiringErr error
 	if current != nil {
 		currentErr = current.CloseContext(ctx)
+		if currentErr == nil {
+			cacheMu.Lock()
+			if installedCache == current {
+				installedCache = nil
+			}
+			cacheMu.Unlock()
+		}
 	}
 	if retiring != nil {
 		retiringErr = retiring.CloseContext(ctx)
 	}
 	return errors.Join(currentErr, retiringErr)
+}
+
+func (c *ownedCache) use(ctx context.Context, fn func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	if c.retired {
+		c.mu.Unlock()
+		return corestorage.ErrCacheClosed
+	}
+	c.active.Add(1)
+	c.mu.Unlock()
+	defer c.active.Done()
+	return fn()
+}
+
+func (c *ownedCache) probe(ctx context.Context) error {
+	return c.use(ctx, func() error { return health.ProbeCache(ctx, c.native) })
 }

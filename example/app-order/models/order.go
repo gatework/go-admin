@@ -2,7 +2,7 @@
 package models
 
 import (
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
 )
 
 // The two values Order.Status can hold. Kept as narrow strings rather than
@@ -32,13 +32,13 @@ type Order struct {
 	contractmodels.Model
 
 	OrderNo    string `json:"orderNo" gorm:"type:varchar(64);uniqueIndex;comment:order number"`
-	UserId     int    `json:"userId" gorm:"index;comment:buyer user id"`
+	UserID     int    `json:"userId" gorm:"index;comment:buyer user id"`
 	Status     string `json:"status" gorm:"type:varchar(4);index;comment:order status: 1 pending, 2 paid"`
 	TotalCents int64  `json:"totalCents" gorm:"comment:total amount in cents, sum of item price*quantity at creation time"`
 
 	// Items is populated by Preload; it is never set by Order's own migrator
 	// column set (OrderItem.OrderId is the foreign key, not a column here).
-	Items []OrderItem `json:"items,omitempty" gorm:"foreignKey:OrderId"`
+	Items []OrderItem `json:"items,omitempty" gorm:"foreignKey:OrderID"`
 
 	contractmodels.ControlBy
 	contractmodels.ModelTime

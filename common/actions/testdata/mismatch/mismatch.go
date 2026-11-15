@@ -4,9 +4,9 @@
 package mismatch
 
 import (
-	"go-admin/app/demo/models"
-	jobdto "go-admin/app/jobs/service/dto"
-	"go-admin/common/actions"
+	"github.com/gatework/motor/app/demo/models"
+	jobdto "github.com/gatework/motor/app/jobs/service/dto"
+	"github.com/gatework/motor/common/actions"
 )
 
 var _ = actions.Create[models.DemoProduct, jobdto.SysJobControl]

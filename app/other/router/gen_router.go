@@ -2,12 +2,13 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 
-	"go-admin/app/admin/apis"
-	"go-admin/app/other/apis/tools"
-	"go-admin/common/middleware"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/app/admin/handler"
+	"github.com/gatework/motor/app/other/handler/tools"
+	"github.com/gatework/motor/common/middleware"
 )
 
 // GenWriteRoutesEnabled reports whether the code generator's writing endpoints
@@ -34,7 +35,7 @@ import (
 // repository spells as a literal in common/middleware/demo.go. Both are
 // literals here so that the two read as one set rather than two conventions.
 func GenWriteRoutesEnabled() bool {
-	switch config.ApplicationConfig.Mode {
+	switch config.Current().Settings.Application.Mode {
 	case "dev", "demo":
 		return true
 	default:
@@ -42,6 +43,7 @@ func GenWriteRoutesEnabled() bool {
 	}
 }
 
+//nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
 	routerCheckRole = append(routerCheckRole, sysNoCheckRoleRouter, registerDBRouter, registerSysTableRouter)
 }
@@ -49,8 +51,8 @@ func init() {
 func sysNoCheckRoleRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	r1 := v1.Group("")
 	{
-		sys := apis.System{}
-		r1.GET("/captcha", sys.GenerateCaptchaHandler)
+		sys := handler.Captcha{}
+		r1.GET("/captcha", sys.Generate)
 	}
 
 	// AuthCheckRole on every generator route: a role reaches them through the
@@ -60,22 +62,22 @@ func sysNoCheckRoleRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlew
 	// files from it.
 	r := v1.Group("").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
-		gen := tools.Gen{}
+		gen := tools.Generator{}
 		r.GET("/gen/preview/:tableId", gen.Preview)
 		if GenWriteRoutesEnabled() {
-			r.GET("/gen/toproject/:tableId", gen.GenCode)
-			r.GET("/gen/apitofile/:tableId", gen.GenApiToFile)
-			r.GET("/gen/todb/:tableId", gen.GenMenuAndApi)
+			r.GET("/gen/toproject/:tableId", gen.Generate)
+			r.GET("/gen/apitofile/:tableId", gen.GenerateMigration)
+			r.GET("/gen/todb/:tableId", gen.CreateMenu)
 		}
-		sysTable := tools.SysTable{}
-		r.GET("/gen/tabletree", sysTable.GetSysTablesTree)
+		sysTable := tools.Table{}
+		r.GET("/gen/tabletree", sysTable.Tree)
 	}
 }
 
 func registerDBRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	db := v1.Group("/db").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
-		gen := tools.Gen{}
+		gen := tools.Generator{}
 		db.GET("/tables/page", gen.GetDBTableList)
 		db.GET("/columns/page", gen.GetDBColumnList)
 	}
@@ -84,15 +86,15 @@ func registerDBRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware)
 func registerSysTableRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	tables := v1.Group("/sys/tables")
 	{
-		sysTable := tools.SysTable{}
-		tables.Group("").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole()).GET("/page", sysTable.GetPage)
+		sysTable := tools.Table{}
+		tables.Group("").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole()).GET("/page", sysTable.List)
 		tablesInfo := tables.Group("/info").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 		{
-			tablesInfo.POST("", sysTable.Insert)
+			tablesInfo.POST("", sysTable.Create)
 			tablesInfo.PUT("", sysTable.Update)
 			tablesInfo.DELETE("/:tableId", sysTable.Delete)
 			tablesInfo.GET("/:tableId", sysTable.Get)
-			tablesInfo.GET("", sysTable.GetSysTablesInfo)
+			tablesInfo.GET("", sysTable.Columns)
 		}
 	}
 }

@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Create sys_app (PRD 008 F2) and sys_app_casbin_grant (F4/F6's casbin
@@ -24,6 +24,8 @@ import (
 // app/admin/models directly, which is also why neither one is added to
 // 1786700003000's frozen softDeleteTables list: neither embeds
 // common.ModelTime in the first place (see design doc §1.1).
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700007000AppRegistryTables)

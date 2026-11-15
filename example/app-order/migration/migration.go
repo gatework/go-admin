@@ -12,11 +12,11 @@ package migration
 import (
 	"gorm.io/gorm"
 
-	contractmigration "github.com/go-admin-team/go-admin-core/v2/sdk/contract/migration"
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
+	contractmigration "github.com/gatework/motor-core/sdk/contract/migration"
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
 
-	"github.com/go-admin-team/example-app-order/models"
+	"github.com/gatework/motor/example/app-order/models"
 )
 
 // AppCode is app-order's migration.ForApp / seed.SeedMenus identity.
@@ -40,7 +40,7 @@ func init() {
 // rows (and, once an administrator grants the menu to a role through the
 // ordinary admin UI, casbin_rule). See seed.Seeder's security note: this
 // call does not sandbox anything, it only saves app-order from needing to
-// know go-admin's own schema.
+// know motor's own schema.
 func createOrderSchema(db *gorm.DB, migrationVersion, appCode string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.AutoMigrate(&models.Order{}, &models.OrderItem{}); err != nil {
@@ -63,7 +63,7 @@ func createOrderSchema(db *gorm.DB, migrationVersion, appCode string) error {
 				// building a MenuSpec would look.
 				Component: "apps/order/order/index",
 				Sort:      1,
-				ApiCodes:  []string{"list", "get", "create", "pay"},
+				APICodes:  []string{"list", "get", "create", "pay"},
 			},
 			{
 				Code: "btn-create", Parent: "list", Kind: contractmodels.Button,
@@ -74,13 +74,13 @@ func createOrderSchema(db *gorm.DB, migrationVersion, appCode string) error {
 				Title: "Pay", Permission: "order:order:pay", Sort: 2,
 			},
 		}
-		apis := []seed.ApiSpec{
-			{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
-			{Code: "get", Title: "Order detail", Path: "/api/v1/order/:id", Method: "GET", Handle: "apis.Order.Get-fm"},
-			{Code: "create", Title: "Create order", Path: "/api/v1/order", Method: "POST", Handle: "apis.Order.Create-fm"},
-			{Code: "pay", Title: "Pay order", Path: "/api/v1/order/:id/pay", Method: "PUT", Handle: "apis.Order.Pay-fm"},
+		apis := []seed.APISpec{
+			{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "GET /api/v1/order"},
+			{Code: "get", Title: "Order detail", Path: "/api/v1/order/:id", Method: "GET", Handle: "GET /api/v1/order/:id"},
+			{Code: "create", Title: "Create order", Path: "/api/v1/order", Method: "POST", Handle: "POST /api/v1/order"},
+			{Code: "pay", Title: "Pay order", Path: "/api/v1/order/:id/pay", Method: "PUT", Handle: "PUT /api/v1/order/:id/pay"},
 		}
-		if err := seed.SeedMenus(tx, appCode, menus, apis); err != nil {
+		if err := seed.Menus(tx, appCode, menus, apis); err != nil {
 			return err
 		}
 

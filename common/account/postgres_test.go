@@ -43,7 +43,7 @@ func TestPostgresConcurrentMFAConsumption(t *testing.T) {
 		t.Fatal(e)
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-password-123"), bcrypt.MinCost)
-	scoped.Create(&User{UserId: 1, Username: "test", Password: string(hash), Status: "2"})
+	scoped.Create(&User{UserID: 1, Username: "test", Password: string(hash), Status: "2"})
 	now := time.Now()
 	s := Service{DB: scoped, Key: strings.Repeat("k", 32), Now: func() time.Time { return now }}
 	setup, e := s.Setup(1, "admin-password-123")

@@ -3,19 +3,20 @@ package service
 import (
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/logger"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
+	"github.com/gatework/motor-core/logger"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
 )
 
 func TestDictDataUpdateBoundaries(t *testing.T) {
 	checkConfigDictUpdateBoundaries(t, configDictUpdateCase{table: "sys_dict_data", model: &models.SysDictData{DictCode: 1, DictType: "one"}, update: func(db *gorm.DB, id int) error {
 		s := &SysDictData{}
-		s.Orm = db
-		s.Log = logger.NewHelper(logger.DefaultLogger)
-		return s.Update(&dto.SysDictDataUpdateReq{Id: id, DictType: "one", DictLabel: "changed"})
+		s.DB = db
+		s.Logger = logger.NewHelper(logger.Default())
+		return s.Update(&dto.SysDictDataUpdateReq{ID: id, DictType: "one", DictLabel: "changed"})
 	}})
 }
 
@@ -24,15 +25,15 @@ func TestDictDataUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
 	if err := db.Create(&models.SysDictType{DictType: "one"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	row := models.SysDictData{DictCode: 1, DictType: "one", Status: 2, DictSort: 8, Remark: "old"}
-	row.CreateBy = 10
+	row := models.SysDictData{DictCode: 1, DictType: "one", Status: 2, DictSort: 8, Remark: "old",
+		CreateBy: 10}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	s := &SysDictData{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
-	req := &dto.SysDictDataUpdateReq{Id: 1, DictType: "one"}
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
+	req := &dto.SysDictDataUpdateReq{ID: 1, DictType: "one"}
 	req.CreateBy = 999
 	req.UpdateBy = 20
 	if err := s.Update(req); err != nil {
@@ -52,8 +53,8 @@ func TestDictDataRejectsMissingTargetType(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db := configDictDB(t)
 			s := &SysDictData{}
-			s.Orm = db
-			s.Log = logger.NewHelper(logger.DefaultLogger)
+			s.DB = db
+			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if name == "insert" {
 				err = s.Insert(&dto.SysDictDataInsertReq{DictType: "missing"})
@@ -61,7 +62,7 @@ func TestDictDataRejectsMissingTargetType(t *testing.T) {
 				if err := db.Create(&models.SysDictData{DictCode: 1, DictType: "original"}).Error; err != nil {
 					t.Fatal(err)
 				}
-				err = s.Update(&dto.SysDictDataUpdateReq{Id: 1, DictType: "missing"})
+				err = s.Update(&dto.SysDictDataUpdateReq{ID: 1, DictType: "missing"})
 			}
 			if err == nil {
 				t.Fatal("accepted missing dictionary parent")

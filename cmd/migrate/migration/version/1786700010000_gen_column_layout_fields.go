@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/app/other/models/tools"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/other/models/tools"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Add sys_columns.col_width and sys_columns.default_value for PRD 010 F1/F2
@@ -35,6 +35,8 @@ import (
 // field lookup fails and AddColumn returns an error naming the missing
 // field), which fails loudly rather than silently - see the "no such field"
 // error - so this is caught at migrate time, not left for a report later.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700010000GenColumnLayoutFields)

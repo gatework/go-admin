@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/runtime"
 )
 
 // freshRuntime hands the test its own Runtime and puts the old one back.
@@ -19,7 +19,7 @@ func freshRuntime(t *testing.T) {
 	t.Helper()
 	previous := sdk.Runtime
 	t.Cleanup(func() { sdk.Runtime = previous })
-	sdk.Runtime = runtime.NewConfig()
+	sdk.Runtime = runtime.New()
 }
 
 // Acceptance 1 and 2 together: the package-level slice a fork appends to and
@@ -27,7 +27,7 @@ func freshRuntime(t *testing.T) {
 // registration order preserved inside each.
 //
 // The order matters beyond neatness. A module that appends to AppRouters has to
-// import go-admin/cmd/api, which is why every module used to need a seven-line
+// import motor/cmd/api, which is why every module used to need a seven-line
 // file in the command package; SetAppRouters is the way out of that. Running
 // the old registry first is what makes the change invisible to anyone who never
 // takes it.
@@ -83,7 +83,7 @@ func TestBeforeCallbacksRun(t *testing.T) {
 }
 
 // A panicking module must not take the server down with it. The guard lives in
-// core; this asserts that go-admin actually goes through it rather than around
+// core; this asserts that motor actually goes through it rather than around
 // it with a loop of its own.
 func TestAPanickingRouterDoesNotStopStartup(t *testing.T) {
 	freshRuntime(t)

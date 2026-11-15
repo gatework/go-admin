@@ -5,21 +5,21 @@ import (
 	"strings"
 	"testing"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
 )
 
 // PostgreSQL checks this constraint at COMMIT, after all writes have succeeded.
 func TestAdminMutationsReturnCommitFailure(t *testing.T) {
-	if os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN") == "" {
-		t.Skip("set GO_ADMIN_TEST_POSTGRES_DSN for deferred PostgreSQL constraints")
+	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
+		t.Skip("set MOTOR_TEST_POSTGRES_DSN for deferred PostgreSQL constraints")
 	}
 	for _, name := range []string{"dept insert", "dept update", "menu insert", "menu update", "role insert", "role update", "role remove", "role scope", "role status"} {
 		t.Run(name, func(t *testing.T) {
 			db := integrityDB(t)
-			dept := models.SysDept{DeptId: 1, DeptName: "original", DeptPath: "/0/1/"}
-			menu := models.SysMenu{MenuId: 1, MenuName: "original", Paths: "/0/1"}
-			role := models.SysRole{RoleId: 1, RoleKey: "original", RoleName: "original", Status: "2", DataScope: "1"}
+			dept := models.SysDept{DeptID: 1, DeptName: "original", DeptPath: "/0/1/"}
+			menu := models.SysMenu{MenuID: 1, MenuName: "original", Paths: "/0/1"}
+			role := models.SysRole{RoleID: 1, RoleKey: "original", RoleName: "original", Status: "2", DataScope: "1"}
 			for _, record := range []any{&dept, &menu, &role} {
 				if err := db.Create(record).Error; err != nil {
 					t.Fatal(err)
@@ -37,31 +37,31 @@ func TestAdminMutationsReturnCommitFailure(t *testing.T) {
 				}
 			}
 			d := &SysDept{}
-			d.Orm = db
+			d.DB = db
 			m := &SysMenu{}
-			m.Orm = db
+			m.DB = db
 			r := &SysRole{}
-			r.Orm = db
+			r.DB = db
 			var err error
 			switch name {
 			case "dept insert":
-				err = d.Insert(&dto.SysDeptInsertReq{DeptId: 2, DeptName: "new"})
+				err = d.Insert(&dto.SysDeptInsertReq{DeptID: 2, DeptName: "new"})
 			case "dept update":
-				err = d.Update(&dto.SysDeptUpdateReq{DeptId: 1, DeptName: "changed"})
+				err = d.Update(&dto.SysDeptUpdateReq{DeptID: 1, DeptName: "changed"})
 			case "menu insert":
-				err = m.Insert(&dto.SysMenuInsertReq{MenuId: 2, MenuName: "new"}).Error
+				err = m.Insert(&dto.SysMenuInsertReq{MenuID: 2, MenuName: "new"})
 			case "menu update":
-				err = m.Update(&dto.SysMenuUpdateReq{MenuId: 1, MenuName: "changed"}).Error
+				err = m.Update(&dto.SysMenuUpdateReq{MenuID: 1, MenuName: "changed"})
 			case "role insert":
-				err = r.Insert(&dto.SysRoleInsertReq{RoleId: 2, RoleKey: "new"}, cb)
+				err = r.Insert(&dto.SysRoleInsertReq{RoleID: 2, RoleKey: "new"}, cb)
 			case "role update":
-				err = r.Update(&dto.SysRoleUpdateReq{RoleId: 1, RoleKey: "changed"}, cb)
+				err = r.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "changed"}, cb)
 			case "role remove":
-				err = r.Remove(&dto.SysRoleDeleteReq{Ids: []int{1}}, cb)
+				err = r.Remove(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
 			case "role scope":
-				err = r.UpdateDataScope(&dto.RoleDataScopeReq{RoleId: 1, DataScope: "2", DeptIds: []int{1}}).Error
+				err = r.UpdateDataScope(&dto.RoleDataScopeReq{RoleID: 1, DataScope: "2", DeptIDs: []int{1}})
 			case "role status":
-				err = r.UpdateStatus(&dto.UpdateStatusReq{RoleId: 1, Status: "1"})
+				err = r.UpdateStatus(&dto.UpdateStatusReq{RoleID: 1, Status: "1"})
 			}
 			if err == nil || !strings.Contains(err.Error(), "injected commit failure") {
 				t.Fatalf("commit error = %v", err)
@@ -92,19 +92,19 @@ func TestAdminMutationsReturnCommitFailure(t *testing.T) {
 }
 
 func TestConcurrentHierarchyMovesCannotCreateCycle(t *testing.T) {
-	if os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN") == "" {
-		t.Skip("set GO_ADMIN_TEST_POSTGRES_DSN for concurrent row locking")
+	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
+		t.Skip("set MOTOR_TEST_POSTGRES_DSN for concurrent row locking")
 	}
 	for _, kind := range []string{"dept", "menu"} {
 		t.Run(kind, func(t *testing.T) {
 			db := integrityDB(t)
 			if kind == "dept" {
-				rows := []models.SysDept{{DeptId: 1, DeptPath: "/0/1/"}, {DeptId: 2, DeptPath: "/0/2/"}}
+				rows := []models.SysDept{{DeptID: 1, DeptPath: "/0/1/"}, {DeptID: 2, DeptPath: "/0/2/"}}
 				if err := db.Create(&rows).Error; err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				rows := []models.SysMenu{{MenuId: 1, Paths: "/0/1"}, {MenuId: 2, Paths: "/0/2"}}
+				rows := []models.SysMenu{{MenuID: 1, Paths: "/0/1"}, {MenuID: 2, Paths: "/0/2"}}
 				if err := db.Create(&rows).Error; err != nil {
 					t.Fatal(err)
 				}
@@ -116,12 +116,12 @@ func TestConcurrentHierarchyMovesCannotCreateCycle(t *testing.T) {
 					<-start
 					if kind == "dept" {
 						s := &SysDept{}
-						s.Orm = db
-						results <- s.Update(&dto.SysDeptUpdateReq{DeptId: id, ParentId: 3 - id})
+						s.DB = db
+						results <- s.Update(&dto.SysDeptUpdateReq{DeptID: id, ParentID: 3 - id})
 					} else {
 						s := &SysMenu{}
-						s.Orm = db
-						results <- s.Update(&dto.SysMenuUpdateReq{MenuId: id, ParentId: 3 - id}).Error
+						s.DB = db
+						results <- s.Update(&dto.SysMenuUpdateReq{MenuID: id, ParentID: 3 - id})
 					}
 				}(id)
 			}

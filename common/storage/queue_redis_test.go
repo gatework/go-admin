@@ -1,14 +1,14 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
-	"github.com/go-admin-team/go-admin-core/v2/storage/queue"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 // redisAddrEnv points these tests at a server. They are skipped without it, so
@@ -16,7 +16,7 @@ import (
 // which is the point: the ordering rule they cover is invisible on the memory
 // backend, and memory is the default. A suite that only ever exercised the
 // default would report success for a queue that silently drops every consumer.
-const redisAddrEnv = "GO_ADMIN_TEST_REDIS_ADDR"
+const redisAddrEnv = "MOTOR_TEST_REDIS_ADDR"
 
 func redisAddr(t *testing.T) string {
 	t.Helper()
@@ -35,36 +35,30 @@ func redisAddr(t *testing.T) string {
 	return ""
 }
 
-// newRedisQueue builds the queue the same way setupQueue does - through
-// openQueue - so that what is under test is the adapter this
-// repository actually gets, LegacyQueueAdapter and all, rather than a redis
-// client wired up by the test.
-func newRedisQueue(t *testing.T, prefix string) corestorage.AdapterQueue {
+// newRedisQueue opens the same owned backend used by the host.
+func newRedisQueue(t *testing.T, prefix string) corestorage.Queue {
 	t.Helper()
-	previous := config.QueueConfig
-	t.Cleanup(func() { config.QueueConfig = previous })
+	previous := testQueueConfig
+	t.Cleanup(func() { testQueueConfig = previous })
 
-	config.QueueConfig = &config.Queue{
+	testQueueConfig = &config.Queue{
 		Redis: &config.RedisQueue{
-			RedisOptions: config.RedisOptions{Addr: redisAddr(t)},
-			Group:        prefix,
-			KeyPrefix:    prefix,
+			Addr:      redisAddr(t),
+			Group:     prefix,
+			KeyPrefix: prefix,
 		},
 	}
-	q, err := openQueue(config.QueueConfig)
+	q, err := openQueue(t.Context(), testQueueConfig)
 	if err != nil {
 		t.Fatalf("queue setup: %v", err)
 	}
-	t.Cleanup(q.Shutdown)
+	t.Cleanup(func() { _ = q.Shutdown(context.Background()) })
 	return q
 }
 
-func message(t *testing.T, stream string) corestorage.Messager {
+func message(t *testing.T, stream string) corestorage.Message {
 	t.Helper()
-	m := &queue.Message{}
-	m.SetStream(stream)
-	m.SetValues(map[string]interface{}{"hello": "world"})
-	return m
+	return corestorage.Message{Topic: stream, Values: map[string]any{"hello": "world"}}
 }
 
 // Registered first, then started: the consumer gets the message. This is the
@@ -74,18 +68,18 @@ func TestRedisQueueDeliversToAConsumerRegisteredBeforeTheStart(t *testing.T) {
 	q := newRedisQueue(t, "gotest-ordered")
 
 	got := make(chan struct{}, 1)
-	q.Register(stream, func(corestorage.Messager) error {
+	q.Subscribe(t.Context(), stream, func(context.Context, corestorage.Message) error {
 		select {
 		case got <- struct{}{}:
 		default:
 		}
 		return nil
 	})
-	go q.Run()
+	go q.Run(t.Context())
 
 	// Give Start a moment to reach its read loop before publishing.
 	time.Sleep(500 * time.Millisecond)
-	if err := q.Append(message(t, stream)); err != nil {
+	if err := q.Publish(t.Context(), message(t, stream)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
@@ -96,29 +90,19 @@ func TestRedisQueueDeliversToAConsumerRegisteredBeforeTheStart(t *testing.T) {
 	}
 }
 
-// Started first, then registered: the registration is refused and every
-// publish afterwards fails.
-//
-// Subscribe answers ErrQueueAlreadyStarted, and LegacyQueueAdapter.Register
-// returns nothing, so the caller cannot know - that part is silent. What is not
-// silent is the consequence: no consumer group was created, so Publish refuses
-// the topic with ErrNoHandler on every single request, and go-admin's call
-// sites log that at error level while the login and operation log rows are
-// never written.
-//
-// This is the test the memory backend cannot provide. queue.Memory's Register
-// starts another consumer goroutine whatever the state, so the same code passes
-// there - which is how the defect survived, memory being the default.
+// A running queue rejects late subscribers and cannot publish unknown topics.
 func TestRedisQueueRefusesAConsumerRegisteredAfterTheStart(t *testing.T) {
 	stream := "t-late"
 	q := newRedisQueue(t, "gotest-late")
 
-	go q.Run()
+	go q.Run(t.Context())
 	time.Sleep(500 * time.Millisecond)
 
-	q.Register(stream, func(corestorage.Messager) error { return nil })
+	if err := q.Subscribe(t.Context(), stream, func(context.Context, corestorage.Message) error { return nil }); !errors.Is(err, corestorage.ErrQueueAlreadyStarted) {
+		t.Fatalf("late subscribe: %v", err)
+	}
 
-	err := q.Append(message(t, stream))
+	err := q.Publish(t.Context(), message(t, stream))
 	if err == nil {
 		t.Fatal("a message was accepted for a topic whose registration came after Start; " +
 			"if the backend now accepts late registration, the ordering rule in setupQueue can be revisited")

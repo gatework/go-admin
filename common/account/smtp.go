@@ -12,12 +12,16 @@ import (
 	"time"
 )
 
+// SMTP defines the smtp contract.
 type SMTP struct {
 	Host, Port, Username, Password, From string
 	Insecure                             bool
 	ImplicitTLS                          bool
 }
 
+// SMTPFromEnv returns the optional SMTP mailer; missing configuration returns a nil interface.
+//
+//nolint:iface // The optional provider must preserve a nil interface when SMTP is unconfigured.
 func SMTPFromEnv() Mailer {
 	host, from := os.Getenv("ACCOUNT_SMTP_HOST"), os.Getenv("ACCOUNT_SMTP_FROM")
 	if host == "" || from == "" {
@@ -29,10 +33,12 @@ func SMTPFromEnv() Mailer {
 	}
 	return SMTP{Host: host, Port: port, From: from, Username: os.Getenv("ACCOUNT_SMTP_USER"), Password: os.Getenv("ACCOUNT_SMTP_PASSWORD"), Insecure: os.Getenv("ACCOUNT_SMTP_INSECURE") == "true", ImplicitTLS: os.Getenv("ACCOUNT_SMTP_TLS") == "implicit"}
 }
+
+// Send handles the send operation.
 func (m SMTP) Send(ctx context.Context, to, subject, body string) error {
 	from, e := mail.ParseAddress(m.From)
 	if e != nil || strings.ContainsAny(m.From+to+subject, "\r\n") {
-		return ErrUnavailable
+		return UnavailableErr
 	}
 	conn, e := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(m.Host, m.Port))
 	if e != nil {
@@ -65,7 +71,7 @@ func (m SMTP) Send(ctx context.Context, to, subject, body string) error {
 				return e
 			}
 		} else if !m.Insecure {
-			return ErrUnavailable
+			return UnavailableErr
 		}
 	}
 	if m.Username != "" {

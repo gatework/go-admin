@@ -8,11 +8,11 @@ PostgreSQL 序列根据实际最大主键初始化，空表的首次编号从 1 
 
 `scripts/reset-local-seed-data.sql` 是需要明确授权才执行的开发清理脚本。先停止后台服务、备份数据库，再通过 psql 执行，成功后重启服务，避免旧任务继续驻留内存。脚本在事务内校验 admin、默认角色、部门和岗位；保留密码、必要权限关系和调度租约，删除非必要账户/组织、演示任务、生成器暂存和历史日志，并刷新保留种子的创建/更新时间。运行后产生的新日志是正常业务记录。
 
-2026-10-25 已按用户授权清理 `goadmin_development`。完整执行前备份保存在 `/Users/crate/Backups/go-admin/goadmin-before-minimal-seed-20261025.dump`（pg_dump 自定义格式，权限 0600），并已验证目录可读。恢复应先将备份装入独立数据库核对，再安排替换，不覆盖运行中的数据库。
 
 ## 验证
 
 - `go test ./config` 通过。
 - `go test -tags integration ./config ./cmd/migrate/migration/version` 通过，覆盖图标迁移不修改自定义菜单和按钮。
-- 独立 PostgreSQL 数据库 `goadmin_seed_check_20261025` 全部 16 个迁移成功；随后执行清理脚本，账户/部门/角色/岗位各 1、任务 0、调度租约 1、孤立菜单关系 0。
+- 独立 PostgreSQL 数据库 `motor_seed_check_20261025` 全部 16 个迁移成功；随后执行清理脚本，账户/部门/角色/岗位各 1、任务 0、调度租约 1、孤立菜单关系 0。
 - 本地开发库读回相同核心计数。SQL Server 种子已同步修改，但未在 SQL Server 实例执行验证。
+The motor development environment starts from fresh volumes and formal migrations. Historical database cleanup records do not describe a migration performed by this refactor.

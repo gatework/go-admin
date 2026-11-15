@@ -3,9 +3,9 @@
 package matched
 
 import (
-	"go-admin/app/demo/models"
-	"go-admin/app/demo/service/dto"
-	"go-admin/common/actions"
+	"github.com/gatework/motor/app/demo/models"
+	"github.com/gatework/motor/app/demo/service/dto"
+	"github.com/gatework/motor/common/actions"
 )
 
 var _ = actions.Create[models.DemoProduct, dto.DemoProductControl]

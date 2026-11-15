@@ -1,13 +1,15 @@
 package version
 
 import (
-	"gorm.io/driver/postgres"
 	"os"
 	"testing"
 
+	"gorm.io/driver/postgres"
+
 	"github.com/glebarez/sqlite"
-	common "go-admin/common/models"
 	"gorm.io/gorm"
+
+	common "github.com/gatework/motor/common/models"
 )
 
 func TestAuthVersionMigrationBackfillsAndPreservesRevocations(t *testing.T) {
@@ -28,9 +30,9 @@ func TestAuthVersionMigrationBackfillsAndPreservesRevocations(t *testing.T) {
 }
 
 func TestPostgresAuthVersionMigrationUpgrade(t *testing.T) {
-	dsn := os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("MOTOR_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("GO_ADMIN_TEST_POSTGRES_DSN is required")
+		t.Skip("MOTOR_TEST_POSTGRES_DSN is required")
 	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

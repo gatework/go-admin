@@ -5,14 +5,14 @@ import (
 	"runtime"
     "time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
+	"github.com/gatework/motor-core/sdk/pkg"
 
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 type Menu struct {
-	MenuId     int    `json:"menuId" gorm:"primaryKey;autoIncrement"`
+	MenuID     int    `json:"menuId" gorm:"primaryKey;autoIncrement"`
 	MenuName   string `json:"menuName" gorm:"size:128;"`
 	Title      string `json:"title" gorm:"size:128;"`
 	Icon       string `json:"icon" gorm:"size:128;"`
@@ -21,7 +21,7 @@ type Menu struct {
 	MenuType   string `json:"menuType" gorm:"size:1;"`
 	Action     string `json:"action" gorm:"size:16;"`
 	Permission string `json:"permission" gorm:"size:255;"`
-	ParentId   int    `json:"parentId" gorm:"size:11;"`
+	ParentID   int    `json:"parentId" gorm:"size:11;"`
 	NoCache    bool   `json:"noCache" gorm:"size:8;"`
 	Breadcrumb string `json:"breadcrumb" gorm:"size:255;"`
 	Component  string `json:"component" gorm:"size:255;"`
@@ -55,7 +55,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Mmenu.Path = "/{{.TBName}}"
         Mmenu.MenuType = "M"
         Mmenu.Action = "无"
-        Mmenu.ParentId = 0
+        Mmenu.ParentID = 0
         Mmenu.NoCache = false
         Mmenu.Component = "Layout"
         Mmenu.Sort = 0
@@ -65,7 +65,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Mmenu.UpdateBy = "1"
         Mmenu.CreatedAt = timeNow
         Mmenu.UpdatedAt = timeNow
-        // Mmenu.MenuId, err = Mmenu.Create(db)
+        // Mmenu.MenuID, err = Mmenu.Create(db)
         err := tx.Create(&Mmenu).Error
         if err != nil {
             return err
@@ -78,7 +78,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Cmenu.MenuType = "C"
         Cmenu.Action = "无"
         Cmenu.Permission = "{{.PackageName}}:{{.BusinessName}}:list"
-        Cmenu.ParentId = Mmenu.MenuId
+        Cmenu.ParentID = Mmenu.MenuID
         Cmenu.NoCache = false
         Cmenu.Component = "/{{.BusinessName}}/index"
         Cmenu.Sort = 0
@@ -88,7 +88,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Cmenu.UpdateBy = "1"
         Cmenu.CreatedAt = timeNow
         Cmenu.UpdatedAt = timeNow
-        // Cmenu.MenuId, err = Cmenu.Create(db)
+        // Cmenu.MenuID, err = Cmenu.Create(db)
         err = tx.Create(&Cmenu).Error
         if err != nil {
             return err
@@ -102,7 +102,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MList.MenuType = "F"
         MList.Action = "无"
         MList.Permission = "{{.PackageName}}:{{.BusinessName}}:query"
-        MList.ParentId = Cmenu.MenuId
+        MList.ParentID = Cmenu.MenuID
         MList.NoCache = false
         MList.Sort = 0
         MList.Visible = "0"
@@ -111,7 +111,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MList.UpdateBy = "1"
         MList.CreatedAt = timeNow
         MList.UpdatedAt = timeNow
-        // MList.MenuId, err = MList.Create(db)
+        // MList.MenuID, err = MList.Create(db)
         err = tx.Create(&MList).Error
         if err != nil {
             return err
@@ -125,7 +125,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MCreate.MenuType = "F"
         MCreate.Action = "无"
         MCreate.Permission = "{{.PackageName}}:{{.BusinessName}}:add"
-        MCreate.ParentId = Cmenu.MenuId
+        MCreate.ParentID = Cmenu.MenuID
         MCreate.NoCache = false
         MCreate.Sort = 0
         MCreate.Visible = "0"
@@ -134,7 +134,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MCreate.UpdateBy = "1"
         MCreate.CreatedAt = timeNow
         MCreate.UpdatedAt = timeNow
-        // MCreate.MenuId, err = MCreate.Create(db)
+        // MCreate.MenuID, err = MCreate.Create(db)
         err = tx.Create(&MCreate).Error
         if err != nil {
             return err
@@ -148,7 +148,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MUpdate.MenuType = "F"
         MUpdate.Action = "无"
         MUpdate.Permission ="{{.PackageName}}:{{.BusinessName}}:edit"
-        MUpdate.ParentId = Cmenu.MenuId
+        MUpdate.ParentID = Cmenu.MenuID
         MUpdate.NoCache = false
         MUpdate.Sort = 0
         MUpdate.Visible = "0"
@@ -157,7 +157,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MUpdate.UpdateBy = "1"
         MUpdate.CreatedAt = timeNow
         MUpdate.UpdatedAt = timeNow
-        // MUpdate.MenuId, err = MUpdate.Create(db)
+        // MUpdate.MenuID, err = MUpdate.Create(db)
         err = tx.Create(&MUpdate).Error
         if err != nil {
             return err
@@ -171,7 +171,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MDelete.MenuType = "F"
         MDelete.Action = "无"
         MDelete.Permission = "{{.PackageName}}:{{.BusinessName}}:remove"
-        MDelete.ParentId = Cmenu.MenuId
+        MDelete.ParentID = Cmenu.MenuID
         MDelete.NoCache = false
         MDelete.Sort = 0
         MDelete.Visible = "0"
@@ -180,7 +180,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         MDelete.UpdateBy = "1"
         MDelete.CreatedAt = timeNow
         MDelete.UpdatedAt = timeNow
-        // MDelete.MenuId, err = MDelete.Create(db)
+        // MDelete.MenuID, err = MDelete.Create(db)
         err = tx.Create(&MDelete).Error
         if err != nil {
             return err
@@ -194,7 +194,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Amenu.Path = "{{.TBName}}"
         Amenu.MenuType = "M"
         Amenu.Action = "无"
-        Amenu.ParentId = InterfaceId
+        Amenu.ParentID = InterfaceId
         Amenu.NoCache = false
         Amenu.Sort = 0
         Amenu.Visible = "1"
@@ -203,7 +203,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         Amenu.UpdateBy = "1"
         Amenu.CreatedAt = timeNow
         Amenu.UpdatedAt = timeNow
-        // Amenu.MenuId, err = Amenu.Create(db)
+        // Amenu.MenuID, err = Amenu.Create(db)
         err = tx.Create(&Amenu).Error
         if err != nil {
             return err
@@ -216,7 +216,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AList.Path = "/api/v1/{{.ModuleName}}"
         AList.MenuType = "A"
         AList.Action = "GET"
-        AList.ParentId = Amenu.MenuId
+        AList.ParentID = Amenu.MenuID
         AList.NoCache = false
         AList.Sort = 0
         AList.Visible = "1"
@@ -225,7 +225,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AList.UpdateBy = "1"
         AList.CreatedAt = timeNow
         AList.UpdatedAt = timeNow
-        // AList.MenuId, err = AList.Create(db)
+        // AList.MenuID, err = AList.Create(db)
         err = tx.Create(&AList).Error
         if err != nil {
             return err
@@ -238,7 +238,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AGet.Path = "/api/v1/{{.ModuleName}}/:id"
         AGet.MenuType = "A"
         AGet.Action = "GET"
-        AGet.ParentId = Amenu.MenuId
+        AGet.ParentID = Amenu.MenuID
         AGet.NoCache = false
         AGet.Sort = 0
         AGet.Visible = "1"
@@ -247,7 +247,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AGet.UpdateBy = "1"
         AGet.CreatedAt = timeNow
         AGet.UpdatedAt = timeNow
-        // AGet.MenuId, err = AGet.Create(db)
+        // AGet.MenuID, err = AGet.Create(db)
         err = tx.Create(&AGet).Error
         if err != nil {
             return err
@@ -260,7 +260,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         ACreate.Path = "/api/v1/{{.ModuleName}}"
         ACreate.MenuType = "A"
         ACreate.Action = "POST"
-        ACreate.ParentId = Amenu.MenuId
+        ACreate.ParentID = Amenu.MenuID
         ACreate.NoCache = false
         ACreate.Sort = 0
         ACreate.Visible = "1"
@@ -269,7 +269,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         ACreate.UpdateBy = "1"
         ACreate.CreatedAt = timeNow
         ACreate.UpdatedAt = timeNow
-        // ACreate.MenuId, err = ACreate.Create(db)
+        // ACreate.MenuID, err = ACreate.Create(db)
         err = tx.Create(&ACreate).Error
         if err != nil {
             return err
@@ -282,7 +282,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AUpdate.Path = "/api/v1/{{.ModuleName}}/:id"
         AUpdate.MenuType = "A"
         AUpdate.Action = "PUT"
-        AUpdate.ParentId = Amenu.MenuId
+        AUpdate.ParentID = Amenu.MenuID
         AUpdate.NoCache = false
         AUpdate.Sort = 0
         AUpdate.Visible = "1"
@@ -291,7 +291,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         AUpdate.UpdateBy = "1"
         AUpdate.CreatedAt = timeNow
         AUpdate.UpdatedAt = timeNow
-        // AUpdate.MenuId, err = AUpdate.Create(db)
+        // AUpdate.MenuID, err = AUpdate.Create(db)
         err = tx.Create(&AUpdate).Error
         if err != nil {
             return err
@@ -304,7 +304,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         ADelete.Path = "/api/v1/{{.ModuleName}}"
         ADelete.MenuType = "A"
         ADelete.Action = "DELETE"
-        ADelete.ParentId = Amenu.MenuId
+        ADelete.ParentID = Amenu.MenuID
         ADelete.NoCache = false
         ADelete.Sort = 0
         ADelete.Visible = "1"
@@ -313,7 +313,7 @@ func _{{.GenerateTime}}Test(db *gorm.DB, version string) error {
         ADelete.UpdateBy = "1"
         ADelete.CreatedAt = timeNow
         ADelete.UpdatedAt = timeNow
-        //ADelete.MenuId, err = ADelete.Create(db)
+        //ADelete.MenuID, err = ADelete.Create(db)
         err = tx.Create(&ADelete).Error
         if err != nil {
             return err

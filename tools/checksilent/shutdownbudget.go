@@ -221,13 +221,6 @@ type stopSite struct {
 	set     bool
 }
 
-func (s stopSite) fix(seconds int) string {
-	if s.compose {
-		return fmt.Sprintf("Set stop_grace_period: %ds", seconds)
-	}
-	return fmt.Sprintf("Pass --timeout %d", seconds)
-}
-
 func findStopDeadlines(s *snapshot) ([]stopSite, error) {
 	sites, err := findDockerStops(s.Root)
 	if err != nil {
@@ -248,8 +241,13 @@ var (
 )
 
 func findDockerStops(root string) ([]stopSite, error) {
+	scoped, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer scoped.Close()
 	var out []stopSite
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -262,7 +260,11 @@ func findDockerStops(root string) ([]stopSite, error) {
 		if !dockerStopExtensions[filepath.Ext(path)] && !dockerStopNames[info.Name()] {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		b, err := scoped.ReadFile(relative)
 		if err != nil {
 			return err
 		}
@@ -270,33 +272,7 @@ func findDockerStops(root string) ([]stopSite, error) {
 		if err != nil {
 			return err
 		}
-		for i, line := range strings.Split(string(b), "\n") {
-			// A commented-out command is not one that runs, and the settings
-			// file describes `docker stop` in prose right beside the budget
-			// this check reads.
-			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "#") {
-				continue
-			}
-			if !dockerStopArgs.MatchString(line) {
-				continue
-			}
-			site := stopSite{
-				file: filepath.ToSlash(rel),
-				line: i + 1,
-				what: "`docker stop` with no --timeout",
-			}
-			if m := dockerStopTime.FindStringSubmatch(line); m != nil {
-				seconds, err := strconv.Atoi(m[2])
-				if err != nil {
-					continue
-				}
-				// Quoted back in the spelling it was written in, so the
-				// message cannot misreport what the line says.
-				site.what = fmt.Sprintf("`docker stop %s %d`", m[1], seconds)
-				site.seconds, site.set = seconds, true
-			}
-			out = append(out, site)
-		}
+		out = append(out, dockerStopsInFile(filepath.ToSlash(rel), string(b))...)
 		return nil
 	})
 	return out, err
@@ -366,22 +342,6 @@ func orDefault(configured *int, fallback int) int {
 		return *configured
 	}
 	return fallback
-}
-
-// hostConfigDefaults reads the three fallback constants out of the parsed tree.
-func (s *snapshot) hostConfigDefaults() (shutdownSeconds, bool) {
-	for _, sf := range s.Files {
-		if sf.Pkg != s.pkg(pkgHostConfig) {
-			continue
-		}
-		drain, okDrain := sf.consts[drainConstName]
-		server, okServer := sf.consts[serverConstName]
-		cleanup, okCleanup := sf.consts[cleanupConstName]
-		if okDrain && okServer && okCleanup {
-			return shutdownSeconds{int(drain), int(server), int(cleanup)}, true
-		}
-	}
-	return shutdownSeconds{}, false
 }
 
 // manifest is what the shipped Deployment says about how long it will wait.
@@ -612,8 +572,8 @@ func runsThisRepo(service *yaml.Node, modulePath string) bool {
 }
 
 func baseName(path string) string {
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		return path[i+1:]
+	if _, after, ok := strings.CutLast(path, "/"); ok {
+		return after
 	}
 	return path
 }
@@ -648,4 +608,59 @@ func mapValue(node *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+func (s stopSite) fix(seconds int) string {
+	if s.compose {
+		return fmt.Sprintf("Set stop_grace_period: %ds", seconds)
+	}
+	return fmt.Sprintf("Pass --timeout %d", seconds)
+}
+
+// hostConfigDefaults reads the three fallback constants out of the parsed tree.
+func (s *snapshot) hostConfigDefaults() (shutdownSeconds, bool) {
+	for _, sf := range s.Files {
+		if sf.Pkg != s.pkg(pkgHostConfig) {
+			continue
+		}
+		drain, okDrain := sf.consts[drainConstName]
+		server, okServer := sf.consts[serverConstName]
+		cleanup, okCleanup := sf.consts[cleanupConstName]
+		if okDrain && okServer && okCleanup {
+			return shutdownSeconds{int(drain), int(server), int(cleanup)}, true
+		}
+	}
+	return shutdownSeconds{}, false
+}
+
+func dockerStopsInFile(rel, contents string) []stopSite {
+	var out []stopSite
+	for i, line := range strings.Split(contents, "\n") {
+		// A commented-out command is not one that runs, and the settings
+		// file describes `docker stop` in prose right beside the budget
+		// this check reads.
+		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if !dockerStopArgs.MatchString(line) {
+			continue
+		}
+		site := stopSite{
+			file: rel,
+			line: i + 1,
+			what: "`docker stop` with no --timeout",
+		}
+		if m := dockerStopTime.FindStringSubmatch(line); m != nil {
+			seconds, err := strconv.Atoi(m[2])
+			if err != nil {
+				continue
+			}
+			// Quoted back in the spelling it was written in, so the
+			// message cannot misreport what the line says.
+			site.what = fmt.Sprintf("`docker stop %s %d`", m[1], seconds)
+			site.seconds, site.set = seconds, true
+		}
+		out = append(out, site)
+	}
+	return out
 }

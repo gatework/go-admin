@@ -1,16 +1,17 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/gatework/motor-core/sdk/api"
 
 	"github.com/gin-gonic/gin"
 )
 
+// CustomError handles the customerror operation.
 func CustomError(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -27,16 +28,7 @@ func CustomError(c *gin.Context) {
 						break
 					}
 					c.Status(statusCode)
-					fmt.Println(
-						time.Now().Format("2006-01-02 15:04:05"),
-						"[ERROR]",
-						c.Request.Method,
-						redactLogURL(c.Request.URL),
-						statusCode,
-						redactLogURL(c.Request.URL),
-						c.ClientIP(),
-						p[2],
-					)
+					api.GetRequestLogger(c).Errorf("request failed: method=%s path=%s status=%d", c.Request.Method, redactLogURL(c.Request.URL), statusCode)
 					c.JSON(http.StatusOK, gin.H{
 						"code": statusCode,
 						"msg":  p[2],

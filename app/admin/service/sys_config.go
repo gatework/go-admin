@@ -3,21 +3,23 @@ package service
 import (
 	"errors"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	cDto "go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	cDto "github.com/gatework/motor/common/dto"
 )
 
+// SysConfig coordinates administration queries and mutations.
 type SysConfig struct {
 	service.Service
 }
 
 // GetPage 获取SysConfig列表
 func (e *SysConfig) GetPage(c *dto.SysConfigGetPageReq, list *[]models.SysConfig, count *int64) error {
-	err := e.Orm.
+	err := e.DB.
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -25,7 +27,7 @@ func (e *SysConfig) GetPage(c *dto.SysConfigGetPageReq, list *[]models.SysConfig
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("Service GetSysConfigPage error:%s", err)
+		e.Logger.Errorf("Service GetSysConfigPage error:%s", err)
 		return err
 	}
 	return nil
@@ -33,18 +35,18 @@ func (e *SysConfig) GetPage(c *dto.SysConfigGetPageReq, list *[]models.SysConfig
 
 // Get 获取SysConfig对象
 func (e *SysConfig) Get(d *dto.SysConfigGetReq, model *models.SysConfig) error {
-	err := e.Orm.
-		FirstOrInit(model, d.GetId()).
+	err := e.DB.
+		FirstOrInit(model, d.GetID()).
 		Error
 	if err != nil {
-		e.Log.Errorf("db error:%s", err)
-		_ = e.AddError(err)
+		e.Logger.Errorf("db error:%s", err)
+
 		return err
 	}
-	if model.Id == 0 {
+	if model.ID == 0 {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("Service GetSysApi error: %s", err)
-		_ = e.AddError(err)
+		e.Logger.Errorf("Service GetSysAPI error: %s", err)
+
 		return err
 	}
 	return nil
@@ -56,27 +58,27 @@ func (e *SysConfig) Insert(c *dto.SysConfigControl) error {
 	var data models.SysConfig
 	c.Generate(&data)
 	data.CreateBy = c.CreateBy
-	err = e.Orm.Create(&data).Error
+	err = e.DB.Create(&data).Error
 	if err != nil {
-		e.Log.Errorf("Service InsertSysConfig error:%s", err)
+		e.Logger.Errorf("Service InsertSysConfig error:%s", err)
 		return err
 	}
-	c.Id = data.Id
+	c.ID = data.ID
 	return nil
 }
 
 // Update 修改SysConfig对象
 func (e *SysConfig) Update(c *dto.SysConfigControl) error {
-	if c.Id <= 0 {
+	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
 	var model models.SysConfig
-	if err := e.Orm.First(&model, c.GetId()).Error; err != nil {
+	if err := e.DB.First(&model, c.GetID()).Error; err != nil {
 		return err
 	}
 	c.Generate(&model)
 	model.UpdateBy = c.UpdateBy
-	db := e.Orm.Omit("create_by", "created_at").Select("*").Updates(&model)
+	db := e.DB.Omit("create_by", "created_at").Select("*").Updates(&model)
 	if db.Error != nil {
 		return db.Error
 	}
@@ -91,14 +93,15 @@ func (e *SysConfig) SetSysConfig(c *[]dto.GetSetSysConfigReq) error {
 	return e.setValues(c, true)
 }
 
+// GetForSet loads configuration values for the settings form.
 func (e *SysConfig) GetForSet(c *[]dto.GetSetSysConfigReq) error {
 	var err error
 	var data models.SysConfig
 
-	err = e.Orm.Model(&data).
+	err = e.DB.Model(&data).
 		Find(c).Error
 	if err != nil {
-		e.Log.Errorf("Service GetSysConfigPage error:%s", err)
+		e.Logger.Errorf("Service GetSysConfigPage error:%s", err)
 		return err
 	}
 	return nil
@@ -109,8 +112,52 @@ func (e *SysConfig) UpdateForSet(c *[]dto.GetSetSysConfigReq) error {
 	return e.setValues(c, false)
 }
 
+// Remove 删除SysConfig
+func (e *SysConfig) Remove(d *dto.SysConfigDeleteReq) error {
+	var err error
+	var data models.SysConfig
+
+	db := e.DB.Delete(&data, d.IDs)
+	if err = db.Error; err != nil {
+		e.Logger.Errorf("Service RemoveSysConfig error:%s", err)
+		return err
+	}
+	if db.RowsAffected == 0 {
+		err = errors.New("无权删除该数据")
+		return err
+	}
+	return nil
+}
+
+// GetWithKey 根据Key获取SysConfig
+func (e *SysConfig) GetWithKey(c *dto.SysConfigByKeyReq, resp *dto.GetSysConfigByKEYForServiceResp) error {
+	var err error
+	var data models.SysConfig
+	err = e.DB.Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
+	if err != nil {
+		e.Logger.Errorf("At Service GetSysConfigByKEY Error:%s", err)
+		return err
+	}
+
+	return nil
+}
+
+// GetWithKeyList loads the configuration values selected by their keys.
+func (e *SysConfig) GetWithKeyList(c *dto.SysConfigGetToSysAppReq, list *[]models.SysConfig) error {
+	err := e.DB.
+		Scopes(
+			cDto.MakeCondition(c.GetNeedSearch()),
+		).
+		Find(list).Error
+	if err != nil {
+		e.Logger.Errorf("Service GetSysConfigByKey error:%s", err)
+		return err
+	}
+	return nil
+}
+
 func (e *SysConfig) setValues(c *[]dto.GetSetSysConfigReq, skipMissing bool) error {
-	return e.Orm.Transaction(func(tx *gorm.DB) error {
+	return e.DB.Transaction(func(tx *gorm.DB) error {
 		for _, req := range *c {
 			var model models.SysConfig
 			if err := tx.Where("config_key = ?", req.ConfigKey).First(&model).Error; err != nil {
@@ -132,47 +179,4 @@ func (e *SysConfig) setValues(c *[]dto.GetSetSysConfigReq, skipMissing bool) err
 		}
 		return nil
 	})
-}
-
-// Remove 删除SysConfig
-func (e *SysConfig) Remove(d *dto.SysConfigDeleteReq) error {
-	var err error
-	var data models.SysConfig
-
-	db := e.Orm.Delete(&data, d.Ids)
-	if err = db.Error; err != nil {
-		e.Log.Errorf("Service RemoveSysConfig error:%s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		err = errors.New("无权删除该数据")
-		return err
-	}
-	return nil
-}
-
-// GetWithKey 根据Key获取SysConfig
-func (e *SysConfig) GetWithKey(c *dto.SysConfigByKeyReq, resp *dto.GetSysConfigByKEYForServiceResp) error {
-	var err error
-	var data models.SysConfig
-	err = e.Orm.Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
-	if err != nil {
-		e.Log.Errorf("At Service GetSysConfigByKEY Error:%s", err)
-		return err
-	}
-
-	return nil
-}
-
-func (e *SysConfig) GetWithKeyList(c *dto.SysConfigGetToSysAppReq, list *[]models.SysConfig) error {
-	err := e.Orm.
-		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
-		).
-		Find(list).Error
-	if err != nil {
-		e.Log.Errorf("Service GetSysConfigByKey error:%s", err)
-		return err
-	}
-	return nil
 }

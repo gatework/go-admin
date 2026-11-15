@@ -1,47 +1,52 @@
 package models
 
 import (
-	"go-admin/common/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor/common/models"
 )
 
+// SysUser describes persisted administration data.
 type SysUser struct {
+	models.ControlBy
+	models.ModelTime
 	// AuthVersion is advanced only by the session revocation path, never DTO updates.
 	AuthVersion int64    `json:"-" gorm:"not null;default:0;<-:create"`
-	UserId      int      `gorm:"primaryKey;autoIncrement;comment:编码"  json:"userId"`
+	UserID      int      `gorm:"primaryKey;autoIncrement;comment:编码"  json:"userId"`
 	Username    string   `json:"username" gorm:"size:64;comment:用户名"`
 	Password    string   `json:"-" gorm:"size:128;comment:密码"`
 	NickName    string   `json:"nickName" gorm:"size:128;comment:昵称"`
 	Phone       string   `json:"phone" gorm:"size:11;comment:手机号"`
-	RoleId      int      `json:"roleId" gorm:"size:20;comment:角色ID"`
+	RoleID      int      `json:"roleId" gorm:"size:20;comment:角色ID"`
 	Salt        string   `json:"-" gorm:"size:255;comment:加盐"`
 	Avatar      string   `json:"avatar" gorm:"size:255;comment:头像"`
 	Sex         string   `json:"sex" gorm:"size:255;comment:性别"`
 	Email       string   `json:"email" gorm:"size:128;comment:邮箱"`
-	DeptId      int      `json:"deptId" gorm:"size:20;comment:部门"`
-	PostId      int      `json:"postId" gorm:"size:20;comment:岗位"`
+	DeptID      int      `json:"deptId" gorm:"size:20;comment:部门"`
+	PostID      int      `json:"postId" gorm:"size:20;comment:岗位"`
 	Remark      string   `json:"remark" gorm:"size:255;comment:备注"`
 	Status      string   `json:"status" gorm:"size:4;comment:状态"`
-	DeptIds     []int    `json:"deptIds" gorm:"-"`
-	PostIds     []int    `json:"postIds" gorm:"-"`
-	RoleIds     []int    `json:"roleIds" gorm:"-"`
+	DeptIDs     []int    `json:"deptIds" gorm:"-"`
+	PostIDs     []int    `json:"postIds" gorm:"-"`
+	RoleIDs     []int    `json:"roleIds" gorm:"-"`
 	Dept        *SysDept `json:"dept"`
-	models.ControlBy
-	models.ModelTime
 }
 
+// TableName returns the explicit persistence table name.
 func (*SysUser) TableName() string {
 	return "sys_user"
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (e *SysUser) Generate() models.ActiveRecord {
 	o := *e
 	return &o
 }
 
-func (e *SysUser) GetId() interface{} {
-	return e.UserId
+// GetID returns the selected resource identity.
+func (e *SysUser) GetID() any {
+	return e.UserID
 }
 
 // Encrypt hashes Password, unless it already holds a hash.
@@ -75,17 +80,20 @@ func (e *SysUser) Encrypt() error {
 	return nil
 }
 
+// BeforeCreate performs the before create administration operation.
 func (e *SysUser) BeforeCreate(_ *gorm.DB) error {
 	return e.Encrypt()
 }
 
+// BeforeUpdate performs the before update administration operation.
 func (e *SysUser) BeforeUpdate(_ *gorm.DB) error {
 	return e.Encrypt()
 }
 
+// AfterFind performs the after find administration operation.
 func (e *SysUser) AfterFind(_ *gorm.DB) error {
-	e.DeptIds = []int{e.DeptId}
-	e.PostIds = []int{e.PostId}
-	e.RoleIds = []int{e.RoleId}
+	e.DeptIDs = []int{e.DeptID}
+	e.PostIDs = []int{e.PostID}
+	e.RoleIDs = []int{e.RoleID}
 	return nil
 }

@@ -1,11 +1,11 @@
-module go-admin-e2e-apporder
+module github.com/gatework/motor/test/e2e-apporder
 
-go 1.27.3
+go 1.27.4
 
 require (
+	github.com/gatework/motor v0.0.0
+	github.com/gatework/motor/example/app-order v0.0.0
 	github.com/glebarez/go-sqlite v1.22.0
-	github.com/go-admin-team/example-app-order v0.0.0
-	go-admin v0.0.0
 )
 
 require (
@@ -31,8 +31,6 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0 // indirect
 	github.com/casbin/govaluate v1.10.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/chanxuehong/rand v0.0.0-20211009035549-2f07823e8e99 // indirect
-	github.com/chanxuehong/wechat v0.0.0-20230222024006-36f0325263cd // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -45,11 +43,11 @@ require (
 	github.com/gatework/go-vxlan v0.1.0 // indirect
 	github.com/gatework/go-wireless v0.1.0 // indirect
 	github.com/gatework/go-zabbix v0.0.0-20261107160521-182600c51b9f // indirect
+	github.com/gatework/motor-core v0.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
 	github.com/gin-gonic/gin v1.12.0 // indirect
 	github.com/glebarez/sqlite v1.11.0 // indirect
-	github.com/go-admin-team/go-admin-core/v2 v2.11.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect
@@ -118,7 +116,6 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirikothe/gotextfsm v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
-	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/swaggo/files v1.0.1 // indirect
@@ -136,11 +133,11 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.30.0 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
@@ -164,6 +161,6 @@ require (
 	modernc.org/sqlite v1.42.2 // indirect
 )
 
-replace go-admin => ../..
+replace github.com/gatework/motor => ../..
 
-replace github.com/go-admin-team/example-app-order => ../../example/app-order
+replace github.com/gatework/motor/example/app-order => ../../example/app-order

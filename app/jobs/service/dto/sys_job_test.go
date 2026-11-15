@@ -18,7 +18,7 @@ func TestSysJobControlBindPreservesPresence(t *testing.T) {
 	}{
 		{"canonical JSON", "application/json", `{"jobId":42,"args":"","concurrent":0,"entryId":999}`, false},
 		{"case insensitive JSON", "application/json", `{"JOBID":42,"ARGS":"","CONCURRENT":0,"ENTRYID":999}`, false},
-		{"legacy form fields", "application/x-www-form-urlencoded", "JobId=42&Args=&Concurrent=0&EntryId=999", false},
+		{"legacy form fields", "application/x-www-form-urlencoded", "JobID=42&Args=&Concurrent=0&EntryID=999", false},
 		{"canonical form fields", "application/x-www-form-urlencoded", "jobId=42&args=&concurrent=0&entryId=999", false},
 		{"URI authoritative", "application/json", `{"jobId":99,"args":"","concurrent":0,"entryId":999}`, true},
 	} {
@@ -35,14 +35,14 @@ func TestSysJobControlBindPreservesPresence(t *testing.T) {
 			}
 			fields := req.UpdateFields()
 			sort.Strings(fields)
-			if req.JobId != 42 || req.Args != "" || req.Concurrent != 0 || !reflect.DeepEqual(fields, []string{"Args", "Concurrent"}) {
+			if req.JobID != 42 || req.Args != "" || req.Concurrent != 0 || !reflect.DeepEqual(fields, []string{"Args", "Concurrent"}) {
 				t.Fatalf("request=%+v fields=%v", req, fields)
 			}
 			model, err := req.ToModel()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if model.EntryId != 0 {
+			if model.EntryID != 0 {
 				t.Fatal("client supplied process-local entry id persisted")
 			}
 		})

@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/service"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
-	cDto "go-admin/common/dto"
+	"github.com/gatework/motor-core/sdk/service"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	cDto "github.com/gatework/motor/common/dto"
 )
 
+// SysDictType coordinates administration queries and mutations.
 type SysDictType struct {
 	service.Service
 }
@@ -22,7 +24,7 @@ func (e *SysDictType) GetPage(c *dto.SysDictTypeGetPageReq, list *[]models.SysDi
 	var err error
 	var data models.SysDictType
 
-	err = e.Orm.Model(&data).
+	err = e.DB.Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -30,7 +32,7 @@ func (e *SysDictType) GetPage(c *dto.SysDictTypeGetPageReq, list *[]models.SysDi
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
@@ -40,15 +42,15 @@ func (e *SysDictType) GetPage(c *dto.SysDictTypeGetPageReq, list *[]models.SysDi
 func (e *SysDictType) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) error {
 	var err error
 
-	db := e.Orm.First(model, d.GetId())
+	db := e.DB.First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if err = db.Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil
@@ -66,33 +68,33 @@ func (e *SysDictType) Insert(c *dto.SysDictTypeInsertReq) error {
 	var count int64
 	// The error was dropped, so a query that failed left count at zero and the
 	// insert went ahead as though the name were free.
-	if err = e.Orm.Model(&data).Where("dict_type = ?", data.DictType).Count(&count).Error; err != nil {
-		e.Log.Errorf("db error: %s", err)
+	if err = e.DB.Model(&data).Where("dict_type = ?", data.DictType).Count(&count).Error; err != nil {
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if count > 0 {
 		return fmt.Errorf("当前字典类型[%s]已经存在！", data.DictType)
 	}
-	err = e.Orm.Create(&data).Error
+	err = e.DB.Create(&data).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
-	c.Id = data.ID
+	c.ID = data.ID
 	return nil
 }
 
 // Update 修改对象
 func (e *SysDictType) Update(c *dto.SysDictTypeUpdateReq) error {
-	if c.Id <= 0 {
+	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
 	if strings.TrimSpace(c.DictType) == "" {
 		return errors.New("字典类型不能为空")
 	}
-	return e.Orm.Transaction(func(tx *gorm.DB) error {
+	return e.DB.Transaction(func(tx *gorm.DB) error {
 		var model models.SysDictType
-		if err := lockAdminRows(tx, model.TableName()).First(&model, c.GetId()).Error; err != nil {
+		if err := lockAdminRows(tx, model.TableName()).First(&model, c.GetID()).Error; err != nil {
 			return err
 		}
 		oldKey := model.DictType
@@ -121,9 +123,9 @@ func (e *SysDictType) Update(c *dto.SysDictTypeUpdateReq) error {
 
 // Remove 删除
 func (e *SysDictType) Remove(d *dto.SysDictTypeDeleteReq) error {
-	return e.Orm.Transaction(func(tx *gorm.DB) error {
+	return e.DB.Transaction(func(tx *gorm.DB) error {
 		var types []models.SysDictType
-		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.Ids).Order("dict_id").Find(&types).Error; err != nil {
+		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.IDs).Order("dict_id").Find(&types).Error; err != nil {
 			return err
 		}
 		if len(types) == 0 {
@@ -147,13 +149,13 @@ func (e *SysDictType) GetAll(c *dto.SysDictTypeGetPageReq, list *[]models.SysDic
 	var err error
 	var data models.SysDictType
 
-	err = e.Orm.Model(&data).
+	err = e.DB.Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {
-		e.Log.Errorf("db error: %s", err)
+		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	return nil

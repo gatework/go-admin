@@ -1,19 +1,22 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
 
-	log "github.com/go-admin-team/go-admin-core/v2/logger"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/storage"
+	log "github.com/gatework/motor-core/logger"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/storage"
 
-	"go-admin/common/models"
+	"github.com/gatework/motor/common/models"
 )
 
+// SysOperaLog describes persisted administration data.
 type SysOperaLog struct {
 	models.Model
+	models.ControlBy
 	Title         string    `json:"title" gorm:"size:255;comment:操作模块"`
 	BusinessType  string    `json:"businessType" gorm:"size:128;comment:操作类型"`
 	BusinessTypes string    `json:"businessTypes" gorm:"size:128;comment:BusinessTypes"`
@@ -22,68 +25,68 @@ type SysOperaLog struct {
 	OperatorType  string    `json:"operatorType" gorm:"size:128;comment:操作类型"`
 	OperName      string    `json:"operName" gorm:"size:128;comment:操作者"`
 	DeptName      string    `json:"deptName" gorm:"size:128;comment:部门名称"`
-	OperUrl       string    `json:"operUrl" gorm:"size:255;comment:访问地址"`
-	OperIp        string    `json:"operIp" gorm:"size:128;comment:客户端ip"`
+	OperURL       string    `json:"operUrl" gorm:"size:255;comment:访问地址"`
+	OperIP        string    `json:"operIp" gorm:"size:128;comment:客户端ip"`
 	OperLocation  string    `json:"operLocation" gorm:"size:128;comment:访问位置"`
 	OperParam     string    `json:"operParam" gorm:"text;comment:请求参数"`
 	Status        string    `json:"status" gorm:"size:4;comment:操作状态 1:正常 2:关闭"`
 	OperTime      time.Time `json:"operTime" gorm:"comment:操作时间"`
-	JsonResult    string    `json:"jsonResult" gorm:"size:255;comment:返回数据"`
+	JSONResult    string    `json:"jsonResult" gorm:"size:255;comment:返回数据"`
 	Remark        string    `json:"remark" gorm:"size:255;comment:备注"`
 	LatencyTime   string    `json:"latencyTime" gorm:"size:128;comment:耗时"`
 	UserAgent     string    `json:"userAgent" gorm:"size:255;comment:ua"`
 	CreatedAt     time.Time `json:"createdAt" gorm:"comment:创建时间"`
 	UpdatedAt     time.Time `json:"updatedAt" gorm:"comment:最后更新时间"`
-	models.ControlBy
 }
 
+// TableName returns the explicit persistence table name.
 func (*SysOperaLog) TableName() string {
 	return "sys_opera_log"
 }
 
+// Generate copies request fields into a new request or supplied model.
 func (e *SysOperaLog) Generate() models.ActiveRecord {
 	o := *e
 	return &o
 }
 
-func (e *SysOperaLog) GetId() interface{} {
-	return e.Id
+// GetID returns the selected resource identity.
+func (e *SysOperaLog) GetID() any {
+	return e.ID
 }
 
 // SaveOperaLog 从队列中获取操作日志
-func SaveOperaLog(message storage.Messager) (err error) {
+func SaveOperaLog(ctx context.Context, message storage.Message) (err error) {
 	//准备db
-	db := sdk.Runtime.GetDbByTenant(message.GetPrefix())
+	tenant, ok := message.Values[storage.PrefixKey].(string)
+	if !ok {
+		return errors.New("log message has no tenant")
+	}
+	db := sdk.Runtime.DB(tenant)
 	if db == nil {
 		err = errors.New("db not exist")
-		log.Errorf("host[%s]'s %s", message.GetPrefix(), err.Error())
-		// Log writing to the database ignores error
-		return nil
+		log.NewHelper(log.Default()).Errorf("host[%s]'s %s", tenant, err.Error())
+		return err
 	}
-	var rb []byte
-	rb, err = json.Marshal(message.GetValues())
-	if err != nil {
-		log.Errorf("json Marshal error, %s", err.Error())
-		// Log writing to the database ignores error
-		return nil
+	payload, ok := message.Values["payload"].(string)
+	if !ok {
+		return errors.New("log message has no payload")
 	}
 	var l SysOperaLog
-	err = json.Unmarshal(rb, &l)
+	err = json.Unmarshal([]byte(payload), &l)
 	if err != nil {
-		log.Errorf("json Unmarshal error, %s", err.Error())
-		// Log writing to the database ignores error
-		return nil
+		log.NewHelper(log.Default()).Errorf("json Unmarshal error, %s", err.Error())
+		return err
 	}
 	// 超出100个字符返回值截断
-	if r := []rune(l.JsonResult); len(r) > 100 {
-		l.JsonResult = string(r[:100])
+	if r := []rune(l.JSONResult); len(r) > 100 {
+		l.JSONResult = string(r[:100])
 	}
 
-	err = db.Create(&l).Error
+	err = db.WithContext(ctx).Create(&l).Error
 	if err != nil {
-		log.Errorf("db create error, %s", err.Error())
-		// Log writing to the database ignores error
-		return nil
+		log.NewHelper(log.Default()).Errorf("db create error, %s", err.Error())
+		return err
 	}
 	return nil
 }

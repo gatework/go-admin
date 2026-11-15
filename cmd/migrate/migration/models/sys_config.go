@@ -1,5 +1,8 @@
 package models
 
+// SysConfig defines the sysconfig contract.
+//
+//nolint:embeddedstructfieldcheck // Frozen migration field order defines historical positional SQL seed columns.
 type SysConfig struct {
 	Model
 	ConfigName  string `json:"configName" gorm:"type:varchar(128);comment:ConfigName"`
@@ -12,6 +15,7 @@ type SysConfig struct {
 	ModelTime
 }
 
+// TableName returns the explicit persistence table name.
 func (SysConfig) TableName() string {
 	return "sys_config"
 }

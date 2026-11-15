@@ -47,52 +47,7 @@ func checkMenuNames(s *snapshot, uiDir string) ([]Finding, error) {
 	var out []Finding
 	for _, sf := range s.Files {
 		forEachStructLiteral(sf, func(lit structLiteral) {
-			if !s.isMenuModel(lit) {
-				return
-			}
-			menuType, _ := stringField(sf, lit, "MenuType")
-			// A directory has no page of its own; its component is the layout.
-			if menuType == "M" || menuType == "F" {
-				return
-			}
-			component, ok := stringField(sf, lit, "Component")
-			if !ok || component == "" || component == "Layout" {
-				return
-			}
-			menuName, ok := stringField(sf, lit, "MenuName")
-			if !ok || menuName == "" {
-				return
-			}
-
-			path := componentFile(uiDir, component)
-			if path == "" {
-				return
-			}
-			b, err := os.ReadFile(path)
-			if err != nil {
-				// A component the frontend does not carry is F2's business -
-				// the placeholder that says the app is not installed - not this
-				// check's.
-				return
-			}
-			declared, ok := componentName(string(b))
-			if !ok {
-				// No literal name at all: the build may derive one from the
-				// file path. Nothing to compare, so nothing to say.
-				return
-			}
-			if declared == menuName {
-				return
-			}
-			expr, _ := field(lit.Lit, "MenuName")
-			rel := path
-			if r, err := filepath.Rel(uiDir, path); err == nil {
-				rel = r
-			}
-			out = append(out, s.finding(Warn, checkMenuName, sf, expr,
-				"menu_name %q does not match the component name %q declared in %s;\n"+
-					"    keep-alive caches by component name and the cache is configured by menu name, so the page silently stops being cached.%s",
-				menuName, declared, rel, heuristicNote))
+			out = append(out, menuNameFinding(s, sf, lit, uiDir)...)
 		})
 	}
 	return out, nil
@@ -128,4 +83,53 @@ func componentName(src string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func menuNameFinding(s *snapshot, sf *sourceFile, lit structLiteral, uiDir string) []Finding {
+	if !s.isMenuModel(lit) {
+		return nil
+	}
+	menuType, _ := stringField(sf, lit, "MenuType")
+	// A directory has no page of its own; its component is the layout.
+	if menuType == "M" || menuType == "F" {
+		return nil
+	}
+	component, ok := stringField(sf, lit, "Component")
+	if !ok || component == "" || component == "Layout" {
+		return nil
+	}
+	menuName, ok := stringField(sf, lit, "MenuName")
+	if !ok || menuName == "" {
+		return nil
+	}
+
+	path := componentFile(uiDir, component)
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		// A component the frontend does not carry is F2's business -
+		// the placeholder that says the app is not installed - not this
+		// check's.
+		return nil
+	}
+	declared, ok := componentName(string(b))
+	if !ok {
+		// No literal name at all: the build may derive one from the
+		// file path. Nothing to compare, so nothing to say.
+		return nil
+	}
+	if declared == menuName {
+		return nil
+	}
+	expr, _ := field(lit.Lit, "MenuName")
+	rel := path
+	if r, err := filepath.Rel(uiDir, path); err == nil {
+		rel = r
+	}
+	return []Finding{s.finding(Warn, checkMenuName, sf, expr,
+		"menu_name %q does not match the component name %q declared in %s;\n"+
+			"    keep-alive caches by component name and the cache is configured by menu name, so the page silently stops being cached.%s",
+		menuName, declared, rel, heuristicNote)}
 }

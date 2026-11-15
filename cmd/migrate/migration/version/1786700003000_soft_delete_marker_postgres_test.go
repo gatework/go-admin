@@ -17,7 +17,7 @@ import (
 // gorm's migrator works there and produces unparseable SQL on PostgreSQL. A
 // suite that only ever exercised SQLite reported success for a migration that
 // failed on every PostgreSQL database it was pointed at - go-admin#919.
-const postgresDSNEnv = "GO_ADMIN_TEST_POSTGRES_DSN"
+const postgresDSNEnv = "MOTOR_TEST_POSTGRES_DSN"
 
 func postgresDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -44,7 +44,7 @@ func postgresDB(t *testing.T) *gorm.DB {
 // pgOldUser is the pre-migration shape: a nullable timestamp with an index on
 // it, which is what makes dropping the column require dropping the index.
 type pgOldUser struct {
-	UserId    int64 `gorm:"column:user_id;primaryKey;autoIncrement"`
+	UserID    int64 `gorm:"column:user_id;primaryKey;autoIncrement"`
 	Username  string
 	DeletedAt *time.Time `gorm:"index"`
 }

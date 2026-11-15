@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	adminmodels "go-admin/app/admin/models"
-	"go-admin/app/network/grouping"
-	"go-admin/app/network/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	adminmodels "github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/net/models/grouping"
+	models "github.com/gatework/motor/app/net/models/inventory"
 )
 
 func deviceGroupMigrationDB(t *testing.T) *gorm.DB {
@@ -19,7 +20,7 @@ func deviceGroupMigrationDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysApi{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}); err != nil {
+	if err = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT,ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; err != nil {
@@ -35,10 +36,10 @@ func TestDeviceGroupsMigrationPreservesLegacyMetadataAndResumesBackfill(t *testi
 	db := deviceGroupMigrationDB(t)
 	legacyLabel := "  " + strings.Repeat("区", 126)
 	rows := []models.Device{
-		{SourceFacts: models.SourceFacts{IP: "192.0.2.1", Name: "SZX9-CSW1", SourceTags: []string{}}, LegacyGroup: legacyLabel, DeviceType: "router", DeviceRole: "other", Owner: "Alice", Tags: []string{"important"}, Notes: "keep", Version: 4},
-		{SourceFacts: models.SourceFacts{IP: "192.0.2.2", Name: "SHA-SW01", SourceTags: []string{}}, Tags: []string{}, Version: 1},
-		{SourceFacts: models.SourceFacts{IP: "192.0.2.3", Serial: "CKG-ASW1", SourceTags: []string{}}, Tags: []string{}, Version: 1},
-		{SourceFacts: models.SourceFacts{IP: "192.0.2.4", Name: "ordinary", Serial: "SZX9-FW1", SourceTags: []string{}}, Tags: []string{}, Version: 1},
+		{IP: "192.0.2.1", Name: "SZX9-CSW1", SourceTags: []string{}, LegacyGroup: legacyLabel, DeviceType: "router", DeviceRole: "other", Owner: "Alice", Tags: []string{"important"}, Notes: "keep", Version: 4},
+		{IP: "192.0.2.2", Name: "SHA-SW01", SourceTags: []string{}, Tags: []string{}, Version: 1},
+		{IP: "192.0.2.3", Serial: "CKG-ASW1", SourceTags: []string{}, Tags: []string{}, Version: 1},
+		{IP: "192.0.2.4", Name: "ordinary", Serial: "SZX9-FW1", SourceTags: []string{}, Tags: []string{}, Version: 1},
 	}
 	for i := range rows {
 		rows[i].SetCreateBy(7)
@@ -72,15 +73,15 @@ func TestDeviceGroupsMigrationPreservesLegacyMetadataAndResumesBackfill(t *testi
 	}
 	var group models.DeviceGroup
 	db.Where("code = ?", "site.shanghai").First(&group)
-	db.Model(&group).Updates(map[string]any{"name": "自定义区域", "description": "keep description", "enabled": false, "parent_id": legacy.Id, "position": 44})
-	db.Model(&models.Device{}).Where("id = ?", after[1].Id).Updates(map[string]any{"group_id": nil, "group_source": "manual", "classification_source": "manual", "device_type": "firewall", "device_role": "firewall"})
+	db.Model(&group).Updates(map[string]any{"name": "自定义区域", "description": "keep description", "enabled": false, "parent_id": legacy.ID, "position": 44})
+	db.Model(&models.Device{}).Where("id = ?", after[1].ID).Updates(map[string]any{"group_id": nil, "group_source": "manual", "classification_source": "manual", "device_type": "firewall", "device_role": "firewall"})
 	if err := seedDeviceGroups(db); err != nil {
 		t.Fatal(err)
 	}
 	var repeated models.Device
-	db.First(&repeated, after[1].Id)
-	db.First(&group, group.Id)
-	if repeated.GroupID != nil || repeated.GroupSource != "manual" || repeated.DeviceType != "firewall" || repeated.Version != after[1].Version || group.Name != "自定义区域" || group.Enabled || group.ParentID == nil || *group.ParentID != legacy.Id || group.Description != "keep description" || group.Position != 44 {
+	db.First(&repeated, after[1].ID)
+	db.First(&group, group.ID)
+	if repeated.GroupID != nil || repeated.GroupSource != "manual" || repeated.DeviceType != "firewall" || repeated.Version != after[1].Version || group.Name != "自定义区域" || group.Enabled || group.ParentID == nil || *group.ParentID != legacy.ID || group.Description != "keep description" || group.Position != 44 {
 		t.Fatalf("retry reset edits: %+v %+v", repeated, group)
 	}
 	var count int64
@@ -97,11 +98,11 @@ func TestDeviceGroupsMigrationBindsOnlyNeededRoleDependencies(t *testing.T) {
 		db.Create(&role)
 		var menu adminmodels.SysMenu
 		db.Where("app_code = 'network' AND seed_code = ?", item.menu).First(&menu)
-		if err := db.Exec("INSERT INTO sys_role_menu(role_id,menu_id) VALUES (?,?)", role.RoleId, menu.MenuId).Error; err != nil {
+		if err := db.Exec("INSERT INTO sys_role_menu(role_id,menu_id) VALUES (?,?)", role.RoleID, menu.MenuID).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := seedDeviceGroups(db); err != nil {
 			t.Fatal(err)
 		}
@@ -140,14 +141,14 @@ func TestDeviceGroupsMigrationBindsOnlyNeededRoleDependencies(t *testing.T) {
 
 func TestDeviceGroupsLegacyStandardRegionKeepsStableCodeAfterRename(t *testing.T) {
 	db := deviceGroupMigrationDB(t)
-	row := models.Device{SourceFacts: models.SourceFacts{IP: "192.0.2.1", Name: "SZX9-CSW1", SourceTags: []string{}}, LegacyGroup: "传音大厦", Tags: []string{}, Version: 1}
+	row := models.Device{IP: "192.0.2.1", Name: "SZX9-CSW1", SourceTags: []string{}, LegacyGroup: "传音大厦", Tags: []string{}, Version: 1}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := seedDeviceGroups(db); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.First(&row, row.Id).Error; err != nil {
+	if err := db.First(&row, row.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var group models.DeviceGroup
@@ -168,7 +169,7 @@ func TestDeviceGroupsLegacyStandardRegionKeepsStableCodeAfterRename(t *testing.T
 		t.Fatal(err)
 	}
 	resolved := groups.Resolve("SZX9-SW1", "", nil)
-	if resolved == nil || *resolved != group.Id {
+	if resolved == nil || *resolved != group.ID {
 		t.Fatalf("renamed standard target was lost: %v", resolved)
 	}
 }

@@ -1,10 +1,12 @@
 package dto
 
-import contractdto "github.com/go-admin-team/go-admin-core/v2/sdk/contract/dto"
+import contractdto "github.com/gatework/motor-core/sdk/contract/dto"
 
-// Index and Control are thin aliases of go-admin-core's sdk/contract/dto
+// Index and Control are thin aliases of motor-core's sdk/contract/dto
 // (PRD 006 F2/F5).
 type (
-	Index   = contractdto.Index
+	// Index uses the canonical core DTO contract.
+	Index = contractdto.Index
+	// Control uses the canonical core DTO contract.
 	Control = contractdto.Control
 )

@@ -3,9 +3,9 @@ package version
 import (
 	"testing"
 
-	common "go-admin/common/models"
+	common "github.com/gatework/motor/common/models"
 
-	adminmodels "go-admin/app/admin/models"
+	adminmodels "github.com/gatework/motor/app/admin/models"
 )
 
 // postgresDB is defined in 1786700003000_soft_delete_marker_postgres_test.go
@@ -55,7 +55,7 @@ func TestAppRegistryTablesAreCreatedOnPostgres(t *testing.T) {
 		t.Fatalf("insert sys_app_casbin_grant: %v", err)
 	}
 	dup := grant
-	dup.Id = 0
+	dup.ID = 0
 	if err := db.Create(&dup).Error; err == nil {
 		t.Fatal("a second sys_app_casbin_grant row with the same natural key was accepted on PostgreSQL")
 	}

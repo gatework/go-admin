@@ -2,7 +2,7 @@ settings:
   application:
     mode: dev
     host: 0.0.0.0
-    name: go-admin
+    name: motor
     port: 8000
     readtimeout: 30
     writertimeout: 30
@@ -13,16 +13,16 @@ settings:
     level: debug
     enableddb: true
   jwt:
-    secret: go-admin-docker-development-only
+    secret: motor-docker-development-only
     timeout: 3600
   database:
     driver: postgres
-    source: host=postgres port=5432 user=goadmin password=goadmin dbname=goadmin_development sslmode=disable TimeZone=Asia/Shanghai
+    source: host=postgres port=5432 user=motor password=motor dbname=motor_development sslmode=disable TimeZone=Asia/Shanghai
     maxIdleConns: 10
     maxOpenConns: 30
     connMaxLifeTime: 3600
   gen:
-    dbname: goadmin_development
+    dbname: motor_development
     frontpath: ../go-admin-ui/src
   extend:
     rateLimit:
@@ -40,6 +40,6 @@ settings:
     redis:
       addr: redis:6379
       db: 1
-      group: go-admin
-      key_prefix: go-admin
+      group: motor
+      key_prefix: motor
       max_attempts: 5

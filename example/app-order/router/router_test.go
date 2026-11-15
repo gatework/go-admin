@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	coreruntime "github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
+	jwt "github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk"
+	coreruntime "github.com/gatework/motor-core/sdk/runtime"
 )
 
 func testAuthMiddleware(t *testing.T) *jwt.GinJWTMiddleware {

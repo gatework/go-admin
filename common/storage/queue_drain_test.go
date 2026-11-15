@@ -2,16 +2,17 @@ package storage
 
 import (
 	"context"
-	"go-admin/common/health"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
+	"github.com/gatework/motor/common/health"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/runtime"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 // countingQueue stands in for an installed adapter. Only Shutdown is exercised
@@ -34,22 +35,17 @@ func newCountingQueue() *countingQueue {
 	return &countingQueue{started: make(chan struct{})}
 }
 
-func (q *countingQueue) Shutdown() {
+func (q *countingQueue) Shutdown(ctx context.Context) error {
 	q.startOnce.Do(func() { close(q.started) })
 	q.calls.Add(1)
 	if q.block != nil {
-		<-q.block
+		select {
+		case <-q.block:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-}
-
-// waitStarted blocks until Shutdown has been entered, or fails the test.
-func (q *countingQueue) waitStarted(t *testing.T) {
-	t.Helper()
-	select {
-	case <-q.started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Shutdown was never called")
-	}
+	return nil
 }
 
 // isolate gives the test its own runtime and its own view of what this package
@@ -64,36 +60,41 @@ func isolate(t *testing.T) {
 
 	prevProbe := health.SetCacheProbe(nil)
 	cacheMu.Lock()
-	previousCache := installedCache
-	installedCache = nil
+	previousCache, previousRetiringCache := installedCache, retiringCache
+	installedCache, retiringCache = nil, nil
 	cacheMu.Unlock()
 	lifecycleMu.Lock()
 	previousStopping := storageStopping
 	storageStopping = false
 	lifecycleMu.Unlock()
-	prevQ, prevC := config.QueueConfig, config.CacheConfig
+	prevQ, prevC := testQueueConfig, testCacheConfig
+	prevSubscribe := testSubscribe
 	prevRuntime := sdk.Runtime
 	queueMu.Lock()
 	prevInstalled, prevGen, prevRegistered := installed, installedGen, drainRegistered
+	prevRetiringQueue := retiringQueue
+	retiringQueue = nil
 	queueMu.Unlock()
 
 	t.Cleanup(func() {
 		_ = shutdownCache(context.Background())
 		cacheMu.Lock()
-		installedCache = previousCache
+		installedCache, retiringCache = previousCache, previousRetiringCache
 		cacheMu.Unlock()
 		health.SetCacheProbe(prevProbe)
 		lifecycleMu.Lock()
 		storageStopping = previousStopping
 		lifecycleMu.Unlock()
-		config.QueueConfig, config.CacheConfig = prevQ, prevC
+		testQueueConfig, testCacheConfig = prevQ, prevC
+		testSubscribe = prevSubscribe
 		sdk.Runtime = prevRuntime
 		queueMu.Lock()
 		installed, installedGen, drainRegistered = prevInstalled, prevGen, prevRegistered
+		retiringQueue = prevRetiringQueue
 		queueMu.Unlock()
 	})
 
-	sdk.Runtime = runtime.NewConfig()
+	sdk.Runtime = runtime.New()
 	queueMu.Lock()
 	installed, drainRegistered = nil, false
 	queueMu.Unlock()
@@ -104,13 +105,13 @@ func isolate(t *testing.T) {
 // Legitimate because the callback reads `installed` when it runs rather than
 // capturing it at registration - that is the property that lets a reload
 // replace the adapter and still have the right one drained.
-func setInstalled(q interface{ Shutdown() }) {
+func setInstalled(q shutdowner) {
 	queueMu.Lock()
 	installed = q
 	queueMu.Unlock()
 }
 
-func currentInstalled() interface{ Shutdown() } {
+func currentInstalled() shutdowner {
 	queueMu.Lock()
 	defer queueMu.Unlock()
 	return installed
@@ -124,12 +125,12 @@ func currentInstalled() interface{ Shutdown() } {
 // times the callback was registered; see the test below for that.
 func TestSetupPutsTheQueueDrainOnBeforeExit(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
 
-	Setup()
-	Setup()
-	Setup()
+	setupStorage(t)
+	setupStorage(t)
+	setupStorage(t)
 
 	q := newCountingQueue()
 	setInstalled(q)
@@ -161,12 +162,12 @@ func TestSetupRegistersTheDrainOncePerProcessHoweverManyReloads(t *testing.T) {
 	registrations := 0
 	setShutdown = func(func(context.Context)) { registrations++ }
 
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
 
-	Setup()
-	Setup()
-	Setup()
+	setupStorage(t)
+	setupStorage(t)
+	setupStorage(t)
 
 	if registrations != 1 {
 		t.Errorf("three reloads registered the drain %d times, want 1", registrations)
@@ -179,9 +180,9 @@ func TestSetupRegistersTheDrainOncePerProcessHoweverManyReloads(t *testing.T) {
 // to since.
 func TestTheDrainRunsAgainstTheAdapterInstalledLast(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
-	Setup()
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	setupStorage(t)
 
 	first, second := newCountingQueue(), newCountingQueue()
 	setInstalled(first)
@@ -204,9 +205,9 @@ func TestTheDrainRunsAgainstTheAdapterInstalledLast(t *testing.T) {
 // default backend participate in shutdown just like configured backends.
 func TestDefaultConfigurationInstallsAnOwnedQueue(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{}
-	Setup()
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{}
+	setupStorage(t)
 	if currentInstalled() == nil {
 		t.Fatal("default queue has no lifecycle owner")
 	}
@@ -275,10 +276,10 @@ type runtimeQueue struct {
 	countingQueue
 }
 
-func (q *runtimeQueue) String() string                            { return "runtime-fake" }
-func (q *runtimeQueue) Append(corestorage.Messager) error         { return nil }
-func (q *runtimeQueue) Register(string, corestorage.ConsumerFunc) {}
-func (q *runtimeQueue) Run()                                      {}
+func (q *runtimeQueue) String() string                                               { return "runtime-fake" }
+func (q *runtimeQueue) Publish(context.Context, corestorage.Message) error           { return nil }
+func (q *runtimeQueue) Subscribe(context.Context, string, corestorage.Handler) error { return nil }
+func (q *runtimeQueue) Run(context.Context) error                                    { return nil }
 
 // The drain must not reach a queue this package did not install.
 //
@@ -295,12 +296,12 @@ func TestTheDrainNeverReachesTheRuntimesOwnQueue(t *testing.T) {
 	isolate(t)
 
 	onTheRuntime := &runtimeQueue{countingQueue: *newCountingQueue()}
-	sdk.Runtime.SetQueueAdapter(onTheRuntime)
+	sdk.Runtime.SetQueue(onTheRuntime)
 
 	if currentInstalled() != nil {
 		t.Fatal("this package installed something, so the distinction under test is not set up")
 	}
-	if sdk.Runtime.GetQueueAdapter() == nil {
+	if sdk.Runtime.Queue() == nil {
 		t.Fatal("the accessor returned nil, so it is no longer the trap this guards")
 	}
 
@@ -327,7 +328,7 @@ func TestATieBetweenTheDeadlineAndTheDrainGoesToTheDrain(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		if !finishedBeforeDeadline(expired, done) {
 			t.Fatalf("iteration %d of 1000: both the deadline and the drain were ready and the "+
 				"deadline won - a drain that completed is being reported as an overrun", i)
@@ -347,5 +348,15 @@ func TestADrainThatHasNotFinishedIsReportedAsAnOverrun(t *testing.T) {
 
 	if finishedBeforeDeadline(expired, stillRunning) {
 		t.Error("an unfinished drain was reported as having finished in time")
+	}
+}
+
+// waitStarted blocks until Shutdown has been entered, or fails the test.
+func (q *countingQueue) waitStarted(t *testing.T) {
+	t.Helper()
+	select {
+	case <-q.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown was never called")
 	}
 }

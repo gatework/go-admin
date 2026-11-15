@@ -3,17 +3,22 @@ package version
 import (
 	"runtime"
 
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
-	adminmodels "go-admin/app/admin/models"
-	_ "go-admin/app/admin/service"
-	networkmodels "go-admin/app/network/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
+	adminmodels "github.com/gatework/motor/app/admin/models"
+
+	// Registers the host menu seeder before migrations run.
+	_ "github.com/gatework/motor/app/admin/service"
+	networkmodels "github.com/gatework/motor/app/net/models/inventory"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, file, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(file), _1793000000000NetworkCircuits)
@@ -32,17 +37,17 @@ func seedNetworkCircuits(db *gorm.DB) error {
 		if err := advanceNetworkSeedSequences(tx); err != nil {
 			return err
 		}
-		if err := seed.SeedMenus(tx, "network", []seed.MenuSpec{
+		if err := seed.Menus(tx, "network", []seed.MenuSpec{
 			{Code: "management", Kind: contractmodels.Directory, Title: "网络管理", Path: "/network", Component: "Layout", Icon: "branch", Sort: 30},
-			{Code: "circuit-manage", Parent: "management", Kind: contractmodels.Menu, Title: "专线管理", Path: "/network/circuit", Component: "/network/circuit/index", Icon: "swap", Sort: 3, ApiCodes: []string{"circuit-list", "circuit-options"}},
-			{Code: "circuit-list", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查询专线", Permission: "network:circuit:list", Sort: 1, ApiCodes: []string{"circuit-list", "circuit-options"}},
-			{Code: "circuit-query", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查看专线", Permission: "network:circuit:query", Sort: 2, ApiCodes: []string{"circuit-query"}},
-			{Code: "circuit-add", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "新增专线", Permission: "network:circuit:add", Sort: 3, ApiCodes: []string{"circuit-add", "circuit-options", "circuit-hosts", "circuit-items", "device-list"}},
-			{Code: "circuit-edit", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "编辑专线", Permission: "network:circuit:edit", Sort: 4, ApiCodes: []string{"circuit-edit", "circuit-query", "circuit-options", "circuit-hosts", "circuit-items", "device-list"}},
-			{Code: "circuit-remove", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "删除规划中专线", Permission: "network:circuit:remove", Sort: 5, ApiCodes: []string{"circuit-remove"}},
-			{Code: "circuit-export", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "导出专线", Permission: "network:circuit:export", Sort: 6, ApiCodes: []string{"circuit-export"}},
-			{Code: "circuit-traffic", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查看流量", Permission: "network:circuit:traffic", Sort: 7, ApiCodes: []string{"circuit-traffic"}},
-		}, []seed.ApiSpec{
+			{Code: "circuit-manage", Parent: "management", Kind: contractmodels.Menu, Title: "专线管理", Path: "/network/circuit", Component: "/network/circuit/index", Icon: "swap", Sort: 3, APICodes: []string{"circuit-list", "circuit-options"}},
+			{Code: "circuit-list", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查询专线", Permission: "network:circuit:list", Sort: 1, APICodes: []string{"circuit-list", "circuit-options"}},
+			{Code: "circuit-query", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查看专线", Permission: "network:circuit:query", Sort: 2, APICodes: []string{"circuit-query"}},
+			{Code: "circuit-add", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "新增专线", Permission: "network:circuit:add", Sort: 3, APICodes: []string{"circuit-add", "circuit-options", "circuit-hosts", "circuit-items", "device-list"}},
+			{Code: "circuit-edit", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "编辑专线", Permission: "network:circuit:edit", Sort: 4, APICodes: []string{"circuit-edit", "circuit-query", "circuit-options", "circuit-hosts", "circuit-items", "device-list"}},
+			{Code: "circuit-remove", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "删除规划中专线", Permission: "network:circuit:remove", Sort: 5, APICodes: []string{"circuit-remove"}},
+			{Code: "circuit-export", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "导出专线", Permission: "network:circuit:export", Sort: 6, APICodes: []string{"circuit-export"}},
+			{Code: "circuit-traffic", Parent: "circuit-manage", Kind: contractmodels.Button, Title: "查看流量", Permission: "network:circuit:traffic", Sort: 7, APICodes: []string{"circuit-traffic"}},
+		}, []seed.APISpec{
 			{Code: "circuit-list", Title: "专线台账列表", Path: "/api/v1/network-circuit", Method: "GET", Handle: "go-admin/app/network/apis.Circuit.GetPage-fm"},
 			{Code: "circuit-query", Title: "专线详情", Path: "/api/v1/network-circuit/:id", Method: "GET", Handle: "go-admin/app/network/apis.Circuit.Get-fm"},
 			{Code: "circuit-add", Title: "新增专线", Path: "/api/v1/network-circuit", Method: "POST", Handle: "go-admin/app/network/apis.Circuit.Create-fm"},

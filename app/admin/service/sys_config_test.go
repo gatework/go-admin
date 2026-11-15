@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/logger"
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/app/admin/service/dto"
+	"github.com/gatework/motor-core/logger"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
 )
 
 func configDictDB(t *testing.T) *gorm.DB {
@@ -99,28 +100,28 @@ func checkConfigDictUpdateBoundaries(t *testing.T, tc configDictUpdateCase) {
 
 func TestConfigUpdateBoundaries(t *testing.T) {
 	row := &models.SysConfig{}
-	row.Id = 1
+	row.ID = 1
 	row.ConfigKey = "one"
 	checkConfigDictUpdateBoundaries(t, configDictUpdateCase{table: "sys_config", model: row, update: func(db *gorm.DB, id int) error {
 		s := &SysConfig{}
-		s.Orm = db
-		s.Log = logger.NewHelper(logger.DefaultLogger)
-		return s.Update(&dto.SysConfigControl{Id: id, ConfigKey: "one", ConfigValue: "changed"})
+		s.DB = db
+		s.Logger = logger.NewHelper(logger.Default())
+		return s.Update(&dto.SysConfigControl{ID: id, ConfigKey: "one", ConfigValue: "changed"})
 	}})
 }
 
 func TestConfigUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
 	db := configDictDB(t)
-	row := models.SysConfig{ConfigKey: "one", ConfigValue: "old", Remark: "old"}
-	row.Id = 1
-	row.CreateBy = 10
+	row := models.SysConfig{ConfigKey: "one", ConfigValue: "old", Remark: "old",
+		ID:       1,
+		CreateBy: 10}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	s := &SysConfig{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
-	req := &dto.SysConfigControl{Id: 1, ConfigKey: "one"}
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
+	req := &dto.SysConfigControl{ID: 1, ConfigKey: "one"}
 	req.CreateBy = 999
 	req.UpdateBy = 20
 	if err := s.Update(req); err != nil {
@@ -176,8 +177,8 @@ func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 					req[1].ConfigKey = "missing"
 				}
 				s := &SysConfig{}
-				s.Orm = db
-				s.Log = logger.NewHelper(logger.DefaultLogger)
+				s.DB = db
+				s.Logger = logger.NewHelper(logger.Default())
 				var err error
 				if method == "SetSysConfig" {
 					err = s.SetSysConfig(&req)
@@ -195,7 +196,7 @@ func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 					t.Fatalf("injected error lost: %v", err)
 				}
 				var got models.SysConfig
-				if err := db.First(&got, rows[0].Id).Error; err != nil {
+				if err := db.First(&got, rows[0].ID).Error; err != nil {
 					t.Fatal(err)
 				}
 				want := "old"
@@ -227,8 +228,8 @@ func TestConfigGetWithKeyExcludesDeletedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &SysConfig{}
-	s.Orm = db
-	s.Log = logger.NewHelper(logger.DefaultLogger)
+	s.DB = db
+	s.Logger = logger.NewHelper(logger.Default())
 	var got dto.GetSysConfigByKEYForServiceResp
 	if err := s.GetWithKey(&dto.SysConfigByKeyReq{ConfigKey: "deleted"}, &got); err == nil {
 		t.Fatalf("deleted config returned: %+v", got)
@@ -244,14 +245,14 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 			switch name {
 			case "config":
 				s := &SysConfig{}
-				s.Orm = db
-				s.Log = logger.NewHelper(logger.DefaultLogger)
+				s.DB = db
+				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.SysConfigControl{ConfigKey: "new"}
 				req.CreateBy = 42
 				if err := s.Insert(req); err != nil {
 					t.Fatal(err)
 				}
-				id = req.Id
+				id = req.ID
 				var row models.SysConfig
 				if err := db.First(&row).Error; err != nil {
 					t.Fatal(err)
@@ -262,14 +263,14 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 					t.Fatal(err)
 				}
 				s := &SysDictData{}
-				s.Orm = db
-				s.Log = logger.NewHelper(logger.DefaultLogger)
+				s.DB = db
+				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.SysDictDataInsertReq{DictType: "new"}
 				req.CreateBy = 42
 				if err := s.Insert(req); err != nil {
 					t.Fatal(err)
 				}
-				id = req.Id
+				id = req.ID
 				var row models.SysDictData
 				if err := db.First(&row).Error; err != nil {
 					t.Fatal(err)
@@ -277,14 +278,14 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				creator = row.CreateBy
 			case "dict type":
 				s := &SysDictType{}
-				s.Orm = db
-				s.Log = logger.NewHelper(logger.DefaultLogger)
+				s.DB = db
+				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.SysDictTypeInsertReq{DictType: "new"}
 				req.CreateBy = 42
 				if err := s.Insert(req); err != nil {
 					t.Fatal(err)
 				}
-				id = req.Id
+				id = req.ID
 				var row models.SysDictType
 				if err := db.First(&row).Error; err != nil {
 					t.Fatal(err)
@@ -299,7 +300,7 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 }
 
 func TestConfigSetReturnsCommitFailure(t *testing.T) {
-	if os.Getenv("GO_ADMIN_TEST_POSTGRES_DSN") == "" {
+	if os.Getenv("MOTOR_TEST_POSTGRES_DSN") == "" {
 		t.Skip("PostgreSQL required for deferred commit failure")
 	}
 	for _, method := range []string{"SetSysConfig", "UpdateForSet"} {
@@ -316,8 +317,8 @@ func TestConfigSetReturnsCommitFailure(t *testing.T) {
 			}
 			req := []dto.GetSetSysConfigReq{{ConfigKey: "one", ConfigValue: "changed"}}
 			s := &SysConfig{}
-			s.Orm = db
-			s.Log = logger.NewHelper(logger.DefaultLogger)
+			s.DB = db
+			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if method == "SetSysConfig" {
 				err = s.SetSysConfig(&req)
@@ -328,7 +329,7 @@ func TestConfigSetReturnsCommitFailure(t *testing.T) {
 				t.Fatalf("commit error=%v", err)
 			}
 			var got models.SysConfig
-			if err := db.First(&got, row.Id).Error; err != nil {
+			if err := db.First(&got, row.ID).Error; err != nil {
 				t.Fatal(err)
 			}
 			if got.ConfigValue != "original" {

@@ -1,15 +1,15 @@
 package models
 
 import (
-orm "go-admin/global"
-"go-admin/utils"
+orm "motor/global"
+"motor/utils"
 "time"
 )
 
 type {{.ClassName}} struct {
 
 {{ range .Columns -}}
-    {{$x := .Pk}}
+    {{$x := .PK}}
     // {{.ColumnComment}}
     {{if ($x)}}{{.GoField}} {{.GoType}} `json:"{{.JsonField}}" gorm:"column:{{.ColumnName}};primary_key"`{{else}}{{.GoField}} {{.GoType}} `json:"{{.JsonField}}" gorm:"column:{{.ColumnName}};"`{{end}}
 {{ end -}}
@@ -78,7 +78,7 @@ return doc, count, nil
 
 // 更新{{.ClassName}}
 func (e *{{.ClassName}}) Update(id int) (update {{.ClassName}}, err error) {
-if err = orm.Eloquent.Table("{{.TableName}}").Where("{{.PkColumn}} = ?", id).First(&update).Error; err != nil {
+if err = orm.Eloquent.Table("{{.TableName}}").Where("{{.PKColumn}} = ?", id).First(&update).Error; err != nil {
 return
 }
 
@@ -93,7 +93,7 @@ return
 // 删除{{.ClassName}}
 func (e *{{.ClassName}}) Delete(id int) (success bool, err error) {
 
-if err = orm.Eloquent.Table("{{.TableName}}").Where("{{.PkColumn}} = ?", id).Delete(&{{.ClassName}}{}).Error; err != nil {
+if err = orm.Eloquent.Table("{{.TableName}}").Where("{{.PKColumn}} = ?", id).Delete(&{{.ClassName}}{}).Error; err != nil {
 success = false
 return
 }

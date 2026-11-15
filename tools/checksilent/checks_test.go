@@ -14,7 +14,7 @@ import (
 func fixture(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
-	files["go.mod"] = "module go-admin\n\ngo 1.26\n"
+	files["go.mod"] = "module motor\n\ngo 1.26\n"
 	for name, content := range files {
 		path := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -100,7 +100,7 @@ func TestModelTimeMixDetectsARuntimeModelOnTheFrozenShape(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"app/shop/models/product.go": `package models
 
-import frozen "go-admin/cmd/migrate/migration/models"
+import frozen "motor/cmd/migrate/migration/models"
 
 type Product struct {
 	Id int
@@ -128,7 +128,7 @@ func TestModelTimeMixDetectsAPostConversionMigrationOnTheFrozenPackage(t *testin
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version-local/1786700009000_seed.go": `package version_local
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() interface{} { return &models.SysMenu{} }
 `,
@@ -150,7 +150,7 @@ func TestModelTimeMixLeavesPreConversionMigrationsAlone(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() interface{} { return &models.SysMenu{} }
 `,
@@ -167,7 +167,7 @@ func TestMenuSortOverflowIsDetectedThroughAnElidedSliceLiteral(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() []models.SysMenu {
 	return []models.SysMenu{
@@ -197,9 +197,9 @@ func TestMenuSortIgnoresSameNamedTypesFromOtherPackages(t *testing.T) {
 
 type SysMenu struct{ Sort int }
 `,
-		"app/admin/apis/sys_menu.go": `package apis
+		"app/admin/handler/sys_menu.go": `package handler
 
-import "go-admin/app/admin/service"
+import "motor/app/admin/service"
 
 func handler() interface{} { return service.SysMenu{Sort: 9000} }
 `,
@@ -216,7 +216,7 @@ func TestConfigValueTruncationIsDetected(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() models.SysConfig {
 	return models.SysConfig{ConfigKey: "k", ConfigValue: "` + strings.Repeat("a", 300) + `"}
@@ -237,7 +237,7 @@ func TestConfigValueCountsRunesNotBytes(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() models.SysConfig {
 	return models.SysConfig{ConfigValue: "` + strings.Repeat("中", 200) + `"}
@@ -256,7 +256,7 @@ func TestMenuIDCollisionAcrossFilesIsDetectedThroughConstants(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_crm.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 const crmMenuId = 9000
 
@@ -264,7 +264,7 @@ func seedCrm() models.SysMenu { return models.SysMenu{MenuId: crmMenuId, MenuNam
 `,
 		"cmd/migrate/migration/version/1786700002000_oms.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seedOms() models.SysMenu { return models.SysMenu{MenuId: 9000, MenuName: "OMS"} }
 `,
@@ -288,7 +288,7 @@ func TestMenuIDRepeatedWithinOneFileIsNotACollision(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_crm.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() []models.SysMenu {
 	dir := models.SysMenu{MenuId: 9000, MenuName: "CRM"}
@@ -312,7 +312,7 @@ const OperaStatusEnabel = "1"
 `,
 		"common/middleware/logger.go": `package middleware
 
-import "go-admin/app/admin/service/dto"
+import "motor/app/admin/service/dto"
 
 func status() string { return dto.OperaStatusEnabel }
 `,
@@ -322,7 +322,7 @@ func status() string { return dto.OperaStatusEnabel }
 	if f.Severity != "ERROR" {
 		t.Errorf("severity = %s", f.Severity)
 	}
-	if !strings.Contains(f.Message, "go-admin/app/admin/service/dto") {
+	if !strings.Contains(f.Message, "motor/app/admin/service/dto") {
 		t.Errorf("message = %s", f.Message)
 	}
 	if f.File != "common/middleware/logger.go" || f.Line != 3 {
@@ -337,7 +337,7 @@ func TestContractImportBoundaryCoversTestFiles(t *testing.T) {
 		"app/admin/models/user.go": "package models\n\ntype SysUser struct{}\n",
 		"common/actions/permission_test.go": `package actions
 
-import "go-admin/app/admin/models"
+import "motor/app/admin/models"
 
 var _ = models.SysUser{}
 `,
@@ -352,7 +352,7 @@ func TestContractImportBoundaryAllowsAppToImportCommon(t *testing.T) {
 		"common/models/by.go": "package models\n\ntype ControlBy struct{}\n",
 		"app/demo/models/product.go": `package models
 
-import "go-admin/common/models"
+import "motor/common/models"
 
 type Product struct{ models.ControlBy }
 `,
@@ -370,7 +370,7 @@ func menuNameFixture(t *testing.T, menuName, componentName string) (string, stri
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() models.SysMenu {
 	return models.SysMenu{MenuId: 9001, MenuName: "` + menuName + `", MenuType: "C", Component: "/demo/product/index"}
@@ -455,7 +455,7 @@ func TestComponentNameParsesBothVueStyles(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 
-const coreContractModels = "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
+const coreContractModels = "github.com/gatework/motor-core/sdk/contract/models"
 
 // shimFixture writes one shim file declaring ControlBy from core's contract
 // package, in whichever of the two forms the caller asks for.
@@ -514,7 +514,7 @@ func TestShimAliasIgnoresOtherPackages(t *testing.T) {
 	root := fixture(t, map[string]string{
 		"app/demo/models/product.go": `package models
 
-import "go-admin/common/models"
+import "motor/common/models"
 
 type Product models.Model
 `,
@@ -531,7 +531,7 @@ func TestShimAliasSurvivesACoreMajorVersionBump(t *testing.T) {
 	root := fixture(t, map[string]string{
 		"common/models/by.go": `package models
 
-import "github.com/go-admin-team/go-admin-core/v9/sdk/contract/models"
+import "github.com/gatework/motor-core/v9/sdk/contract/models"
 
 type ControlBy models.ControlBy
 `,
@@ -587,7 +587,7 @@ func TestMenuSortOverflowIsDetectedInAContractMenuSpec(t *testing.T) {
 	root := fixture(t, map[string]string{
 		"example/app-order/migration/migration.go": `package migration
 
-import "github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
+import "github.com/gatework/motor-core/sdk/contract/seed"
 
 func menus() []seed.MenuSpec {
 	return []seed.MenuSpec{
@@ -612,7 +612,7 @@ func TestSeededValueChecksSkipTestFiles(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"app/admin/service/seed_test.go": `package service
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func fixtureMenus() []models.SysMenu {
 	return []models.SysMenu{
@@ -634,7 +634,7 @@ func TestSeededValueChecksStillCoverNonTestFiles(t *testing.T) {
 		"cmd/migrate/migration/models/models.go": frozenModelsPkg,
 		"cmd/migrate/migration/version/1786700001000_seed.go": `package version
 
-import "go-admin/cmd/migrate/migration/models"
+import "motor/cmd/migrate/migration/models"
 
 func seed() []models.SysMenu {
 	return []models.SysMenu{

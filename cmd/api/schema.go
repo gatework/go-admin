@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
 	"gorm.io/gorm"
 
-	"go-admin/cmd/migrate/migration"
-	"go-admin/common/health"
-	commonmodels "go-admin/common/models"
+	"github.com/gatework/motor-core/sdk"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	"github.com/gatework/motor/common/health"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // schemaCheckName is what a failing schema reports itself as in /ready's body.
@@ -57,7 +58,7 @@ func schemaCheck(ctx context.Context) error {
 	}
 
 	behind := make([]string, 0, 2)
-	for name, db := range sdk.Runtime.GetAllDb() {
+	for name, db := range sdk.Runtime.Databases() {
 		applied, err := appliedVersions(ctx, db)
 		if err != nil {
 			return fmt.Errorf("reading applied migrations for %q: %w", name, err)
@@ -71,7 +72,7 @@ func schemaCheck(ctx context.Context) error {
 		return nil
 	}
 	sort.Strings(behind)
-	return fmt.Errorf("%s; run `go-admin migrate -c <config>` and see `go-admin migrate status`",
+	return fmt.Errorf("%s; run `motor migrate -c <config>` and see `motor migrate status`",
 		strings.Join(behind, "; "))
 }
 

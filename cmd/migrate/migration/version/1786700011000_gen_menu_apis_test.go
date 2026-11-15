@@ -9,12 +9,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"go-admin/app/admin/models"
+	"github.com/gatework/motor/app/admin/models"
 )
 
 const (
-	genMenuId  = 261
-	editMenuId = 262
+	genMenuID  = 261
+	editMenuID = 262
 )
 
 // openGenMenuDB builds the tables bindGenMenuApis reads and writes, with the
@@ -27,7 +27,7 @@ func openGenMenuDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(new(models.SysApi), new(models.SysMenu), new(models.SysRole)); err != nil {
+	if err := db.AutoMigrate(new(models.SysAPI), new(models.SysMenu), new(models.SysRole)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`CREATE TABLE casbin_rule (id integer primary key autoincrement,
@@ -35,8 +35,8 @@ func openGenMenuDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	for _, m := range []models.SysMenu{
-		{MenuId: genMenuId, MenuName: "Gen", Component: "/dev-tools/gen/index", MenuType: "C"},
-		{MenuId: editMenuId, MenuName: "EditTable", Component: "/dev-tools/gen/editTable", MenuType: "C"},
+		{MenuID: genMenuID, MenuName: "Gen", Component: "/dev-tools/gen/index", MenuType: "C"},
+		{MenuID: editMenuID, MenuName: "EditTable", Component: "/dev-tools/gen/editTable", MenuType: "C"},
 	} {
 		if err := db.Create(&m).Error; err != nil {
 			t.Fatal(err)
@@ -47,7 +47,7 @@ func openGenMenuDB(t *testing.T) *gorm.DB {
 
 func addRole(t *testing.T, db *gorm.DB, id int, key string, menus ...int) {
 	t.Helper()
-	if err := db.Create(&models.SysRole{RoleId: id, RoleKey: key, RoleName: key}).Error; err != nil {
+	if err := db.Create(&models.SysRole{RoleID: id, RoleKey: key, RoleName: key}).Error; err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range menus {
@@ -71,26 +71,26 @@ func policies(t *testing.T, db *gorm.DB, role string) []string {
 	return out
 }
 
-func boundApis(t *testing.T, db *gorm.DB, menuId int) int {
+func boundAPIs(t *testing.T, db *gorm.DB, menuID int) int {
 	t.Helper()
-	menu := models.SysMenu{MenuId: menuId}
-	return int(db.Model(&menu).Association("SysApi").Count())
+	menu := models.SysMenu{MenuID: menuID}
+	return int(db.Model(&menu).Association("SysAPI").Count())
 }
 
-func TestGenMenuApisGrantsWhatARoleAlreadyHolds(t *testing.T) {
+func TestGenMenuAPIsGrantsWhatARoleAlreadyHolds(t *testing.T) {
 	db := openGenMenuDB(t)
-	addRole(t, db, 2, "developer", genMenuId, editMenuId)
-	addRole(t, db, 3, "editor", editMenuId)
+	addRole(t, db, 2, "developer", genMenuID, editMenuID)
+	addRole(t, db, 3, "editor", editMenuID)
 	addRole(t, db, 4, "clerk")
 
-	if err := bindGenMenuApis(db); err != nil {
+	if err := bindGenMenuAPIs(db); err != nil {
 		t.Fatal(err)
 	}
 
-	if n := boundApis(t, db, genMenuId); n != 9 {
+	if n := boundAPIs(t, db, genMenuID); n != 9 {
 		t.Errorf("代码生成 is bound to %d APIs, want 9", n)
 	}
-	if n := boundApis(t, db, editMenuId); n != 4 {
+	if n := boundAPIs(t, db, editMenuID); n != 4 {
 		t.Errorf("代码生成修改 is bound to %d APIs, want 4", n)
 	}
 	if got := policies(t, db, "developer"); len(got) != 13 {
@@ -112,39 +112,39 @@ func TestGenMenuApisGrantsWhatARoleAlreadyHolds(t *testing.T) {
 
 // The seed data already registers most of these APIs. Binding must point at
 // those rows, not add a second row per API next to each.
-func TestGenMenuApisReusesRegisteredApis(t *testing.T) {
+func TestGenMenuAPIsReusesRegisteredAPIs(t *testing.T) {
 	db := openGenMenuDB(t)
-	seeded := models.SysApi{Id: 32, Title: "数据库表生成到项目", Path: "/api/v1/gen/toproject/:tableId", Action: "GET", Type: "SYS"}
+	seeded := models.SysAPI{ID: 32, Title: "数据库表生成到项目", Path: "/api/v1/gen/toproject/:tableId", Action: "GET", Type: "SYS"}
 	if err := db.Create(&seeded).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bindGenMenuApis(db); err != nil {
+	if err := bindGenMenuAPIs(db); err != nil {
 		t.Fatal(err)
 	}
 
 	var n int64
-	db.Model(&models.SysApi{}).Where("path = ? AND action = ?", seeded.Path, seeded.Action).Count(&n)
+	db.Model(&models.SysAPI{}).Where("path = ? AND action = ?", seeded.Path, seeded.Action).Count(&n)
 	if n != 1 {
 		t.Errorf("%d rows for %s, want the seeded one only", n, seeded.Path)
 	}
 	var total int64
-	db.Model(&models.SysApi{}).Count(&total)
+	db.Model(&models.SysAPI{}).Count(&total)
 	if total != 13 {
 		t.Errorf("sys_api holds %d rows, want 13: the 12 missing created and the seeded one reused", total)
 	}
 }
 
-func TestGenMenuApisRunTwiceAddsNothing(t *testing.T) {
+func TestGenMenuAPIsRunTwiceAddsNothing(t *testing.T) {
 	db := openGenMenuDB(t)
-	addRole(t, db, 2, "developer", genMenuId, editMenuId)
+	addRole(t, db, 2, "developer", genMenuID, editMenuID)
 
-	for i := 0; i < 2; i++ {
-		if err := bindGenMenuApis(db); err != nil {
+	for i := range 2 {
+		if err := bindGenMenuAPIs(db); err != nil {
 			t.Fatalf("run %d: %v", i+1, err)
 		}
 	}
-	if n := boundApis(t, db, genMenuId); n != 9 {
+	if n := boundAPIs(t, db, genMenuID); n != 9 {
 		t.Errorf("代码生成 is bound to %d APIs after two runs, want 9", n)
 	}
 	if got := policies(t, db, "developer"); len(got) != 13 {
@@ -152,21 +152,21 @@ func TestGenMenuApisRunTwiceAddsNothing(t *testing.T) {
 	}
 }
 
-func TestGenMenuApisSkipsADeletedMenuAndADeletedRole(t *testing.T) {
+func TestGenMenuAPIsSkipsADeletedMenuAndADeletedRole(t *testing.T) {
 	db := openGenMenuDB(t)
-	if err := db.Delete(&models.SysMenu{MenuId: editMenuId}).Error; err != nil {
+	if err := db.Delete(&models.SysMenu{MenuID: editMenuID}).Error; err != nil {
 		t.Fatal(err)
 	}
-	addRole(t, db, 5, "gone", genMenuId)
+	addRole(t, db, 5, "gone", genMenuID)
 	if err := db.Model(&models.SysRole{}).Where("role_id = ?", 5).
 		Update("deleted_at", time.Now().UnixMilli()).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bindGenMenuApis(db); err != nil {
+	if err := bindGenMenuAPIs(db); err != nil {
 		t.Fatal(err)
 	}
-	if n := boundApis(t, db, editMenuId); n != 0 {
+	if n := boundAPIs(t, db, editMenuID); n != 0 {
 		t.Errorf("a deleted menu was bound to %d APIs", n)
 	}
 	if got := policies(t, db, "gone"); len(got) != 0 {

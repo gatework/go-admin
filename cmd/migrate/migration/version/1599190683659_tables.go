@@ -1,16 +1,18 @@
 package version
 
 import (
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"runtime"
 
-	"go-admin/cmd/migrate/migration"
-	"go-admin/cmd/migrate/migration/models"
-	common "go-admin/common/models"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	"github.com/gatework/motor/cmd/migrate/migration/models"
+	common "github.com/gatework/motor/common/models"
 
 	"gorm.io/gorm"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1599190683659Tables)
@@ -18,7 +20,7 @@ func init() {
 
 func _1599190683659Tables(db *gorm.DB, version string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if config.DatabaseConfig.Driver == "mysql" {
+		if config.Current().Settings.Database.Driver == "mysql" {
 			tx = tx.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
 		}
 		err := tx.Migrator().AutoMigrate(
@@ -37,13 +39,13 @@ func _1599190683659Tables(db *gorm.DB, version string) error {
 			new(models.DictType),
 			new(models.SysJob),
 			new(models.SysConfig),
-			new(models.SysApi),
+			new(models.SysAPI),
 			new(models.TbDemo),
 		)
 		if err != nil {
 			return err
 		}
-		if err := models.InitDb(tx); err != nil {
+		if err := models.InitDB(tx); err != nil {
 			return err
 		}
 		return tx.Create(&common.Migration{

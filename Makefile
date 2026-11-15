@@ -1,4 +1,4 @@
-PROJECT:=go-admin
+PROJECT:=motor
 
 .PHONY: build
 build:
@@ -6,7 +6,7 @@ build:
 
 # make build-linux
 build-linux:
-	@docker build -t go-admin:latest .
+	@docker build -t motor:latest .
 	@echo "build successful"
 
 build-sqlite:
@@ -14,7 +14,7 @@ build-sqlite:
 
 # make run
 run:
-    # delete go-admin-api container
+    # delete motor-api container
     #
     # stop then rm, rather than `rm -f`. The force flag kills a running
     # container with SIGKILL and no grace at all, so restarting locally cut
@@ -24,34 +24,30 @@ run:
     # docker-stop-cuts-shutdown-short check compares it against
     # config/settings.yml. On a container that has already stopped, stop is a
     # no-op and the removal is unchanged.
-	@if [ $(shell docker ps -aq --filter name=go-admin --filter publish=8000) ]; then docker stop --timeout 30 go-admin && docker rm go-admin; fi
+	@if [ $(shell docker ps -aq --filter name=motor --filter publish=8000) ]; then docker stop --timeout 30 motor && docker rm motor; fi
 
-    # 启动方法一 run go-admin-api container  docker-compose 启动方式
+    # 启动方法一 run motor-api container  docker-compose 启动方式
     # 进入到项目根目录 执行 make run 命令
 	@docker-compose up -d
 
-	@echo "go-admin service is running..."
+	@echo "motor service is running..."
 
 	# delete Tag=<none> 的镜像
 	@docker image prune -f
-	@docker ps -a | grep "go-admin"
+	@docker ps -a | grep "motor"
 
 stop:
-    # delete go-admin-api container
-	@if [ $(shell docker ps -aq --filter name=go-admin --filter publish=8000) ]; then docker-compose down; fi
+    # delete motor-api container
+	@if [ $(shell docker ps -aq --filter name=motor --filter publish=8000) ]; then docker-compose down; fi
 
 
 # -race is worth the extra minute here: common/actions reuses model instances
 # across concurrent requests, so a Generate() that returns in place instead of
 # a copy leaks data between them - and that is invisible to a single-threaded
 # test run.
-.PHONY: test
-test:
-	go test -race -cover ./...
-
 # The end-to-end install, which `test` above cannot reach: test/e2e-apporder
 # is its own module, so `./...` in this one does not include it. It builds a
-# go-admin binary with the example application linked in and drives
+# motor binary with the example application linked in and drives
 # `migrate install` / `migrate uninstall` against a real database.
 #
 # Its own target rather than a line in the CI workflow, so the one thing in
@@ -97,3 +93,15 @@ deploy:
 
 	make build-linux
 	make run
+
+CHECK_EXTRA := build checksilent branding test-e2e test-sqlite
+include standard.mk
+export GOFLAGS := -mod=readonly -p=2
+
+.PHONY: ci branding test-sqlite
+ci: check
+branding:
+	python3 scripts/check-branding.py
+
+test-sqlite:
+	$(GO) test -tags sqlite3 ./common/database/...

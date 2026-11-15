@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"go-admin/app/admin/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
 // Bind the code generator's APIs to its two menus, and grant them to every
@@ -35,18 +35,20 @@ import (
 // Ordered after 1786700003000 (the soft-delete conversion), so the runtime
 // models under app/admin/models are used, not cmd/migrate/migration/models -
 // see schema_coverage_test.go's TestPostConversionMigrationsAvoidFrozenSeedModels.
+//
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, fileName, _, _ := runtime.Caller(0)
-	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700011000GenMenuApis)
+	migration.Migrate.SetVersion(migration.GetFilename(fileName), _1786700011000GenMenuAPIs)
 }
 
 // genMenuApis is which page calls which endpoint, read off go-admin-ui's
 // src/api/tools/gen.ts and the views under dev-tools/gen.
-var genMenuApis = []struct {
+var genMenuAPIs = []struct {
 	component string
-	apis      []models.SysApi
+	apis      []models.SysAPI
 }{
-	{"/dev-tools/gen/index", []models.SysApi{
+	{"/dev-tools/gen/index", []models.SysAPI{
 		{Title: "代码生成表列表", Path: "/api/v1/sys/tables/page", Action: "GET"},
 		{Title: "数据库表列表", Path: "/api/v1/db/tables/page", Action: "GET"},
 		{Title: "数据表列列表", Path: "/api/v1/db/columns/page", Action: "GET"},
@@ -57,7 +59,7 @@ var genMenuApis = []struct {
 		{Title: "生成api带文件", Path: "/api/v1/gen/apitofile/:tableId", Action: "GET"},
 		{Title: "数据库表生成到DB", Path: "/api/v1/gen/todb/:tableId", Action: "GET"},
 	}},
-	{"/dev-tools/gen/editTable", []models.SysApi{
+	{"/dev-tools/gen/editTable", []models.SysAPI{
 		{Title: "表配置详情", Path: "/api/v1/sys/tables/info/:tableId", Action: "GET"},
 		{Title: "按表名查询表配置", Path: "/api/v1/sys/tables/info", Action: "GET"},
 		{Title: "修改表配置", Path: "/api/v1/sys/tables/info", Action: "PUT"},
@@ -65,9 +67,9 @@ var genMenuApis = []struct {
 	}},
 }
 
-func _1786700011000GenMenuApis(db *gorm.DB, version string) error {
+func _1786700011000GenMenuAPIs(db *gorm.DB, version string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := bindGenMenuApis(tx); err != nil {
+		if err := bindGenMenuAPIs(tx); err != nil {
 			return err
 		}
 		return tx.Create(&common.Migration{Version: version}).Error
@@ -75,8 +77,8 @@ func _1786700011000GenMenuApis(db *gorm.DB, version string) error {
 }
 
 // bindGenMenuApis is split out so tests can run it without sys_migration.
-func bindGenMenuApis(tx *gorm.DB) error {
-	for _, m := range genMenuApis {
+func bindGenMenuAPIs(tx *gorm.DB) error {
+	for _, m := range genMenuAPIs {
 		var menu models.SysMenu
 		err := tx.Where("component = ?", m.component).First(&menu).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -86,9 +88,9 @@ func bindGenMenuApis(tx *gorm.DB) error {
 			return err
 		}
 
-		apis := make([]models.SysApi, 0, len(m.apis))
+		apis := make([]models.SysAPI, 0, len(m.apis))
 		for _, want := range m.apis {
-			var api models.SysApi
+			var api models.SysAPI
 			err := tx.Where("path = ? AND action = ?", want.Path, want.Action).First(&api).Error
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				api = want
@@ -100,14 +102,14 @@ func bindGenMenuApis(tx *gorm.DB) error {
 			}
 			apis = append(apis, api)
 		}
-		if err := tx.Model(&menu).Association("SysApi").Append(apis); err != nil {
+		if err := tx.Model(&menu).Association("SysAPI").Append(apis); err != nil {
 			return err
 		}
 
 		var roleKeys []string
 		if err := tx.Model(&models.SysRole{}).
 			Joins("JOIN sys_role_menu ON sys_role_menu.role_id = sys_role.role_id").
-			Where("sys_role_menu.menu_id = ?", menu.MenuId).
+			Where("sys_role_menu.menu_id = ?", menu.MenuID).
 			Distinct().Pluck("sys_role.role_key", &roleKeys).Error; err != nil {
 			return err
 		}

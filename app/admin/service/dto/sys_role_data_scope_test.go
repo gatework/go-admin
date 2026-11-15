@@ -49,13 +49,13 @@ func TestDataScopeRejectsWhatPermissionCannotRecognize(t *testing.T) {
 
 	t.Run("RoleDataScopeReq", func(t *testing.T) {
 		for _, s := range invalid {
-			req := RoleDataScopeReq{RoleId: 1, DataScope: s}
+			req := RoleDataScopeReq{RoleID: 1, DataScope: s}
 			if err := vd.Validate(&req); err == nil {
 				t.Errorf("DataScope %q was accepted, want rejected", s)
 			}
 		}
 		for _, s := range valid {
-			req := RoleDataScopeReq{RoleId: 1, DataScope: s}
+			req := RoleDataScopeReq{RoleID: 1, DataScope: s}
 			if err := vd.Validate(&req); err != nil {
 				t.Errorf("DataScope %q was rejected: %v", s, err)
 			}

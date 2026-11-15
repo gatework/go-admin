@@ -9,18 +9,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gatework/motor/internal/testconfig"
+
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+
+	"github.com/gatework/motor-core/sdk/config"
 )
 
 // serveWithLogger runs one request through the logger middleware and returns
 // what the handler saw, with logger.enableddb set as given.
-func serveWithLogger(t testing.TB, enabledDB bool, method, body string) string {
-	t.Helper()
+func serveWithLogger(tb testing.TB, enabledDB bool, method, body string) string {
+	tb.Helper()
 
-	prev := config.LoggerConfig.EnabledDB
-	config.LoggerConfig.EnabledDB = enabledDB
-	t.Cleanup(func() { config.LoggerConfig.EnabledDB = prev })
+	testconfig.Apply(tb, func(s *config.Config) { s.Logger.EnabledDB = enabledDB })
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -30,7 +31,7 @@ func serveWithLogger(t testing.TB, enabledDB bool, method, body string) string {
 	handler := func(c *gin.Context) {
 		b, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			t.Errorf("handler could not read the body: %v", err)
+			tb.Errorf("handler could not read the body: %v", err)
 		}
 		seen = string(b)
 		c.Status(http.StatusOK)
@@ -86,9 +87,7 @@ func TestBodyIsNotCopiedWhenTheOperationLogIsOff(t *testing.T) {
 	const size = 1 << 20
 	body := strings.Repeat("x", size)
 
-	prev := config.LoggerConfig.EnabledDB
-	config.LoggerConfig.EnabledDB = false
-	t.Cleanup(func() { config.LoggerConfig.EnabledDB = prev })
+	testconfig.Apply(t, func(s *config.Config) { s.Logger.EnabledDB = false })
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()

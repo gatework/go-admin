@@ -2,51 +2,50 @@ package migrate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg"
 	"gorm.io/gorm"
 
-	"github.com/go-admin-team/go-admin-core/v2/config/source/file"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/app"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
+
 	"github.com/spf13/cobra"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	"go-admin/cmd/migrate/migration"
-	_ "go-admin/cmd/migrate/migration/version"
-	_ "go-admin/cmd/migrate/migration/version-local"
-	"go-admin/common/database"
-	"go-admin/common/models"
+	"github.com/gatework/motor-core/config/source/file"
+	"github.com/gatework/motor-core/sdk/contract/app"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	_ "github.com/gatework/motor/cmd/migrate/migration/version"       // Registers the distributed migrations.
+	_ "github.com/gatework/motor/cmd/migrate/migration/version-local" // Registers local migration extensions.
+	"github.com/gatework/motor/common/database"
+	"github.com/gatework/motor/common/models"
+	"github.com/gatework/motor/common/settings"
 )
 
 var (
 	configYml string
 	generate  bool
-	goAdmin   bool
+	framework bool
 	host      string
 	appCode   string
 	dryRun    bool
-	StartCmd  = &cobra.Command{
-		Use:     "migrate",
-		Short:   "Initialize the database",
-		Example: "go-admin migrate -c config/settings.yml",
-		Run: func(cmd *cobra.Command, args []string) {
-			run()
-		},
-	}
+	// StartCmd exposes this command to the host CLI.
+	StartCmd  *cobra.Command
 	statusCmd = &cobra.Command{
 		Use:     "status",
 		Short:   "List applied and pending migrations, grouped by app",
-		Example: "go-admin migrate status -c config/settings.yml",
+		Example: "motor migrate status -c config/settings.yml",
 		Run: func(cmd *cobra.Command, args []string) {
-			runStatus()
+			runStatus(cmd.Context())
 		},
 	}
 	// Under migrate rather than under the existing `app` command, which
@@ -59,28 +58,40 @@ var (
 	installCmd = &cobra.Command{
 		Use:     "install <code>",
 		Short:   "Install one application: run its migrations and record it in sys_app",
-		Example: "go-admin migrate install order -c config/settings.yml",
+		Example: "motor migrate install order -c config/settings.yml",
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runInstall(args[0])
+			runInstall(cmd.Context(), args[0])
 		},
 	}
 	uninstallCmd = &cobra.Command{
 		Use:     "uninstall <code>",
 		Short:   "Remove one application's menus, apis and permission grants; its own tables are left alone",
-		Example: "go-admin migrate uninstall order -c config/settings.yml",
+		Example: "motor migrate uninstall order -c config/settings.yml",
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runUninstall(args[0])
+			runUninstall(cmd.Context(), args[0])
 		},
 	}
 )
 
 // fixme 在您看不见代码的时候运行迁移，我觉得是不安全的，所以编译后最好不要去执行迁移
+//
+//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
 func init() {
+	// StartCmd exposes this command to the host CLI.
+	StartCmd = &cobra.Command{
+		Use:     "migrate",
+		Short:   "Initialize the database",
+		Example: "motor migrate -c config/settings.yml",
+		Run: func(cmd *cobra.Command, args []string) {
+			run(cmd.Context())
+		},
+	}
+
 	StartCmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
 	StartCmd.PersistentFlags().BoolVarP(&generate, "generate", "g", false, "generate migration file")
-	StartCmd.PersistentFlags().BoolVarP(&goAdmin, "goAdmin", "a", false, "with -g, write the generated file to version/ instead of version-local/ (does not affect which migrations run)")
+	StartCmd.PersistentFlags().BoolVarP(&framework, "framework", "a", false, "with -g, write the generated file to version/ instead of version-local/ (does not affect which migrations run)")
 	StartCmd.PersistentFlags().StringVarP(&host, "domain", "d", "*", "select tenant host")
 
 	// --app is deliberately long-only. -a already means "generate into
@@ -95,13 +106,12 @@ func init() {
 	StartCmd.AddCommand(uninstallCmd)
 }
 
-func run() {
+func run(ctx context.Context) {
 
 	if !generate {
 		fmt.Println(`start init`)
 		//1. 读取配置
-		config.Setup(
-			file.NewSource(file.WithPath(configYml)),
+		withDatabase(ctx,
 			initDB,
 		)
 	} else {
@@ -119,10 +129,10 @@ func resolveDB() (*gorm.DB, error) {
 	if host == "" {
 		host = "*"
 	}
-	db := sdk.Runtime.GetDbByTenant(host)
+	db := sdk.Runtime.DB(host)
 	if db == nil {
-		if len(sdk.Runtime.GetAllDb()) == 1 && host == "*" {
-			for k, v := range sdk.Runtime.GetAllDb() {
+		if len(sdk.Runtime.Databases()) == 1 && host == "*" {
+			for k, v := range sdk.Runtime.Databases() {
 				db = v
 				host = k
 				break
@@ -132,7 +142,7 @@ func resolveDB() (*gorm.DB, error) {
 	if db == nil {
 		return nil, fmt.Errorf("未找到数据库配置")
 	}
-	if config.DatabasesConfig[host].Driver == "mysql" {
+	if config.Current().Settings.Databases[host].Driver == "mysql" {
 		//初始化数据库时候用
 		db.Set("gorm:table_options", "ENGINE=InnoDB CHARSET=utf8mb4")
 	}
@@ -146,7 +156,7 @@ func resolveDB() (*gorm.DB, error) {
 // printed that the app was unknown and still exited 0, while `--dry-run` and
 // `status` said "nothing to apply" and "none recorded" - which is what an
 // up-to-date database says too, so the output does not even hint at the typo.
-// An operator running `go-admin migrate --app crmm && deploy` gets the deploy.
+// An operator running `motor migrate --app crmm && deploy` gets the deploy.
 //
 // Checked against the registry, which init() has already filled, so this runs
 // before any database work and costs nothing. It lives in the command layer
@@ -168,10 +178,8 @@ func appRegistrationError() error {
 	}
 	want := migration.DisplayAppCode(migration.AppFilter(appCode))
 	registered := migration.Migrate.AppCodes()
-	for _, c := range registered {
-		if c == want {
-			return nil
-		}
+	if slices.Contains(registered, want) {
+		return nil
 	}
 	return fmt.Errorf("no migrations are registered for app %q; registered: %s",
 		want, strings.Join(registered, ", "))
@@ -189,7 +197,7 @@ func migrateModel() error {
 	if err = db.Debug().AutoMigrate(&models.Migration{}); err != nil {
 		return err
 	}
-	migration.Migrate.SetDb(db.Debug())
+	migration.Migrate.SetDB(db.Debug())
 	if appCode != "" {
 		return migration.Migrate.MigrateApp(appCode)
 	}
@@ -202,7 +210,6 @@ func initDB() {
 	exitUnlessAppRegistered()
 
 	//3. 初始化数据库链接
-	database.Setup()
 
 	if dryRun {
 		db, err := resolveDB()
@@ -210,7 +217,7 @@ func initDB() {
 			fmt.Println(err)
 			return
 		}
-		migration.Migrate.SetDb(db)
+		migration.Migrate.SetDB(db)
 		entries, err := migration.Migrate.Status()
 		if err != nil {
 			fmt.Println(err)
@@ -258,19 +265,17 @@ var (
 	origExit = os.Exit
 )
 
-func runStatus() {
-	config.Setup(
-		file.NewSource(file.WithPath(configYml)),
+func runStatus(ctx context.Context) {
+	withDatabase(ctx,
 		func() {
 			exitUnlessAppRegistered()
 
-			database.Setup()
 			db, err := resolveDB()
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			migration.Migrate.SetDb(db)
+			migration.Migrate.SetDB(db)
 			entries, err := migration.Migrate.Status()
 			if err != nil {
 				fmt.Println(err)
@@ -291,11 +296,10 @@ func runStatus() {
 	)
 }
 
-func runInstall(code string) {
-	config.Setup(
-		file.NewSource(file.WithPath(configYml)),
+func runInstall(ctx context.Context, code string) {
+	withDatabase(ctx,
 		func() {
-			database.Setup()
+
 			db, err := resolveDB()
 			if err != nil {
 				exitOnError(os.Stderr, err)
@@ -325,11 +329,10 @@ func runInstall(code string) {
 	)
 }
 
-func runUninstall(code string) {
-	config.Setup(
-		file.NewSource(file.WithPath(configYml)),
+func runUninstall(ctx context.Context, code string) {
+	withDatabase(ctx,
 		func() {
-			database.Setup()
+
 			db, err := resolveDB()
 			if err != nil {
 				exitOnError(os.Stderr, err)
@@ -356,15 +359,30 @@ func genFile() error {
 	m := map[string]string{}
 	m["GenerateTime"] = strconv.FormatInt(time.Now().UnixNano()/1e6, 10)
 	m["Package"] = "version_local"
-	if goAdmin {
+	if framework {
 		m["Package"] = "version"
 	}
 	var b1 bytes.Buffer
 	if err = t1.Execute(&b1, m); err != nil {
 		return err
 	}
-	if goAdmin {
+	if framework {
 		return pkg.FileCreate(b1, "./cmd/migrate/migration/version/"+m["GenerateTime"]+"_migrate.go")
 	}
 	return pkg.FileCreate(b1, "./cmd/migrate/migration/version-local/"+m["GenerateTime"]+"_migrate.go")
+}
+
+func withDatabase(ctx context.Context, action func()) {
+	watcher, err := settings.Load(ctx, sdk.Runtime, file.NewSource(file.WithPath(configYml)), database.Setup)
+	if err != nil {
+		exitOnError(os.Stderr, err)
+		return
+	}
+	defer watcher.Close()
+	defer func() {
+		if err := settings.CloseLogger(); err != nil {
+			fmt.Fprintf(os.Stderr, "close logger: %v\n", err)
+		}
+	}()
+	action()
 }

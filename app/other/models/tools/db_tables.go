@@ -2,10 +2,12 @@ package tools
 
 import (
 	"errors"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
+// DBTables stores dbtables data in the database.
 type DBTables struct {
 	TableName      string `gorm:"column:TABLE_NAME" json:"tableName"`
 	Engine         string `gorm:"column:ENGINE" json:"engine"`
@@ -16,6 +18,7 @@ type DBTables struct {
 	TableComment   string `gorm:"column:TABLE_COMMENT" json:"tableComment"`
 }
 
+// GetPage stores get page data in the database.
 func (e *DBTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBTables, int, error) {
 	table, err := metadataTables(tx)
 	if err != nil {
@@ -52,6 +55,7 @@ func (e *DBTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBTables
 	return doc, int(count), nil
 }
 
+// Get stores get data in the database.
 func (e *DBTables) Get(tx *gorm.DB) (DBTables, error) {
 
 	var doc DBTables
@@ -69,8 +73,8 @@ func (e *DBTables) Get(tx *gorm.DB) (DBTables, error) {
 	return doc, nil
 }
 
-func tableNamesAsValues(names []string) []interface{} {
-	values := make([]interface{}, len(names))
+func tableNamesAsValues(names []string) []any {
+	values := make([]any, len(names))
 	for i, name := range names {
 		values[i] = name
 	}

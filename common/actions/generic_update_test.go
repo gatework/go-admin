@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 
-	"go-admin/common/actions"
-	"go-admin/common/models"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/models"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 type boolRow struct {
@@ -17,35 +19,38 @@ type boolRow struct {
 	Enabled bool
 }
 
-func (boolRow) TableName() string { return "bool_row" }
-func (s *boolRow) GetId() any     { return s.Id }
+func (*boolRow) TableName() string { return "bool_row" }
+func (s *boolRow) GetID() any      { return s.ID }
 
 type boolControl struct {
-	Id      int  `json:"id"`
+	ID      int  `json:"id"`
 	Enabled bool `json:"enabled"`
 }
 
 func (s *boolControl) Bind(c *gin.Context) error { return c.ShouldBindJSON(s) }
 func (s *boolControl) ToModel() (*boolRow, error) {
-	return &boolRow{Model: models.Model{Id: s.Id}, ControlBy: models.ControlBy{CreateBy: 999}, Enabled: s.Enabled}, nil
+	return &boolRow{ID: s.ID, CreateBy: 999, Enabled: s.Enabled}, nil
 }
 func (s *boolControl) UpdateFields() []string { return []string{"Enabled", "Id", "CreateBy", "*"} }
 func TestGenericUpdateIncludesExplicitFalseAndProtectsCreator(t *testing.T) {
-	old := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = false
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = old })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = false
+	})
+
 	db := probeDB(t, t.Name(), nil)
 	if err := db.AutoMigrate(&boolRow{}); err != nil {
 		t.Fatal(err)
 	}
-	row := boolRow{Enabled: true, ControlBy: models.ControlBy{CreateBy: 42}}
+	row := boolRow{Enabled: true, CreateBy: 42}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	r := probeEngine(db, func(r gin.IRoutes) { r.PUT("/row", actions.Update[boolRow, boolControl]()) })
 	_, body := serve(r, http.MethodPut, "/row", `{"id":1,"enabled":false}`)
 	var after boolRow
-	if err := db.First(&after, row.Id).Error; err != nil {
+	if err := db.First(&after, row.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if after.Enabled || after.CreateBy != 42 || after.UpdateBy != 7 {

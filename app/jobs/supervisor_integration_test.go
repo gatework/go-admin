@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/pkg/cronjob"
-	"go-admin/app/jobs/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/pkg/cronjob"
+	"github.com/gatework/motor/app/jobs/models"
 )
 
 func TestPostgresBlockedRenewalDeadline(t *testing.T) {
 	dsn := os.Getenv(postgresDSNEnv)
 	if dsn == "" {
-		t.Skip("GO_ADMIN_TEST_POSTGRES_DSN is required")
+		t.Skip("MOTOR_TEST_POSTGRES_DSN is required")
 	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -28,7 +29,7 @@ func TestPostgresBlockedRenewalDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	const key = "pg-blocked-renewal"
-	sdk.Runtime.SetCrontabByTenant(key, cronjob.NewWithSeconds())
+	sdk.Runtime.SetCrontab(key, cronjob.NewWithSeconds())
 	s := newSupervisor(key, db, "pg-first")
 	s.lease.ttl = 300 * time.Millisecond
 	s.tick()

@@ -37,8 +37,8 @@ func sqliteDSN(source string) string {
 	}
 
 	path, rawQuery := source, ""
-	if i := strings.IndexByte(source, '?'); i >= 0 {
-		path, rawQuery = source[:i], source[i+1:]
+	if before, after, ok := strings.Cut(source, "?"); ok {
+		path, rawQuery = before, after
 	}
 	q, err := url.ParseQuery(rawQuery)
 	if err != nil {

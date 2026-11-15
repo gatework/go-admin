@@ -2,17 +2,20 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	jwt "github.com/go-admin-team/go-admin-core/v2/jwtauth"
 
-	"go-admin/app/demo/models"
-	"go-admin/app/demo/service/dto"
-	"go-admin/common/actions"
-	"go-admin/common/middleware"
+	jwt "github.com/gatework/motor-core/jwtauth"
+
+	"github.com/gatework/motor/app/demo/models"
+	"github.com/gatework/motor/app/demo/service/dto"
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/middleware"
 )
 
 // 路由通过 init 自注册，无需在任何中心文件登记。
 // 新建应用时用 `go run main.go app -n <名称>` 生成骨架，
 // 它会同时产出 cmd/api/<名称>.go 完成注册。
+//
+//nolint:gochecknoinits // The host seals startup registries after these module declarations are loaded.
 func init() {
 	routerCheckRole = append(routerCheckRole, registerDemoProductRouter)
 }
@@ -23,7 +26,7 @@ func init() {
 // 操作人注入、分页、错误响应，因此本模块没有 apis 与 service 文件。
 //
 // 仅当业务逻辑超出单表 CRUD（如跨表事务、外部调用、复杂校验）时，才需要
-// 自行编写 Handler 与 Service，写法参照 app/admin/apis/sys_post.go。
+// 自行编写 Handler 与 Service，写法参照 app/admin/handler/sys_post.go。
 func registerDemoProductRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	r := v1.Group("/demo-product").
 		Use(authMiddleware.MiddlewareFunc()). // JWT 认证
@@ -32,9 +35,9 @@ func registerDemoProductRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMi
 		// actions.PermissionAction() 注入数据权限上下文，
 		// 列表与详情缺少它会绕过 DataScope 过滤
 		r.GET("", actions.PermissionAction(), actions.Index[models.DemoProduct, dto.DemoProductSearch]())
-		r.GET("/:id", actions.PermissionAction(), actions.View[models.DemoProduct, dto.DemoProductById]())
+		r.GET("/:id", actions.PermissionAction(), actions.View[models.DemoProduct, dto.DemoProductByID]())
 		r.POST("", actions.Create[models.DemoProduct, dto.DemoProductControl]())
 		r.PUT("/:id", actions.PermissionAction(), actions.Update[models.DemoProduct, dto.DemoProductControl]())
-		r.DELETE("", actions.PermissionAction(), actions.Delete[models.DemoProduct, dto.DemoProductById]())
+		r.DELETE("", actions.PermissionAction(), actions.Delete[models.DemoProduct, dto.DemoProductByID]())
 	}
 }

@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	corecaptcha "github.com/go-admin-team/go-admin-core/v2/captcha"
 	"github.com/mojocn/base64Captcha"
+
+	corecaptcha "github.com/gatework/motor-core/captcha"
 )
 
 func TestGenerate(t *testing.T) {

@@ -1,16 +1,22 @@
 package version
 
 import (
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
-	_ "go-admin/app/admin/service"
-	"go-admin/app/wireless/models"
-	"go-admin/cmd/migrate/migration"
-	common "go-admin/common/models"
-	"gorm.io/gorm"
 	"runtime"
+
+	"gorm.io/gorm"
+
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
+
+	// Registers the host menu seeder before migrations run.
+	_ "github.com/gatework/motor/app/admin/service"
+	models "github.com/gatework/motor/app/net/models/wireless"
+
+	"github.com/gatework/motor/cmd/migrate/migration"
+	common "github.com/gatework/motor/common/models"
 )
 
+//nolint:gochecknoinits // Frozen migration registration must complete before the host seals its startup registry.
 func init() {
 	_, file, _, _ := runtime.Caller(0)
 	migration.Migrate.SetVersion(migration.GetFilename(file), _1793160000000NetworkWireless)
@@ -40,15 +46,15 @@ func seedNetworkWireless(db *gorm.DB) error {
 			{"collect", "/controllers/:controllerId/collections", "POST", "Collect"}, {"management", "/controllers/:controllerId/access-points/:id/management", "PUT", "Management"}, {"neighbor", "/controllers/:controllerId/access-points/:id/neighbor", "PUT", "Associate"},
 			{"export", "/controllers/:controllerId/exports/:kind", "GET", "Export"}, {"preview-import", "/imports/preview", "POST", "PreviewImport"}, {"commit-import", "/imports/commit", "POST", "CommitImport"},
 		}
-		apis := []seed.ApiSpec{}
+		apis := []seed.APISpec{}
 		read := []string{}
 		for _, r := range routes {
-			apis = append(apis, seed.ApiSpec{Code: "wireless-" + r.code, Title: "Wireless " + r.code, Path: "/api/v1/network-wireless" + r.path, Method: r.method, Handle: "go-admin/app/wireless/apis.Wireless." + r.handler + "-fm"})
+			apis = append(apis, seed.APISpec{Code: "wireless-" + r.code, Title: "Wireless " + r.code, Path: "/api/v1/network-wireless" + r.path, Method: r.method, Handle: "go-admin/app/wireless/apis.Wireless." + r.handler + "-fm"})
 			if r.method == "GET" && r.code != "export" {
 				read = append(read, "wireless-"+r.code)
 			}
 		}
-		menus := []seed.MenuSpec{{Code: "management", Kind: contractmodels.Directory, Title: "网络管理", Path: "/network", Component: "Layout", Icon: "branch", Sort: 30}, {Code: "wireless-manage", Parent: "management", Kind: contractmodels.Menu, Title: "无线管理", Path: "/network/wireless", Component: "/network/wireless/index", Icon: "wifi", Sort: 6, ApiCodes: []string{"wireless-controllers", "wireless-groups"}}}
+		menus := []seed.MenuSpec{{Code: "management", Kind: contractmodels.Directory, Title: "网络管理", Path: "/network", Component: "Layout", Icon: "branch", Sort: 30}, {Code: "wireless-manage", Parent: "management", Kind: contractmodels.Menu, Title: "无线管理", Path: "/network/wireless", Component: "/network/wireless/index", Icon: "wifi", Sort: 6, APICodes: []string{"wireless-controllers", "wireless-groups"}}}
 		for i, action := range []string{"list", "query", "collect", "edit", "import", "export"} {
 			codes := append([]string{}, read...)
 			switch action {
@@ -63,8 +69,8 @@ func seedNetworkWireless(db *gorm.DB) error {
 			case "export":
 				codes = append(codes, "wireless-export")
 			}
-			menus = append(menus, seed.MenuSpec{Code: "wireless-" + action, Parent: "wireless-manage", Kind: contractmodels.Button, Title: "Wireless " + action, Permission: "network:wireless:" + action, Sort: i + 1, ApiCodes: codes})
+			menus = append(menus, seed.MenuSpec{Code: "wireless-" + action, Parent: "wireless-manage", Kind: contractmodels.Button, Title: "Wireless " + action, Permission: "network:wireless:" + action, Sort: i + 1, APICodes: codes})
 		}
-		return seed.SeedMenus(tx, "network", menus, apis)
+		return seed.Menus(tx, "network", menus, apis)
 	})
 }

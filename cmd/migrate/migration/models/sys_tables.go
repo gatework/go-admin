@@ -1,20 +1,23 @@
 package models
 
+// SysTables defines the systables contract.
+//
+//nolint:embeddedstructfieldcheck // Frozen migration field order defines historical positional SQL seed columns.
 type SysTables struct {
-	TableId             int    `gorm:"primaryKey;autoIncrement" json:"tableId"`        //表编码
-	TBName              string `gorm:"column:table_name;size:255;" json:"tableName"`   //表名称
-	TableComment        string `gorm:"size:255;" json:"tableComment"`                  //表备注
-	ClassName           string `gorm:"size:255;" json:"className"`                     //类名
-	TplCategory         string `gorm:"size:255;" json:"tplCategory"`                   //
-	PackageName         string `gorm:"size:255;" json:"packageName"`                   //包名
-	ModuleName          string `gorm:"size:255;" json:"moduleName"`                    //go文件名
-	ModuleFrontName     string `gorm:"size:255;comment:前端文件名;" json:"moduleFrontName"` //前端文件名
-	BusinessName        string `gorm:"size:255;" json:"businessName"`                  //
-	FunctionName        string `gorm:"size:255;" json:"functionName"`                  //功能名称
-	FunctionAuthor      string `gorm:"size:255;" json:"functionAuthor"`                //功能作者
-	PkColumn            string `gorm:"size:255;" json:"pkColumn"`
-	PkGoField           string `gorm:"size:255;" json:"pkGoField"`
-	PkJsonField         string `gorm:"size:255;" json:"pkJsonField"`
+	TableID             int    `gorm:"primaryKey;autoIncrement" json:"tableId"`
+	TBName              string `gorm:"column:table_name;size:255;" json:"tableName"`
+	TableComment        string `gorm:"size:255;" json:"tableComment"`
+	ClassName           string `gorm:"size:255;" json:"className"`
+	TplCategory         string `gorm:"size:255;" json:"tplCategory"`
+	PackageName         string `gorm:"size:255;" json:"packageName"`
+	ModuleName          string `gorm:"size:255;" json:"moduleName"`
+	ModuleFrontName     string `gorm:"size:255;comment:前端文件名;" json:"moduleFrontName"`
+	BusinessName        string `gorm:"size:255;" json:"businessName"`
+	FunctionName        string `gorm:"size:255;" json:"functionName"`
+	FunctionAuthor      string `gorm:"size:255;" json:"functionAuthor"`
+	PKColumn            string `gorm:"size:255;" json:"pkColumn"`
+	PKGoField           string `gorm:"size:255;" json:"pkGoField"`
+	PKJSONField         string `gorm:"size:255;" json:"pkJSONField"`
 	Options             string `gorm:"size:255;" json:"options"`
 	TreeCode            string `gorm:"size:255;" json:"treeCode"`
 	TreeParentCode      string `gorm:"size:255;" json:"treeParentCode"`
@@ -32,6 +35,7 @@ type SysTables struct {
 	ControlBy
 }
 
+// TableName returns the explicit persistence table name.
 func (SysTables) TableName() string {
 	return "sys_tables"
 }

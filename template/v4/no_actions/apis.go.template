@@ -1,21 +1,22 @@
-package apis
+package handler
 
 import (
     "fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/api"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth/user"
-	_ "github.com/go-admin-team/go-admin-core/v2/response"
+	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor-core/jwtauth/user"
+	_ "github.com/gatework/motor-core/response"
 
-	"go-admin/app/{{.PackageName}}/models"
-	"go-admin/app/{{.PackageName}}/service"
-	"go-admin/app/{{.PackageName}}/service/dto"
-	"go-admin/common/actions"
+	"github.com/gatework/motor/app/{{.PackageName}}/models"
+	"github.com/gatework/motor/app/{{.PackageName}}/service"
+	"github.com/gatework/motor/app/{{.PackageName}}/service/dto"
+	"github.com/gatework/motor/common/actions"
+    "github.com/gatework/motor/common/request"
 )
 
 type {{.ClassName}} struct {
-	api.Api
+	api.API
 }
 
 // GetPage 获取{{.TableComment}}列表
@@ -25,7 +26,7 @@ type {{.ClassName}} struct {
 {{- $tablename := .TBName -}}
 {{- range .Columns -}}
 {{- if eq .IsQuery "1" }}
-// @Param {{.JsonField}} query {{.GoType}} false "{{.ColumnComment}}"
+// @Param {{.JSONField}} query {{.GoType}} false "{{.ColumnComment}}"
 {{- end -}}
 {{- end }}
 // @Param pageSize query int false "页条数"
@@ -33,14 +34,17 @@ type {{.ClassName}} struct {
 // @Success 200 {object} response.Response{data=response.Page{list=[]models.{{.ClassName}}}} "{"code": 200, "data": [...]}"
 // @Router /api/v1/{{.ModuleName}} [get]
 // @Security Bearer
-func (e {{.ClassName}}) GetPage(c *gin.Context) {
+func (e {{.ClassName}}) List(c *gin.Context) {
     req := dto.{{.ClassName}}GetPageReq{}
     s := service.{{.ClassName}}{}
-    err := e.MakeContext(c).
-        MakeOrm().
-        Bind(&req).
-        MakeService(&s.Service).
-        Errors
+    a, err := request.New(c)
+    if err != nil {
+        a.Error(500, err, err.Error())
+        return
+    }
+    e.API = a
+    s.Service = a.Service()
+    err = a.Bind(&req)
    	if err != nil {
    		e.Logger.Error(err)
    		e.Error(500, err, err.Error())
@@ -51,7 +55,7 @@ func (e {{.ClassName}}) GetPage(c *gin.Context) {
 	list := make([]models.{{.ClassName}}, 0)
 	var count int64
 
-	err = s.GetPage(&req, p, &list, &count)
+	err = s.GetPage(c.Request.Context(), &req, p, &list, &count)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("获取{{.TableComment}}失败，\r\n失败信息 %s", err.Error()))
         return
@@ -71,11 +75,14 @@ func (e {{.ClassName}}) GetPage(c *gin.Context) {
 func (e {{.ClassName}}) Get(c *gin.Context) {
 	req := dto.{{.ClassName}}GetReq{}
 	s := service.{{.ClassName}}{}
-    err := e.MakeContext(c).
-		MakeOrm().
-		Bind(&req).
-		MakeService(&s.Service).
-		Errors
+    a, err := request.New(c)
+    if err != nil {
+        a.Error(500, err, err.Error())
+        return
+    }
+    e.API = a
+    s.Service = a.Service()
+    err = a.Bind(&req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, err.Error())
@@ -84,7 +91,7 @@ func (e {{.ClassName}}) Get(c *gin.Context) {
 	var object models.{{.ClassName}}
 
 	p := actions.GetPermissionFromContext(c)
-	err = s.Get(&req, p, &object)
+	err = s.Get(c.Request.Context(), &req, p, &object)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("获取{{.TableComment}}失败，\r\n失败信息 %s", err.Error()))
         return
@@ -103,29 +110,32 @@ func (e {{.ClassName}}) Get(c *gin.Context) {
 // @Success 200 {object} response.Response	"{"code": 200, "message": "添加成功"}"
 // @Router /api/v1/{{.ModuleName}} [post]
 // @Security Bearer
-func (e {{.ClassName}}) Insert(c *gin.Context) {
+func (e {{.ClassName}}) Create(c *gin.Context) {
     req := dto.{{.ClassName}}InsertReq{}
     s := service.{{.ClassName}}{}
-    err := e.MakeContext(c).
-        MakeOrm().
-        Bind(&req).
-        MakeService(&s.Service).
-        Errors
+    a, err := request.New(c)
+    if err != nil {
+        a.Error(500, err, err.Error())
+        return
+    }
+    e.API = a
+    s.Service = a.Service()
+    err = a.Bind(&req)
     if err != nil {
         e.Logger.Error(err)
         e.Error(500, err, err.Error())
         return
     }
 	// 设置创建人
-	req.SetCreateBy(user.GetUserId(c))
+	req.SetCreateBy(user.ID(c))
 
-	err = s.Insert(&req)
+	err = s.Insert(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("创建{{.TableComment}}失败，\r\n失败信息 %s", err.Error()))
         return
 	}
 
-	e.OK(req.GetId(), "创建成功")
+	e.OK(req.GetID(), "创建成功")
 }
 
 // Update 修改{{.TableComment}}
@@ -142,25 +152,28 @@ func (e {{.ClassName}}) Insert(c *gin.Context) {
 func (e {{.ClassName}}) Update(c *gin.Context) {
     req := dto.{{.ClassName}}UpdateReq{}
     s := service.{{.ClassName}}{}
-    err := e.MakeContext(c).
-        MakeOrm().
-        Bind(&req).
-        MakeService(&s.Service).
-        Errors
+    a, err := request.New(c)
+    if err != nil {
+        a.Error(500, err, err.Error())
+        return
+    }
+    e.API = a
+    s.Service = a.Service()
+    err = a.Bind(&req)
     if err != nil {
         e.Logger.Error(err)
         e.Error(500, err, err.Error())
         return
     }
-	req.SetUpdateBy(user.GetUserId(c))
+	req.SetUpdateBy(user.ID(c))
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.Update(&req, p)
+	err = s.Update(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("修改{{.TableComment}}失败，\r\n失败信息 %s", err.Error()))
         return
 	}
-	e.OK( req.GetId(), "修改成功")
+	e.OK( req.GetID(), "修改成功")
 }
 
 // Delete 删除{{.TableComment}}
@@ -174,24 +187,27 @@ func (e {{.ClassName}}) Update(c *gin.Context) {
 func (e {{.ClassName}}) Delete(c *gin.Context) {
     s := service.{{.ClassName}}{}
     req := dto.{{.ClassName}}DeleteReq{}
-    err := e.MakeContext(c).
-        MakeOrm().
-        Bind(&req).
-        MakeService(&s.Service).
-        Errors
+    a, err := request.New(c)
+    if err != nil {
+        a.Error(500, err, err.Error())
+        return
+    }
+    e.API = a
+    s.Service = a.Service()
+    err = a.Bind(&req)
     if err != nil {
         e.Logger.Error(err)
         e.Error(500, err, err.Error())
         return
     }
 
-	// req.SetUpdateBy(user.GetUserId(c))
+	// req.SetUpdateBy(user.ID(c))
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.Remove(&req, p)
+	err = s.Remove(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("删除{{.TableComment}}失败，\r\n失败信息 %s", err.Error()))
         return
 	}
-	e.OK( req.GetId(), "删除成功")
+	e.OK( req.GetID(), "删除成功")
 }

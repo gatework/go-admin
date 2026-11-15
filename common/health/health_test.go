@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/runtime"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/runtime"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 func freshRuntime(t *testing.T) {
@@ -18,7 +18,7 @@ func freshRuntime(t *testing.T) {
 	t.Cleanup(func() { SetCacheProbe(previousProbe) })
 	previous := sdk.Runtime
 	t.Cleanup(func() { sdk.Runtime = previous })
-	sdk.Runtime = runtime.NewConfig()
+	sdk.Runtime = runtime.New()
 }
 
 // fakeCache answers whatever the test needs it to.
@@ -51,25 +51,15 @@ type barrier struct {
 
 func newBarrier(n int) *barrier { return &barrier{n: n, ch: make(chan struct{})} }
 
-func (b *barrier) wait() {
-	b.mu.Lock()
-	b.got++
-	if b.got == b.n {
-		close(b.ch)
-	}
-	b.mu.Unlock()
-	<-b.ch
-}
-
 func (c *fakeCache) String() string { return "fake" }
 
-func (c *fakeCache) Set(key string, val interface{}, _ int) error {
+func (c *fakeCache) Set(ctx context.Context, key, val string, _ time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.setErr != nil {
 		return c.setErr
 	}
-	v, _ := val.(string)
+	v := val
 	if c.oneSlot {
 		c.slot = v
 		return nil
@@ -88,7 +78,7 @@ func (c *fakeCache) Set(key string, val interface{}, _ int) error {
 	return nil
 }
 
-func (c *fakeCache) Get(key string) (string, error) {
+func (c *fakeCache) Get(ctx context.Context, key string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.getErr != nil {
@@ -103,20 +93,19 @@ func (c *fakeCache) Get(key string) (string, error) {
 	return c.stored[key], nil
 }
 
-func (c *fakeCache) Del(key string) error {
+func (c *fakeCache) Del(ctx context.Context, keys ...string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.stored, key)
+	for _, key := range keys {
+		delete(c.stored, key)
+	}
 	return nil
 }
+func (c *fakeCache) Incr(context.Context, string, int64) (int64, error)  { return 0, nil }
+func (c *fakeCache) Expire(context.Context, string, time.Duration) error { return nil }
+func (c *fakeCache) Close() error                                        { return nil }
 
-func (c *fakeCache) HashGet(_, _ string) (string, error) { return "", nil }
-func (c *fakeCache) HashDel(_, _ string) error           { return nil }
-func (c *fakeCache) Increase(string) error               { return nil }
-func (c *fakeCache) Decrease(string) error               { return nil }
-func (c *fakeCache) Expire(string, time.Duration) error  { return nil }
-
-var _ corestorage.AdapterCache = (*fakeCache)(nil)
+var _ corestorage.Cache = (*fakeCache)(nil)
 
 func named(checks []Check, name string) Check {
 	for _, c := range checks {
@@ -133,7 +122,7 @@ func named(checks []Check, name string) Check {
 // a healthy cache with a cold key, which is why the probe writes first.
 func TestCacheProbeFailsWhenTheValueDoesNotComeBack(t *testing.T) {
 	freshRuntime(t)
-	sdk.Runtime.SetCacheAdapter(&fakeCache{getBack: "something else"})
+	sdk.Runtime.SetCache(&fakeCache{getBack: "something else"})
 
 	got := named(Ready(context.Background()), "cache")
 	if got.OK {
@@ -146,7 +135,7 @@ func TestCacheProbeFailsWhenTheValueDoesNotComeBack(t *testing.T) {
 
 func TestCacheProbePassesWhenTheValueComesBack(t *testing.T) {
 	freshRuntime(t)
-	sdk.Runtime.SetCacheAdapter(&fakeCache{})
+	sdk.Runtime.SetCache(&fakeCache{})
 
 	if got := named(Ready(context.Background()), "cache"); !got.OK {
 		t.Errorf("the cache check failed for a cache that works: %s", got.Err)
@@ -155,7 +144,7 @@ func TestCacheProbePassesWhenTheValueComesBack(t *testing.T) {
 
 func TestCacheProbeReportsAWriteFailure(t *testing.T) {
 	freshRuntime(t)
-	sdk.Runtime.SetCacheAdapter(&fakeCache{setErr: errors.New("connection refused")})
+	sdk.Runtime.SetCache(&fakeCache{setErr: errors.New("connection refused")})
 
 	got := named(Ready(context.Background()), "cache")
 	if got.OK {
@@ -217,20 +206,18 @@ func TestConcurrentProbesDoNotOverwriteEachOther(t *testing.T) {
 	freshRuntime(t)
 	const probes = 16
 	adapter := &fakeCache{setBarrier: newBarrier(probes)}
-	sdk.Runtime.SetCacheAdapter(adapter)
-	previous := SetCacheProbe(func(ctx context.Context) error { return probeLegacyCache(ctx, adapter) })
+	sdk.Runtime.SetCache(adapter)
+	previous := SetCacheProbe(func(ctx context.Context) error { return ProbeCache(ctx, adapter) })
 	t.Cleanup(func() { SetCacheProbe(previous) })
 
 	var wg sync.WaitGroup
 	failures := make(chan string, probes)
-	for i := 0; i < probes; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range probes {
+		wg.Go(func() {
 			if c := named(Ready(context.Background()), "cache"); !c.OK {
 				failures <- c.Err
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(failures)
@@ -246,4 +233,14 @@ func TestConcurrentProbesDoNotOverwriteEachOther(t *testing.T) {
 	if n > 0 {
 		t.Errorf("%d of %d concurrent probes called a healthy cache broken; first: %s", n, probes, first)
 	}
+}
+
+func (b *barrier) wait() {
+	b.mu.Lock()
+	b.got++
+	if b.got == b.n {
+		close(b.ch)
+	}
+	b.mu.Unlock()
+	<-b.ch
 }

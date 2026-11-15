@@ -16,13 +16,13 @@
 
 ## 验证
 
-回归文件：`app/fabric/service/review_regression_test.go`。最初 8 条审查复现均先在原实现得到预期失败，再修复通过；额外覆盖伪造跨 VRF 计划、库存角色变化、历史列表/采集权限、8 类不可关联 MAC 证据、vPC 部分及冲突证据。
+回归文件：`app/net/service/fabric/review_regression_test.go`。最初 8 条审查复现均先在原实现得到预期失败，再修复通过；额外覆盖伪造跨 VRF 计划、库存角色变化、历史列表/采集权限、8 类不可关联 MAC 证据、vPC 部分及冲突证据。
 
 初次审查修复集成时已验证：
 
-- `go test ./app/fabric/... ./app/delivery/... -count=1` 通过（Fabric router/service，Delivery apis/models/service；包含本轮回归和集成中的候选方案测试）。
-- `go test -race ./app/fabric/service ./app/delivery/service -count=1` 通过（5.453s / 3.982s）。
-- `go vet ./app/fabric/... ./app/delivery/...` 通过。
+- `go test ./app/net/... -count=1` 通过（Fabric router/service，Delivery apis/models/service；包含本轮回归和集成中的候选方案测试）。
+- `go test -race ./app/net/service/fabric ./app/net/service/delivery -count=1` 通过（5.453s / 3.982s）。
+- `go vet ./app/net/...` 通过。
 
 相同 IP/VRF 下不同 MAC 或不同端口仍分别计为候选位置；仅有相同设备 ID 不会隐藏歧义。当前双端 vPC 证据的完整/部分/失败状态另有端到端分类回归。
 
@@ -33,12 +33,12 @@
 
 ## 历史列表容量收尾
 
-`app/fabric/service/history_test.go` 在工单与采集、Self 与 All 四个组合各建立 225 条历史记录，混合隐藏目标，校验第 7 页、准确可见计数及真实反序列化批量大小。原实现每次读取 225 条，测试先失败；修复后受限范围每次不超过 100 条，All 范围只读取请求的 17 条。
+`app/net/service/fabric/history_test.go` 在工单与采集、Self 与 All 四个组合各建立 225 条历史记录，混合隐藏目标，校验第 7 页、准确可见计数及真实反序列化批量大小。原实现每次读取 225 条，测试先失败；修复后受限范围每次不超过 100 条，All 范围只读取请求的 17 条。
 
-本次收尾后，`go vet ./app/fabric/... ./app/delivery/...` 通过。并行集成自动连接功能的新测试已加入，完整 affected suite 和 race 的本次重跑出现该功能的预期 RED：Fabric `TestFabricEffectiveConnectionSupportsAutomaticNXOSAndRejectsChangedDriver`；Delivery API `TestOptionsInventoryGroupsAreScopedAndRetainUnclassifiedDevices`；Delivery service 的 `TestAutomaticConnectionUsesInventoryWithoutWritingMetadata`、`TestConnectionInfersOnlySupportedUnambiguousProfiles`、`TestManualProfileAndRestoreAutomaticRetainCAS`、`TestAutomaticTargetsPersistGroupingAndHistoricalProfile`、`TestDeviceListUsesEffectiveConnections`、`TestSubmissionRejectsChangedProfileOrRoleFromSelection`、`TestExecutionRechecksAutomaticProfileBeforeEveryWrite`。失败原因为自动连接尚返回 `connection_missing`；该功能属于本代理树以外的并发工作，本轮未修改，保留其代码及测试。根协调者汇总最终集成验证。本次历史分页与原有权限回归未失败。
+本次收尾后，`go vet ./app/net/...` 通过。并行集成自动连接功能的新测试已加入，完整 affected suite 和 race 的本次重跑出现该功能的预期 RED：Fabric `TestFabricEffectiveConnectionSupportsAutomaticNXOSAndRejectsChangedDriver`；Delivery API `TestOptionsInventoryGroupsAreScopedAndRetainUnclassifiedDevices`；Delivery service 的 `TestAutomaticConnectionUsesInventoryWithoutWritingMetadata`、`TestConnectionInfersOnlySupportedUnambiguousProfiles`、`TestManualProfileAndRestoreAutomaticRetainCAS`、`TestAutomaticTargetsPersistGroupingAndHistoricalProfile`、`TestDeviceListUsesEffectiveConnections`、`TestSubmissionRejectsChangedProfileOrRoleFromSelection`、`TestExecutionRechecksAutomaticProfileBeforeEveryWrite`。失败原因为自动连接尚返回 `connection_missing`；该功能属于本代理树以外的并发工作，本轮未修改，保留其代码及测试。根协调者汇总最终集成验证。本次历史分页与原有权限回归未失败。
 
 本轮历史列表专项最终命令及结果：
 
-- `go test ./app/fabric/service -run 'TestHistoricalPages|TestReview' -count=1`：通过，0.618s。
-- `go test -race ./app/fabric/service -run 'TestHistoricalPages|TestReview' -count=1`：通过，3.836s。
-- `go vet ./app/fabric/... ./app/delivery/...`：通过。
+- `go test ./app/net/service/fabric -run 'TestHistoricalPages|TestReview' -count=1`：通过，0.618s。
+- `go test -race ./app/net/service/fabric -run 'TestHistoricalPages|TestReview' -count=1`：通过，3.836s。
+- `go vet ./app/net/...`：通过。

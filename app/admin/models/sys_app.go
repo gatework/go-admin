@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"go-admin/common/models"
+	"github.com/gatework/motor/common/models"
 )
 
 // The values sys_app.status takes.
@@ -30,15 +30,14 @@ const (
 // every other sys_* table follows. Uninstalling an app deletes its row
 // outright; a later reinstall creates a fresh one.
 type SysApp struct {
-	models.Model // Id int, primary key, autoincrement
-
+	models.Model     // Id int, primary key, autoincrement
+	models.ControlBy // CreateBy/UpdateBy: which operator triggered the attempt
 	// AppCode is the app.Manifest.Code / migration.ForApp / seed.SeedMenus
 	// identity, already lower-cased by migration.NormalizeAppCode before
 	// anything reaches this table. Unique: row existence alone answers G2
 	// ("is app X installed").
 	AppCode string `json:"appCode" gorm:"type:varchar(64);not null;uniqueIndex:uk_sys_app_app_code;comment:app code"`
-
-	Name string `json:"name" gorm:"size:128;not null;comment:display name, from Manifest.Name"`
+	Name    string `json:"name" gorm:"size:128;not null;comment:display name, from Manifest.Name"`
 	// Version is the version this row currently reflects - attempted or
 	// confirmed, disambiguated by Status. It does not drive which
 	// migrations run next; sys_migration's per-version rows do that (see
@@ -47,26 +46,22 @@ type SysApp struct {
 	Version     string `json:"version" gorm:"size:32;not null;comment:version this row currently reflects, see Status"`
 	Description string `json:"description" gorm:"size:255;not null;default:'';comment:from Manifest.Description"`
 	Author      string `json:"author" gorm:"size:128;not null;default:'';comment:from Manifest.Author"`
-
 	// Requires is a comma-separated list of app codes this app declared as
 	// dependencies (Manifest.Requires). Stored as plain VARCHAR CSV, not
 	// JSON - see design doc §1.3 for why. F8 (P1) is what validates and
 	// orders on this; this batch only stores what the manifest declared.
 	Requires string `json:"requires" gorm:"size:255;not null;default:'';comment:declared dependency app codes, comma separated"`
-
 	// Pricing/License are reserved passthrough fields (PRD 003; PRD 008
 	// open question 1). This batch stores whatever the manifest carries and
 	// does not interpret either one.
 	Pricing string `json:"pricing" gorm:"size:64;not null;default:'';comment:reserved, not interpreted by this batch"`
 	License string `json:"license" gorm:"size:64;not null;default:'';comment:reserved, not interpreted by this batch"`
-
 	// Status: 1=installing 2=installed 3=failed. Three states, not a
 	// single "1=installed", because a partial, stuck install has to be an
 	// observable row rather than "the row doesn't exist yet" - see design
 	// doc §1.5 for why cross-migration-file atomicity is not available on
 	// MySQL (implicit commit on DDL).
 	Status int `json:"status" gorm:"size:4;not null;default:1;comment:1=installing 2=installed 3=failed"`
-
 	// FailedVersion and LastError are DIAGNOSTIC TEXT ONLY - what a human
 	// looking at this row is told about the last failure, nothing more. No
 	// code anywhere may read either one to decide what to do next.
@@ -86,7 +81,6 @@ type SysApp struct {
 	// reading the row.
 	FailedVersion string `json:"failedVersion" gorm:"size:64;not null;default:'';comment:diagnostic snapshot only, not a judgment basis; meaningful only when status=3"`
 	LastError     string `json:"lastError" gorm:"size:255;not null;default:'';comment:diagnostic text only, not a judgment basis; meaningful only when status=3"`
-
 	// InstalledAt is when this app first reached status=installed - set
 	// once, never moved by a later upgrade (see design doc §1.4). Nullable,
 	// unlike every other column here: a row can exist before it has a
@@ -97,10 +91,9 @@ type SysApp struct {
 	// so nullability here opens no such hole.
 	InstalledAt *time.Time `json:"installedAt" gorm:"comment:first successful install time; null until status first reaches installed"`
 	UpdatedAt   time.Time  `json:"updatedAt" gorm:"comment:last updated time"`
-
-	models.ControlBy // CreateBy/UpdateBy: which operator triggered the attempt
 }
 
+// TableName returns the explicit persistence table name.
 func (*SysApp) TableName() string {
 	return "sys_app"
 }

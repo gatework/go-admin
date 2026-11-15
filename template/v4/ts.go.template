@@ -10,7 +10,7 @@
 {{- $pkType := "number" -}}
 {{- $hasQuery := false -}}
 {{- range .Columns -}}
-  {{- if and .Pk (or (eq .GoType "string") (eq .GoType "int64")) }}{{$pkType = "string"}}{{end -}}
+  {{- if and .PK (or (eq .GoType "string") (eq .GoType "int64")) }}{{$pkType = "string"}}{{end -}}
   {{- if eq .IsQuery "1" }}{{$hasQuery = true}}{{end -}}
 {{- end -}}
 import request from '@/utils/request'
@@ -18,7 +18,7 @@ import type { ApiResponse, PageQuery, PageResult, Id } from '@/types/api'
 
 export interface {{.ClassName}} {
 {{- range .Columns}}
-  {{.JsonField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
+  {{.JSONField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
     number
   {{- else if or (eq .GoType "int64") (eq .GoType "*int64") -}}
     string
@@ -38,7 +38,7 @@ export interface {{.ClassName}} {
 export interface {{.ClassName}}Query {
 {{- range .Columns}}
 {{- if eq .IsQuery "1"}}
-  {{.JsonField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
+  {{.JSONField}}?: {{if or (eq .GoType "int") (eq .GoType "*int") -}}
     number
   {{- else if or (eq .GoType "int64") (eq .GoType "*int64") -}}
     string
@@ -97,9 +97,9 @@ export function list{{.ClassName}}(query: {{.ClassName}}Query & PageQuery) {
   })
 }
 
-export function get{{.ClassName}}({{.PkJsonField}}: {{$pkType}}) {
+export function get{{.ClassName}}({{.PKJSONField}}: {{$pkType}}) {
   return request<ApiResponse<{{.ClassName}}>>({
-    url: '/api/v1/{{.ModuleName}}/' + {{.PkJsonField}},
+    url: '/api/v1/{{.ModuleName}}/' + {{.PKJSONField}},
     method: 'get'
   })
 }
@@ -114,7 +114,7 @@ export function add{{.ClassName}}(data: {{.ClassName}}) {
 
 export function update{{.ClassName}}(data: {{.ClassName}}) {
   return request<ApiResponse<{{.ClassName}}>>({
-    url: '/api/v1/{{.ModuleName}}/' + data.{{.PkJsonField}},
+    url: '/api/v1/{{.ModuleName}}/' + data.{{.PKJSONField}},
     method: 'put',
     data
   })

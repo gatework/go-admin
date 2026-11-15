@@ -2,53 +2,56 @@ package models
 
 import (
 	"fmt"
-	"go-admin/common/global"
-	"go-admin/config"
 	"log"
 	"strings"
+
+	"github.com/gatework/motor/config"
 
 	"gorm.io/gorm"
 )
 
-func InitDb(db *gorm.DB) (err error) {
+// InitDB handles the initdb operation.
+func InitDB(db *gorm.DB) (err error) {
 	filePath := "config/db.sql"
-	if global.Driver == "postgres" {
+	switch db.Name() {
+	case "postgres":
 		filePath := "config/db.sql"
-		if err = ExecSql(db, filePath); err != nil {
+		if err = ExecSQL(db, filePath); err != nil {
 			return err
 		}
 		filePath = "config/pg.sql"
-		err = ExecSql(db, filePath)
-	} else if global.Driver == "mysql" {
+		err = ExecSQL(db, filePath)
+	case "mysql":
 		filePath = "config/db-begin-mysql.sql"
-		if err = ExecSql(db, filePath); err != nil {
+		if err = ExecSQL(db, filePath); err != nil {
 			return err
 		}
 		filePath = "config/db.sql"
-		if err = ExecSql(db, filePath); err != nil {
+		if err = ExecSQL(db, filePath); err != nil {
 			return err
 		}
 		filePath = "config/db-end-mysql.sql"
-		err = ExecSql(db, filePath)
-	} else {
-		err = ExecSql(db, filePath)
+		err = ExecSQL(db, filePath)
+	default:
+		err = ExecSQL(db, filePath)
 	}
 	return err
 }
 
-func ExecSql(db *gorm.DB, filePath string) error {
-	sql, err := Ioutil(filePath)
+// ExecSQL handles the execsql operation.
+func ExecSQL(db *gorm.DB, filePath string) error {
+	sql, err := readSeedSQL(filePath)
 	if err != nil {
 		fmt.Println("数据库基础数据初始化脚本读取失败！原因:", err.Error())
 		return err
 	}
 	sqlList := strings.Split(sql, ";")
-	for i := 0; i < len(sqlList)-1; i++ {
+	for i := range len(sqlList) - 1 {
 		if strings.Contains(sqlList[i], "--") {
 			fmt.Println(sqlList[i])
 			continue
 		}
-		sql := strings.Replace(sqlList[i]+";", "\n", "", -1)
+		sql := strings.ReplaceAll(sqlList[i]+";", "\n", "")
 		sql = strings.TrimSpace(sql)
 		if err = db.Exec(sql).Error; err != nil {
 			log.Printf("error sql: %s", sql)
@@ -60,13 +63,11 @@ func ExecSql(db *gorm.DB, filePath string) error {
 	return nil
 }
 
-func Ioutil(filePath string) (string, error) {
-	if contents, err := config.ReadSeed(filePath); err == nil {
-		//因为contents是[]byte类型，直接转换成string类型后会多一行空格,需要使用strings.Replace替换换行符
-		result := strings.Replace(string(contents), "\n", "", 1)
-		fmt.Println("Use ioutil.ReadFile to read a file:", result)
-		return result, nil
-	} else {
+// readSeedSQL handles the ioutil operation.
+func readSeedSQL(filePath string) (string, error) {
+	contents, err := config.ReadSeed(filePath)
+	if err != nil {
 		return "", err
 	}
+	return strings.Replace(string(contents), "\n", "", 1), nil
 }

@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// DBColumns stores dbcolumns data in the database.
 type DBColumns struct {
 	TableSchema            string `gorm:"column:TABLE_SCHEMA" json:"tableSchema"`
 	TableName              string `gorm:"column:TABLE_NAME" json:"tableName"`
@@ -22,6 +23,7 @@ type DBColumns struct {
 	ColumnComment          string `gorm:"column:COLUMN_COMMENT" json:"columnComment"`
 }
 
+// GetPage stores get page data in the database.
 func (e *DBColumns) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBColumns, int, error) {
 
 	var doc []DBColumns
@@ -46,6 +48,7 @@ func (e *DBColumns) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBColum
 	return doc, int(count), nil
 }
 
+// GetList stores get list data in the database.
 func (e *DBColumns) GetList(tx *gorm.DB) ([]DBColumns, error) {
 
 	var doc []DBColumns

@@ -14,10 +14,10 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	contractmodels "github.com/go-admin-team/go-admin-core/v2/sdk/contract/models"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/seed"
+	contractmodels "github.com/gatework/motor-core/sdk/contract/models"
+	"github.com/gatework/motor-core/sdk/contract/seed"
 
-	"go-admin/app/admin/models"
+	"github.com/gatework/motor/app/admin/models"
 )
 
 // newSeedTestDB builds the tables adminSeeder.SeedMenus writes to. sys_menu,
@@ -39,7 +39,7 @@ func newSeedTestDB(t *testing.T) *gorm.DB {
 	// 1786700007000, which is a framework migration and therefore runs ahead
 	// of every application's - version strings sort bare digits before any
 	// app-prefixed one.
-	if err := db.AutoMigrate(&models.SysMenu{}, &models.SysApi{}, &models.SysRole{},
+	if err := db.AutoMigrate(&models.SysMenu{}, &models.SysAPI{}, &models.SysRole{},
 		&models.SysAppCasbinGrant{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -61,7 +61,7 @@ func seedAdminRole(t *testing.T, db *gorm.DB) models.SysRole {
 	return role
 }
 
-// This is the acceptance case go-admin-core's docs/contract.md requires: one
+// This is the acceptance case motor-core's docs/contract.md requires: one
 // SeedMenus call populates all four tables a visible, working menu entry
 // needs, every row tagged with the appCode it was called with, and the
 // parent/child tree resolved into sys_menu's parent_id/paths.
@@ -71,21 +71,21 @@ func TestSeedMenusPopulatesAllFourTables(t *testing.T) {
 
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: contractmodels.Directory, Title: "Order Example", Path: "/apps/order", Component: "Layout", Sort: 10},
-		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Path: "list", Component: "apps/order/order/index", Sort: 1, ApiCodes: []string{"list"}},
+		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Path: "list", Component: "apps/order/order/index", Sort: 1, APICodes: []string{"list"}},
 		{Code: "btn-create", Parent: "list", Kind: contractmodels.Button, Title: "Create", Permission: "order:order:create", Sort: 1},
 	}
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 	}
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	})
 	if err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
-	var apiRows []models.SysApi
+	var apiRows []models.SysAPI
 	if err := db.Find(&apiRows).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -108,22 +108,22 @@ func TestSeedMenusPopulatesAllFourTables(t *testing.T) {
 		byName[m.MenuName] = m
 	}
 	dir, ok := byName[menuName("order", "dir")]
-	if !ok || dir.ParentId != 0 || dir.Paths != "/0/"+strconv.Itoa(dir.MenuId) {
+	if !ok || dir.ParentID != 0 || dir.Paths != "/0/"+strconv.Itoa(dir.MenuID) {
 		t.Fatalf("dir menu = %+v", dir)
 	}
 	list, ok := byName[menuName("order", "list")]
-	if !ok || list.ParentId != dir.MenuId || list.Paths != dir.Paths+"/"+strconv.Itoa(list.MenuId) {
+	if !ok || list.ParentID != dir.MenuID || list.Paths != dir.Paths+"/"+strconv.Itoa(list.MenuID) {
 		t.Fatalf("list menu = %+v (dir=%+v)", list, dir)
 	}
 	btn, ok := byName[menuName("order", "btn-create")]
-	if !ok || btn.ParentId != list.MenuId {
+	if !ok || btn.ParentID != list.MenuID {
 		t.Fatalf("btn menu = %+v (list=%+v)", btn, list)
 	}
 
-	// sys_menu_api_rule: gorm's own many2many join table for SysMenu.SysApi.
+	// sys_menu_api_rule: gorm's own many2many join table for SysMenu.SysAPI.
 	var joinCount int64
 	if err := db.Table("sys_menu_api_rule").
-		Where("sys_menu_menu_id = ? AND sys_api_id = ?", list.MenuId, apiRows[0].Id).
+		Where("sys_menu_menu_id = ? AND sys_api_id = ?", list.MenuID, apiRows[0].ID).
 		Count(&joinCount).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestSeedMenusToleratesMissingAdminRole(t *testing.T) {
 	db := newSeedTestDB(t)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", []seed.MenuSpec{
+		return adminSeeder{}.Menus(tx, "order", []seed.MenuSpec{
 			{Code: "dir", Kind: contractmodels.Directory, Title: "Order"},
 		}, nil)
 	})
@@ -180,7 +180,7 @@ func TestSeedMenusRejectsMalformedSpecs(t *testing.T) {
 	cases := []struct {
 		name  string
 		menus []seed.MenuSpec
-		apis  []seed.ApiSpec
+		apis  []seed.APISpec
 		want  string
 	}{
 		{
@@ -195,22 +195,22 @@ func TestSeedMenusRejectsMalformedSpecs(t *testing.T) {
 		},
 		{
 			name:  "unresolved api code",
-			menus: []seed.MenuSpec{{Code: "a", Kind: contractmodels.Menu, ApiCodes: []string{"missing"}}},
+			menus: []seed.MenuSpec{{Code: "a", Kind: contractmodels.Menu, APICodes: []string{"missing"}}},
 			want:  `ApiCodes references "missing"`,
 		},
 		{
 			name:  "unknown kind",
 			menus: []seed.MenuSpec{{Code: "a", Kind: "X"}},
-			want:  `Kind "X" is not one of Directory/Menu/Button`,
+			want:  `kind "X" is not one of Directory/Menu/Button`,
 		},
 		{
 			name:  "sort overflows a tinyint",
 			menus: []seed.MenuSpec{{Code: "a", Kind: contractmodels.Directory, Sort: 900}},
-			want:  `Sort 900 does not fit sys_menu.sort's tinyint column`,
+			want:  `sort 900 does not fit sys_menu.sort's tinyint column`,
 		},
 		{
 			name: "duplicate api code",
-			apis: []seed.ApiSpec{{Code: "x"}, {Code: "x"}},
+			apis: []seed.APISpec{{Code: "x"}, {Code: "x"}},
 			want: `duplicate ApiSpec.Code "x"`,
 		},
 	}
@@ -218,7 +218,7 @@ func TestSeedMenusRejectsMalformedSpecs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newSeedTestDB(t)
 			err := db.Transaction(func(tx *gorm.DB) error {
-				return adminSeeder{}.SeedMenus(tx, "order", tc.menus, tc.apis)
+				return adminSeeder{}.Menus(tx, "order", tc.menus, tc.apis)
 			})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want it to contain %q", err, tc.want)
@@ -238,7 +238,7 @@ func TestSeedMenusRejectsMalformedSpecs(t *testing.T) {
 func TestSeederIsRegistered(t *testing.T) {
 	db := newSeedTestDB(t)
 	err := db.Transaction(func(tx *gorm.DB) error {
-		return seed.SeedMenus(tx, "probe", []seed.MenuSpec{{
+		return seed.Menus(tx, "probe", []seed.MenuSpec{{
 			Code: "root", Kind: contractmodels.Directory, Title: "Probe", Sort: 1,
 		}}, nil)
 	})
@@ -255,20 +255,20 @@ func TestSeederIsRegistered(t *testing.T) {
 // grantToAdminRole on an empty menu list wrote the sys_api rows and then no
 // casbin rule for them, so every one of those endpoints was denied to
 // everyone including admin, from a migration that reported success.
-func TestSeedMenusGrantsApisWhenThereAreNoMenus(t *testing.T) {
+func TestSeedMenusGrantsAPIsWhenThereAreNoMenus(t *testing.T) {
 	db := newSeedTestDB(t)
 	role := seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "hook", Title: "Inbound hook", Path: "/api/v1/hook", Method: "POST", Handle: "hook.Receive"},
 		{Code: "sync", Title: "Sync", Path: "/api/v1/sync", Method: "GET", Handle: "hook.Sync"},
 	}
-	if err := (adminSeeder{}).SeedMenus(db, "hooks", nil, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "hooks", nil, apis); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
 	var apiCount int64
-	db.Model(&models.SysApi{}).Where("app_code = ?", "hooks").Count(&apiCount)
+	db.Model(&models.SysAPI{}).Where("app_code = ?", "hooks").Count(&apiCount)
 	if apiCount != int64(len(apis)) {
 		t.Fatalf("sys_api rows = %d, want %d", apiCount, len(apis))
 	}
@@ -290,7 +290,7 @@ func TestSeedMenusWithNothingRegisteredWritesNothing(t *testing.T) {
 	db := newSeedTestDB(t)
 	seedAdminRole(t, db)
 
-	if err := (adminSeeder{}).SeedMenus(db, "empty", nil, nil); err != nil {
+	if err := (adminSeeder{}).Menus(db, "empty", nil, nil); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 	for _, table := range []string{"casbin_rule", "sys_role_menu"} {
@@ -306,7 +306,7 @@ func TestSeedMenusWithNothingRegisteredWritesNothing(t *testing.T) {
 // because SysMenu.SeedCode is the only field in the struct carrying the
 // uk_sys_menu_app_seed_code_del tag - app_code already carries a different,
 // non-unique index name of its own, and the embedded ModelTime's
-// DeletedAt (aliased from go-admin-core) cannot be given a third one. The
+// DeletedAt (aliased from motor-core) cannot be given a third one. The
 // real migration (cmd/migrate/migration/version/1786700008000_seed_natural_keys.go)
 // never lets AutoMigrate touch this table for exactly that reason: it
 // builds the composite (app_code, seed_code, deleted_at) index by hand
@@ -339,31 +339,31 @@ func TestSeedMenusIsIdempotentAcrossARetry(t *testing.T) {
 
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: contractmodels.Directory, Title: "Order", Sort: 10},
-		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Sort: 1, ApiCodes: []string{"list"}},
+		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Sort: 1, APICodes: []string{"list"}},
 	}
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"},
 	}
 
 	run := func() {
 		t.Helper()
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+			return adminSeeder{}.Menus(tx, "order", menus, apis)
 		}); err != nil {
 			t.Fatalf("SeedMenus: %v", err)
 		}
 	}
 	run()
 	firstMenuIDs := allMenuIDs(t, db, "order")
-	firstApiIDs := allApiIDs(t, db, "order")
+	firstAPIIDs := allAPIIDs(t, db, "order")
 
 	run() // the retry
 
 	if got := allMenuIDs(t, db, "order"); !sameIDs(got, firstMenuIDs) {
 		t.Errorf("sys_menu ids after retry = %v, want unchanged %v (a second call inserted new rows)", got, firstMenuIDs)
 	}
-	if got := allApiIDs(t, db, "order"); !sameIDs(got, firstApiIDs) {
-		t.Errorf("sys_api ids after retry = %v, want unchanged %v (a second call inserted new rows)", got, firstApiIDs)
+	if got := allAPIIDs(t, db, "order"); !sameIDs(got, firstAPIIDs) {
+		t.Errorf("sys_api ids after retry = %v, want unchanged %v (a second call inserted new rows)", got, firstAPIIDs)
 	}
 
 	assertRowCount(t, db, "sys_api", 1)
@@ -384,10 +384,10 @@ func TestSeedMenusOnlyReusesLiveRows(t *testing.T) {
 	seedAdminRole(t, db)
 
 	menus := []seed.MenuSpec{{Code: "dir", Kind: contractmodels.Directory, Title: "Order", Sort: 10}}
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestSeedMenusOnlyReusesLiveRows(t *testing.T) {
 	}
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus after soft-delete: %v", err)
 	}
@@ -413,14 +413,14 @@ func TestSeedMenusOnlyReusesLiveRows(t *testing.T) {
 	assertRowCount(t, db, "sys_menu", 2)
 	assertRowCount(t, db, "sys_api", 2)
 
-	var liveMenus, liveApis int64
+	var liveMenus, liveAPIs int64
 	db.Model(&models.SysMenu{}).Where("app_code = ?", "order").Count(&liveMenus)
-	db.Model(&models.SysApi{}).Where("app_code = ?", "order").Count(&liveApis)
+	db.Model(&models.SysAPI{}).Where("app_code = ?", "order").Count(&liveAPIs)
 	if liveMenus != 1 {
 		t.Errorf("live sys_menu rows = %d, want 1", liveMenus)
 	}
-	if liveApis != 1 {
-		t.Errorf("live sys_api rows = %d, want 1", liveApis)
+	if liveAPIs != 1 {
+		t.Errorf("live sys_api rows = %d, want 1", liveAPIs)
 	}
 }
 
@@ -435,17 +435,17 @@ func TestSeedMenusScopesTheNaturalKeyByAppCode(t *testing.T) {
 	seedAdminRole(t, db)
 
 	menus := []seed.MenuSpec{{Code: "dir", Kind: contractmodels.Directory, Title: "Dir", Sort: 10}}
-	apis := []seed.ApiSpec{{Code: "list", Title: "Shared endpoint", Path: "/api/v1/shared", Method: "GET"}}
+	apis := []seed.APISpec{{Code: "list", Title: "Shared endpoint", Path: "/api/v1/shared", Method: "GET"}}
 
 	for _, appCode := range []string{"order", "billing"} {
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			return adminSeeder{}.SeedMenus(tx, appCode, menus, apis)
+			return adminSeeder{}.Menus(tx, appCode, menus, apis)
 		}); err != nil {
 			t.Fatalf("SeedMenus(%q): %v", appCode, err)
 		}
 	}
 
-	var apiRows []models.SysApi
+	var apiRows []models.SysAPI
 	if err := db.Where("path = ? AND action = ?", "/api/v1/shared", "GET").
 		Order("app_code").Find(&apiRows).Error; err != nil {
 		t.Fatalf("read sys_api: %v", err)
@@ -477,20 +477,20 @@ func allMenuIDs(t *testing.T, db *gorm.DB, appCode string) []int {
 	}
 	ids := make([]int, len(rows))
 	for i, r := range rows {
-		ids[i] = r.MenuId
+		ids[i] = r.MenuID
 	}
 	return ids
 }
 
-func allApiIDs(t *testing.T, db *gorm.DB, appCode string) []int {
+func allAPIIDs(t *testing.T, db *gorm.DB, appCode string) []int {
 	t.Helper()
-	var rows []models.SysApi
+	var rows []models.SysAPI
 	if err := db.Where("app_code = ?", appCode).Order("id").Find(&rows).Error; err != nil {
 		t.Fatalf("read sys_api: %v", err)
 	}
 	ids := make([]int, len(rows))
 	for i, r := range rows {
-		ids[i] = r.Id
+		ids[i] = r.ID
 	}
 	return ids
 }
@@ -543,7 +543,7 @@ func existingHalfWrittenMenu(t *testing.T, db *gorm.DB, appCode, seedCode string
 		MenuName: menuName(appCode, seedCode),
 		AppCode:  appCode,
 		SeedCode: &code,
-		ParentId: parentID,
+		ParentID: parentID,
 		Visible:  "0",
 		IsFrame:  "1",
 		// Paths deliberately left "" - never computed, the same as a row
@@ -575,34 +575,34 @@ func TestSeedMenusRepairsAnIncompleteExistingRow(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
-	apiRows, err := seedApis(db, "order", apis)
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apiRows, err := seedAPIs(db, "order", apis)
 	if err != nil {
 		t.Fatalf("seedApis: %v", err)
 	}
 
 	dir := existingHalfWrittenMenu(t, db, "order", "dir", 0)
-	list := existingHalfWrittenMenu(t, db, "order", "list", dir.MenuId)
+	list := existingHalfWrittenMenu(t, db, "order", "list", dir.MenuID)
 
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: contractmodels.Directory, Title: "Order", Sort: 10},
-		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Sort: 1, ApiCodes: []string{"list"}},
+		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: "Orders", Sort: 1, APICodes: []string{"list"}},
 	}
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
-	wantDirPaths := "/0/" + strconv.Itoa(dir.MenuId)
-	wantListPaths := wantDirPaths + "/" + strconv.Itoa(list.MenuId)
+	wantDirPaths := "/0/" + strconv.Itoa(dir.MenuID)
+	wantListPaths := wantDirPaths + "/" + strconv.Itoa(list.MenuID)
 
 	var gotDir, gotList models.SysMenu
-	if err := db.First(&gotDir, dir.MenuId).Error; err != nil {
+	if err := db.First(&gotDir, dir.MenuID).Error; err != nil {
 		t.Fatalf("read dir: %v", err)
 	}
-	if err := db.First(&gotList, list.MenuId).Error; err != nil {
+	if err := db.First(&gotList, list.MenuID).Error; err != nil {
 		t.Fatalf("read list: %v", err)
 	}
 	if gotDir.Paths != wantDirPaths {
@@ -611,7 +611,7 @@ func TestSeedMenusRepairsAnIncompleteExistingRow(t *testing.T) {
 	if gotList.Paths != wantListPaths {
 		t.Errorf("list.Paths = %q, want %q - a retried install left the seeded subtree with a broken materialized path", gotList.Paths, wantListPaths)
 	}
-	if n := bindingCount(t, db, list.MenuId, apiRows["list"].Id); n != 1 {
+	if n := bindingCount(t, db, list.MenuID, apiRows["list"].ID); n != 1 {
 		t.Errorf("sys_menu_api_rule binding count for list = %d, want 1 - a retried install left the menu with its api granted to no one", n)
 	}
 }
@@ -622,7 +622,7 @@ func TestSeedMenusRepairsAnIncompleteExistingRow(t *testing.T) {
 // one repair path at a time from TestSeedMenusRepairsAnIncompleteExistingRow's
 // combined (both broken) case.
 func soloMenuSpec() []seed.MenuSpec {
-	return []seed.MenuSpec{{Code: "solo", Kind: contractmodels.Menu, Title: "Solo", Sort: 1, ApiCodes: []string{"list"}}}
+	return []seed.MenuSpec{{Code: "solo", Kind: contractmodels.Menu, Title: "Solo", Sort: 1, APICodes: []string{"list"}}}
 }
 
 // Only the binding is missing; paths is already correct. The repair must
@@ -632,34 +632,34 @@ func TestSeedMenusRepairsOnlyAMissingBinding(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
-	apiRows, err := seedApis(db, "order", apis)
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apiRows, err := seedAPIs(db, "order", apis)
 	if err != nil {
 		t.Fatalf("seedApis: %v", err)
 	}
 
 	solo := existingHalfWrittenMenu(t, db, "order", "solo", 0)
-	wantPaths := "/0/" + strconv.Itoa(solo.MenuId)
-	if err := db.Model(&models.SysMenu{}).Where("menu_id = ?", solo.MenuId).
+	wantPaths := "/0/" + strconv.Itoa(solo.MenuID)
+	if err := db.Model(&models.SysMenu{}).Where("menu_id = ?", solo.MenuID).
 		Update("paths", wantPaths).Error; err != nil {
 		t.Fatalf("set paths: %v", err)
 	}
 	// The binding is deliberately left unwritten.
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", soloMenuSpec(), apis)
+		return adminSeeder{}.Menus(tx, "order", soloMenuSpec(), apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
 	var got models.SysMenu
-	if err := db.First(&got, solo.MenuId).Error; err != nil {
+	if err := db.First(&got, solo.MenuID).Error; err != nil {
 		t.Fatalf("read solo: %v", err)
 	}
 	if got.Paths != wantPaths {
 		t.Errorf("paths changed from %q to %q; repairing a missing binding must not touch an already-correct path", wantPaths, got.Paths)
 	}
-	if n := bindingCount(t, db, solo.MenuId, apiRows["list"].Id); n != 1 {
+	if n := bindingCount(t, db, solo.MenuID, apiRows["list"].ID); n != 1 {
 		t.Errorf("binding count = %d, want 1", n)
 	}
 }
@@ -673,8 +673,8 @@ func TestSeedMenusRepairsOnlyMissingPaths(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
-	apiRows, err := seedApis(db, "order", apis)
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apiRows, err := seedAPIs(db, "order", apis)
 	if err != nil {
 		t.Fatalf("seedApis: %v", err)
 	}
@@ -682,27 +682,27 @@ func TestSeedMenusRepairsOnlyMissingPaths(t *testing.T) {
 	solo := existingHalfWrittenMenu(t, db, "order", "solo", 0)
 	if err := db.Exec(
 		"INSERT INTO sys_menu_api_rule (sys_menu_menu_id, sys_api_id) VALUES (?, ?)",
-		solo.MenuId, apiRows["list"].Id,
+		solo.MenuID, apiRows["list"].ID,
 	).Error; err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
 	// solo.Paths is deliberately left "" by existingHalfWrittenMenu.
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", soloMenuSpec(), apis)
+		return adminSeeder{}.Menus(tx, "order", soloMenuSpec(), apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
-	wantPaths := "/0/" + strconv.Itoa(solo.MenuId)
+	wantPaths := "/0/" + strconv.Itoa(solo.MenuID)
 	var got models.SysMenu
-	if err := db.First(&got, solo.MenuId).Error; err != nil {
+	if err := db.First(&got, solo.MenuID).Error; err != nil {
 		t.Fatalf("read solo: %v", err)
 	}
 	if got.Paths != wantPaths {
 		t.Errorf("paths = %q, want %q", got.Paths, wantPaths)
 	}
-	if n := bindingCount(t, db, solo.MenuId, apiRows["list"].Id); n != 1 {
+	if n := bindingCount(t, db, solo.MenuID, apiRows["list"].ID); n != 1 {
 		t.Errorf("binding count = %d, want 1 - repairing paths must not duplicate an already-correct binding", n)
 	}
 }
@@ -727,12 +727,6 @@ func (l *capturingLogger) Trace(ctx context.Context, begin time.Time, fc func() 
 	l.mu.Unlock()
 }
 
-func (l *capturingLogger) all() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return strings.Join(l.stmts, "\n")
-}
-
 // Both paths and the binding are already correct - the ordinary shape of
 // every retry after the first one succeeds in full. Repairing an
 // already-consistent row must not touch it: paths is read-before-write and
@@ -747,16 +741,16 @@ func TestSeedMenusFullyConsistentRowCausesNoPathsUpdate(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
 	menus := soloMenuSpec()
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus (first): %v", err)
 	}
 
-	var apiRows []models.SysApi
+	var apiRows []models.SysAPI
 	db.Where("app_code = ?", "order").Find(&apiRows)
 	var soloRow models.SysMenu
 	if err := db.Where("app_code = ? AND seed_code = ?", "order", "solo").First(&soloRow).Error; err != nil {
@@ -765,7 +759,7 @@ func TestSeedMenusFullyConsistentRowCausesNoPathsUpdate(t *testing.T) {
 	if soloRow.Paths == "" {
 		t.Fatalf("solo.Paths is empty after the first call; the fixture itself is broken, not what this test means to check")
 	}
-	wantBindings := bindingCount(t, db, soloRow.MenuId, apiRows[0].Id)
+	wantBindings := bindingCount(t, db, soloRow.MenuID, apiRows[0].ID)
 	if wantBindings != 1 {
 		t.Fatalf("binding count after the first call = %d, want 1; the fixture itself is broken", wantBindings)
 	}
@@ -774,7 +768,7 @@ func TestSeedMenusFullyConsistentRowCausesNoPathsUpdate(t *testing.T) {
 	captured := db.Session(&gorm.Session{Logger: capturing})
 
 	if err := captured.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus (retry): %v", err)
 	}
@@ -783,7 +777,7 @@ func TestSeedMenusFullyConsistentRowCausesNoPathsUpdate(t *testing.T) {
 	if strings.Contains(all, "UPDATE") && strings.Contains(all, "SYS_MENU") && strings.Contains(all, "PATHS") {
 		t.Errorf("a fully consistent retry executed a paths UPDATE against sys_menu:\n%s", capturing.all())
 	}
-	if got := bindingCount(t, db, soloRow.MenuId, apiRows[0].Id); got != 1 {
+	if got := bindingCount(t, db, soloRow.MenuID, apiRows[0].ID); got != 1 {
 		t.Errorf("binding count after the retry = %d, want 1 (unchanged)", got)
 	}
 }
@@ -800,11 +794,11 @@ func TestSeedMenusPreservesAHandAddedBinding(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
+	apis := []seed.APISpec{{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET"}}
 	menus := soloMenuSpec()
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus (first): %v", err)
 	}
@@ -817,13 +811,13 @@ func TestSeedMenusPreservesAHandAddedBinding(t *testing.T) {
 	// An api this call's ApiSpec list never mentions - standing in for one
 	// belonging to some other feature entirely, bound to this menu by an
 	// administrator, not by any SeedMenus call.
-	handAdded := models.SysApi{Path: "/api/v1/order/export", Action: "GET", Type: "SYS", AppCode: "order"}
+	handAdded := models.SysAPI{Path: "/api/v1/order/export", Action: "GET", Type: "SYS", AppCode: "order"}
 	if err := db.Create(&handAdded).Error; err != nil {
 		t.Fatalf("seed the hand-added api: %v", err)
 	}
 	if err := db.Exec(
 		"INSERT INTO sys_menu_api_rule (sys_menu_menu_id, sys_api_id) VALUES (?, ?)",
-		soloRow.MenuId, handAdded.Id,
+		soloRow.MenuID, handAdded.ID,
 	).Error; err != nil {
 		t.Fatalf("seed the hand-added binding: %v", err)
 	}
@@ -831,21 +825,21 @@ func TestSeedMenusPreservesAHandAddedBinding(t *testing.T) {
 	// A retry with the exact same specs - solo's ApiCodes still names only
 	// "list".
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return adminSeeder{}.SeedMenus(tx, "order", menus, apis)
+		return adminSeeder{}.Menus(tx, "order", menus, apis)
 	}); err != nil {
 		t.Fatalf("SeedMenus (retry): %v", err)
 	}
 
-	if n := bindingCount(t, db, soloRow.MenuId, handAdded.Id); n != 1 {
+	if n := bindingCount(t, db, soloRow.MenuID, handAdded.ID); n != 1 {
 		t.Errorf("hand-added binding count = %d, want 1 - a retry silently deleted a binding it does not own", n)
 	}
 
-	var apiRows []models.SysApi
+	var apiRows []models.SysAPI
 	db.Where("app_code = ? AND path = ?", "order", "/api/v1/order").Find(&apiRows)
 	if len(apiRows) != 1 {
 		t.Fatalf("seeded api not found as expected: %+v", apiRows)
 	}
-	if n := bindingCount(t, db, soloRow.MenuId, apiRows[0].Id); n != 1 {
+	if n := bindingCount(t, db, soloRow.MenuID, apiRows[0].ID); n != 1 {
 		t.Errorf("the seed's own binding count = %d, want 1 - it must survive the retry too", n)
 	}
 }
@@ -857,11 +851,11 @@ func TestSeedMenusRecordsTheGrantsItCreated(t *testing.T) {
 	db := newSeedTestDB(t)
 	role := seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 		{Code: "create", Title: "Create order", Path: "/api/v1/order", Method: "POST", Handle: "apis.Order.Insert-fm"},
 	}
-	if err := (adminSeeder{}).SeedMenus(db, "order", nil, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", nil, apis); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
@@ -892,11 +886,11 @@ func TestSeedMenusDoesNotClaimAPolicyItDidNotCreate(t *testing.T) {
 		t.Fatalf("pre-existing policy: %v", err)
 	}
 
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 		{Code: "create", Title: "Create order", Path: "/api/v1/order", Method: "POST", Handle: "apis.Order.Insert-fm"},
 	}
-	if err := (adminSeeder{}).SeedMenus(db, "order", nil, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", nil, apis); err != nil {
 		t.Fatalf("SeedMenus: %v", err)
 	}
 
@@ -929,11 +923,11 @@ func TestSeedMenusLedgerSurvivesARetry(t *testing.T) {
 	db := newSeedTestDB(t)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 	}
-	for i := 0; i < 2; i++ {
-		if err := (adminSeeder{}).SeedMenus(db, "order", nil, apis); err != nil {
+	for i := range 2 {
+		if err := (adminSeeder{}).Menus(db, "order", nil, apis); err != nil {
 			t.Fatalf("SeedMenus run %d: %v", i+1, err)
 		}
 	}
@@ -955,10 +949,10 @@ func TestSeedMenusLedgerToleratesAnEntryWhosePolicyWasRemoved(t *testing.T) {
 	db := newSeedTestDB(t)
 	seedAdminRole(t, db)
 
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 	}
-	if err := (adminSeeder{}).SeedMenus(db, "order", nil, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", nil, apis); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
 	if err := db.Exec("DELETE FROM casbin_rule WHERE v1 = ? AND v2 = ?", "/api/v1/order", "GET").Error; err != nil {
@@ -970,7 +964,7 @@ func TestSeedMenusLedgerToleratesAnEntryWhosePolicyWasRemoved(t *testing.T) {
 		t.Fatalf("the ledger entry is gone, so this test is not set up: %d rows", ledger)
 	}
 
-	if err := (adminSeeder{}).SeedMenus(db, "order", nil, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", nil, apis); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 
@@ -989,24 +983,24 @@ func TestSeedMenusLedgerToleratesAnEntryWhosePolicyWasRemoved(t *testing.T) {
 // removed and written again kept parent_id on the dead row while its paths
 // named the new one, so the menu was gone from the sidebar and the migration
 // said it had succeeded.
-func TestSeedMenusRepairsParentIdAfterTheParentWasRemoved(t *testing.T) {
+func TestSeedMenusRepairsParentIDAfterTheParentWasRemoved(t *testing.T) {
 	db := newSeedTestDB(t)
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
 
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
 	var dir models.SysMenu
 	if err := db.Where("app_code = ? AND seed_code = ?", "order", "dir").First(&dir).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Delete(&models.SysMenu{}, "menu_id = ?", dir.MenuId).Error; err != nil {
+	if err := db.Delete(&models.SysMenu{}, "menu_id = ?", dir.MenuID).Error; err != nil {
 		t.Fatalf("removing the parent: %v", err)
 	}
 
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("second seed: %v", err)
 	}
 
@@ -1017,14 +1011,14 @@ func TestSeedMenusRepairsParentIdAfterTheParentWasRemoved(t *testing.T) {
 	if err := db.Where("app_code = ? AND seed_code = ?", "order", "list").First(&list).Error; err != nil {
 		t.Fatal(err)
 	}
-	if newDir.MenuId == dir.MenuId {
+	if newDir.MenuID == dir.MenuID {
 		t.Fatal("the removed parent was reused, so this test proves nothing")
 	}
-	if list.ParentId != newDir.MenuId {
+	if list.ParentID != newDir.MenuID {
 		t.Errorf("parent_id = %d, want the new parent %d; the menu hangs off a row that is gone",
-			list.ParentId, newDir.MenuId)
+			list.ParentID, newDir.MenuID)
 	}
-	if want := newDir.Paths + "/" + strconv.Itoa(list.MenuId); list.Paths != want {
+	if want := newDir.Paths + "/" + strconv.Itoa(list.MenuID); list.Paths != want {
 		t.Errorf("paths = %q, want %q", list.Paths, want)
 	}
 }
@@ -1037,7 +1031,7 @@ func TestSeedMenusMovesTheSubtreeUnderARepairedMenu(t *testing.T) {
 	seedAdminRole(t, db)
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
 
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
 	var dir, list models.SysMenu
@@ -1046,12 +1040,12 @@ func TestSeedMenusMovesTheSubtreeUnderARepairedMenu(t *testing.T) {
 
 	// By hand, under the seeded menu, the way an administrator would.
 	hand := models.SysMenu{MenuName: "HandMade", Title: "By hand", MenuType: contractmodels.Menu,
-		ParentId: list.MenuId}
+		ParentID: list.MenuID}
 	if err := db.Create(&hand).Error; err != nil {
 		t.Fatal(err)
 	}
-	hand.Paths = list.Paths + "/" + strconv.Itoa(hand.MenuId)
-	db.Model(&models.SysMenu{}).Where("menu_id = ?", hand.MenuId).Update("paths", hand.Paths)
+	hand.Paths = list.Paths + "/" + strconv.Itoa(hand.MenuID)
+	db.Model(&models.SysMenu{}).Where("menu_id = ?", hand.MenuID).Update("paths", hand.Paths)
 
 	// Rows whose paths start with the moving one's as a string and are not
 	// underneath it as a path. /0/1/2 is a string prefix of /0/1/20, and a
@@ -1065,30 +1059,30 @@ func TestSeedMenusMovesTheSubtreeUnderARepairedMenu(t *testing.T) {
 			t.Fatal(err)
 		}
 		d.Paths = list.Paths + suffix
-		db.Model(&models.SysMenu{}).Where("menu_id = ?", d.MenuId).Update("paths", d.Paths)
+		db.Model(&models.SysMenu{}).Where("menu_id = ?", d.MenuID).Update("paths", d.Paths)
 		decoys = append(decoys, d)
 	}
 
-	if err := db.Delete(&models.SysMenu{}, "menu_id = ?", dir.MenuId).Error; err != nil {
+	if err := db.Delete(&models.SysMenu{}, "menu_id = ?", dir.MenuID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("second seed: %v", err)
 	}
 
 	var newList, movedHand models.SysMenu
 	db.Where("app_code = ? AND seed_code = ?", "order", "list").First(&newList)
-	db.Where("menu_id = ?", hand.MenuId).First(&movedHand)
-	if want := newList.Paths + "/" + strconv.Itoa(hand.MenuId); movedHand.Paths != want {
+	db.Where("menu_id = ?", hand.MenuID).First(&movedHand)
+	if want := newList.Paths + "/" + strconv.Itoa(hand.MenuID); movedHand.Paths != want {
 		t.Errorf("the hand-made menu's paths = %q, want %q; it no longer names its ancestors",
 			movedHand.Paths, want)
 	}
 	for _, d := range decoys {
 		var after models.SysMenu
-		db.Where("menu_id = ?", d.MenuId).First(&after)
+		db.Where("menu_id = ?", d.MenuID).First(&after)
 		if after.Paths != d.Paths {
 			t.Errorf("decoy %d moved from %q to %q; a prefix match caught a row that is not underneath",
-				d.MenuId, d.Paths, after.Paths)
+				d.MenuID, d.Paths, after.Paths)
 		}
 	}
 }
@@ -1101,7 +1095,7 @@ func TestSeedMenusRefreshesWhatTheSpecDecides(t *testing.T) {
 	seedAdminRole(t, db)
 
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
 	// An administrator hides it. That is not something the spec expresses,
@@ -1112,7 +1106,7 @@ func TestSeedMenusRefreshesWhatTheSpecDecides(t *testing.T) {
 	}
 
 	menus2, apis2 := orderMenuSpecs("Sales orders", "apps/order/list/index")
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus2, apis2); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus2, apis2); err != nil {
 		t.Fatalf("second seed: %v", err)
 	}
 
@@ -1131,12 +1125,12 @@ func TestSeedMenusRefreshesWhatTheSpecDecides(t *testing.T) {
 
 // orderMenuSpecs is a two-level tree plus one api, parameterised on the two
 // columns the upgrade test changes.
-func orderMenuSpecs(title, component string) ([]seed.MenuSpec, []seed.ApiSpec) {
+func orderMenuSpecs(title, component string) ([]seed.MenuSpec, []seed.APISpec) {
 	menus := []seed.MenuSpec{
 		{Code: "dir", Kind: contractmodels.Directory, Title: "Order Example", Path: "/apps/order", Component: "Layout", Sort: 10},
-		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: title, Path: "list", Component: component, Sort: 1, ApiCodes: []string{"list"}},
+		{Code: "list", Parent: "dir", Kind: contractmodels.Menu, Title: title, Path: "list", Component: component, Sort: 1, APICodes: []string{"list"}},
 	}
-	apis := []seed.ApiSpec{
+	apis := []seed.APISpec{
 		{Code: "list", Title: "Order list", Path: "/api/v1/order", Method: "GET", Handle: "apis.Order.GetPage-fm"},
 	}
 	return menus, apis
@@ -1162,7 +1156,7 @@ func TestSeedMenusAdoptsARowWrittenBeforeSeedCodeExisted(t *testing.T) {
 	}
 
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
@@ -1174,8 +1168,8 @@ func TestSeedMenusAdoptsARowWrittenBeforeSeedCodeExisted(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("%d rows carry that name; the row from before the column existed was not found", len(rows))
 	}
-	if rows[0].MenuId != legacy.MenuId {
-		t.Errorf("menu_id = %d, want the row that was already there (%d)", rows[0].MenuId, legacy.MenuId)
+	if rows[0].MenuID != legacy.MenuID {
+		t.Errorf("menu_id = %d, want the row that was already there (%d)", rows[0].MenuID, legacy.MenuID)
 	}
 	if rows[0].SeedCode == nil || *rows[0].SeedCode != "dir" {
 		t.Errorf("seed_code = %v, want it claimed", rows[0].SeedCode)
@@ -1195,7 +1189,7 @@ func TestSeedMenusRefusesAnAmbiguousAdoption(t *testing.T) {
 	useCompositeSeedCodeIndex(t, db)
 	seedAdminRole(t, db)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		row := models.SysMenu{
 			MenuName: menuName("order", "dir"), AppCode: "order", Title: fmt.Sprintf("copy %d", i),
 			MenuType: contractmodels.Directory,
@@ -1206,7 +1200,7 @@ func TestSeedMenusRefusesAnAmbiguousAdoption(t *testing.T) {
 	}
 
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
-	err := (adminSeeder{}).SeedMenus(db, "order", menus, apis)
+	err := (adminSeeder{}).Menus(db, "order", menus, apis)
 	if err == nil {
 		t.Fatal("an ambiguous adoption was accepted")
 	}
@@ -1237,12 +1231,12 @@ func TestSeedMenusDoesNotAdoptAnotherApplicationsRow(t *testing.T) {
 	}
 
 	menus, apis := orderMenuSpecs("Orders", "apps/order/index")
-	if err := (adminSeeder{}).SeedMenus(db, "order", menus, apis); err != nil {
+	if err := (adminSeeder{}).Menus(db, "order", menus, apis); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
 	var after models.SysMenu
-	db.Where("menu_id = ?", other.MenuId).First(&after)
+	db.Where("menu_id = ?", other.MenuID).First(&after)
 	if after.SeedCode != nil || after.Title != "crm's own" {
 		t.Errorf("another application's row was claimed: %+v", after)
 	}
@@ -1250,4 +1244,10 @@ func TestSeedMenusDoesNotAdoptAnotherApplicationsRow(t *testing.T) {
 	if err := db.Where("app_code = ? AND seed_code = ?", "order", "dir").First(&mine).Error; err != nil {
 		t.Fatalf("this application's own row was not created: %v", err)
 	}
+}
+
+func (l *capturingLogger) all() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.stmts, "\n")
 }

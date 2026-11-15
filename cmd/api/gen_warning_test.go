@@ -3,7 +3,8 @@ package api
 import (
 	"testing"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // The warning fires exactly where the generator's writing endpoints are served
@@ -26,9 +27,11 @@ func TestGeneratorWriteRoutesWarningFiresWhereTheExposureIs(t *testing.T) {
 		{"", false, "not served"},
 	} {
 		t.Run("mode="+tc.mode, func(t *testing.T) {
-			previous := config.ApplicationConfig.Mode
-			t.Cleanup(func() { config.ApplicationConfig.Mode = previous })
-			config.ApplicationConfig.Mode = tc.mode
+
+			testconfig.Apply(t, func(settings *config.Config) {
+				settings.
+					Application.Mode = tc.mode
+			})
 
 			if got := generatorWriteRoutesNeedWarning(); got != tc.want {
 				t.Errorf("mode %q: warning = %v, want %v (%s)", tc.mode, got, tc.want, tc.why)

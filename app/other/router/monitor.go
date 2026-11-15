@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/tools/transfer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"go-admin/common/health"
+	"github.com/gatework/motor-core/tools/transfer"
+
+	"github.com/gatework/motor/common/health"
 )
 
+//nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
 	routerNoCheckRole = append(routerNoCheckRole, RegisterMonitorRouter)
 }

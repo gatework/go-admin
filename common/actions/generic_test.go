@@ -1,6 +1,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,17 +10,20 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/go-admin-team/go-admin-core/v2/jwtauth"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"go-admin/common/actions"
-	"go-admin/common/dto"
-	"go-admin/common/models"
+	"github.com/gatework/motor-core/jwtauth"
+	"github.com/gatework/motor-core/sdk/config"
+
+	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/dto"
+	"github.com/gatework/motor/common/models"
+	"github.com/gatework/motor/internal/testconfig"
 )
 
 // probeSearch is probeIndexReq with a search field, so a list request can
@@ -29,33 +33,27 @@ type probeSearch struct {
 	Name           string `form:"name" search:"type:exact;column:name;table:action_probe_row"`
 }
 
-func (p *probeSearch) Generate() dto.Index        { o := *p; return &o }
-func (p *probeSearch) Bind(c *gin.Context) error  { return c.ShouldBind(p) }
-func (p *probeSearch) GetNeedSearch() interface{} { return *p }
+func (p *probeSearch) Generate() dto.Index       { o := *p; return &o }
+func (p *probeSearch) Bind(c *gin.Context) error { return c.ShouldBind(p) }
+func (p *probeSearch) GetNeedSearch() any        { return *p }
 
 // probeById names rows the way every ById DTO here does.
-type probeById struct {
-	dto.ObjectById
+type probeByID struct {
+	dto.ObjectByID
 }
-
-func (s *probeById) Generate() dto.Control                   { o := *s; return &o }
-func (s *probeById) GenerateM() (models.ActiveRecord, error) { return &probeRow{}, nil }
 
 // probeControl carries both the old actions' methods and ToModel, so one
 // request type serves both generations of action.
 type probeControl struct {
-	Id   int    `json:"id"`
+	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
 
 func (s *probeControl) Bind(c *gin.Context) error { return c.ShouldBindJSON(s) }
-func (s *probeControl) Generate() dto.Control     { o := *s; return &o }
-func (s *probeControl) GetId() interface{}        { return s.Id }
-func (s *probeControl) GenerateM() (models.ActiveRecord, error) {
-	return &probeRow{Model: models.Model{Id: s.Id}, Name: s.Name}, nil
-}
+func (s *probeControl) GetID() any                { return s.ID }
+
 func (s *probeControl) ToModel() (*probeRow, error) {
-	return &probeRow{Model: models.Model{Id: s.Id}, Name: s.Name}, nil
+	return &probeRow{ID: s.ID, Name: s.Name}, nil
 }
 
 // probeKey names a row by a string key, which the old actions handed to GORM
@@ -65,7 +63,30 @@ type probeKey struct {
 }
 
 func (s *probeKey) Bind(c *gin.Context) error { return c.ShouldBindUri(s) }
-func (s *probeKey) GetId() interface{}        { return s.Key }
+func (s *probeKey) GetID() any                { return s.Key }
+
+type capturingLogger struct {
+	gormlogger.Interface
+	mu    sync.Mutex
+	stmts []string
+}
+
+func (l *capturingLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	sql, _ := fc()
+	l.mu.Lock()
+	l.stmts = append(l.stmts, sql)
+	l.mu.Unlock()
+}
+
+type probeRow struct {
+	models.Model
+	models.ControlBy
+	Name string
+}
+
+func (*probeRow) TableName() string               { return "action_probe_row" }
+func (e *probeRow) Generate() models.ActiveRecord { o := *e; return &o }
+func (e *probeRow) GetID() any                    { return e.ID }
 
 func probeDB(t *testing.T, name string, l gormlogger.Interface) *gorm.DB {
 	t.Helper()
@@ -97,20 +118,12 @@ func probeEngine(db *gorm.DB, register func(r gin.IRoutes)) *gin.Engine {
 	return r
 }
 
-func oldRoutes(r gin.IRoutes) {
-	r.GET("/x", actions.IndexAction(&probeRow{}, &probeSearch{}, func() interface{} { l := make([]probeRow, 0); return &l }))
-	r.GET("/x/:id", actions.ViewAction(&probeById{}, func() interface{} { return &probeRow{} }))
-	r.POST("/x", actions.CreateAction(&probeControl{}))
-	r.PUT("/x", actions.UpdateAction(&probeControl{}))
-	r.DELETE("/x", actions.DeleteAction(&probeById{}))
-}
-
 func newRoutes(r gin.IRoutes) {
 	r.GET("/x", actions.Index[probeRow, probeSearch]())
-	r.GET("/x/:id", actions.View[probeRow, probeById]())
+	r.GET("/x/:id", actions.View[probeRow, probeByID]())
 	r.POST("/x", actions.Create[probeRow, probeControl]())
 	r.PUT("/x", actions.Update[probeRow, probeControl]())
-	r.DELETE("/x", actions.Delete[probeRow, probeById]())
+	r.DELETE("/x", actions.Delete[probeRow, probeByID]())
 }
 
 var requestIDField = regexp.MustCompile(`"requestId":"[^"]*"`)
@@ -123,44 +136,14 @@ func serve(r *gin.Engine, method, path, body string) (int, string) {
 	return w.Code, requestIDField.ReplaceAllString(w.Body.String(), `"requestId":""`)
 }
 
-// The generic actions answer every request exactly as the actions they
-// replace, on the same types and the same data, until the old ones go.
-func TestGenericActionsAnswerAsTheOldOnesDo(t *testing.T) {
-	script := []struct{ method, path, body string }{
-		{"POST", "/x", `{"name":"a"}`},
-		{"POST", "/x", `{"name":"b"}`},
-		{"POST", "/x", `not json`},
-		{"GET", "/x?pageIndex=1&pageSize=10", ""},
-		{"GET", "/x?pageIndex=1&pageSize=1&name=b", ""},
-		{"GET", "/x?pageIndex=2&pageSize=1", ""},
-		{"GET", "/x/1", ""},
-		{"GET", "/x/99", ""},
-		{"GET", "/x/abc", ""},
-		{"PUT", "/x", `{"id":1,"name":"a2"}`},
-		{"PUT", "/x", `{"id":99,"name":"ghost"}`},
-		{"PUT", "/x", `{"name":"no-id"}`},
-		{"GET", "/x/1", ""},
-		{"DELETE", "/x", `{"ids":[2]}`},
-		{"DELETE", "/x", `{"ids":[99]}`},
-		{"GET", "/x?pageIndex=1&pageSize=10", ""},
-	}
-	old := probeEngine(probeDB(t, t.Name()+"-old", nil), oldRoutes)
-	gen := probeEngine(probeDB(t, t.Name()+"-new", nil), newRoutes)
-	for i, s := range script {
-		oc, ob := serve(old, s.method, s.path, s.body)
-		nc, nb := serve(gen, s.method, s.path, s.body)
-		if oc != nc || ob != nb {
-			t.Errorf("step %d, %s %s %s:\nold %d %s\nnew %d %s", i+1, s.method, s.path, s.body, oc, ob, nc, nb)
-		}
-	}
-}
-
 // Every action that reads or changes existing rows applies the caller's
 // data permission: Index, View, Update and Delete.
 func TestGenericActionsApplyDataPermission(t *testing.T) {
-	previous := config.ApplicationConfig.EnableDP
-	config.ApplicationConfig.EnableDP = true
-	t.Cleanup(func() { config.ApplicationConfig.EnableDP = previous })
+
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = true
+	})
 
 	for _, req := range []struct{ method, path, body string }{
 		{"GET", "/x?pageIndex=1&pageSize=10", ""},
@@ -172,12 +155,12 @@ func TestGenericActionsApplyDataPermission(t *testing.T) {
 		db := probeDB(t, strings.NewReplacer("/", "_", "?", "_").Replace(t.Name()+req.method+req.path), cl)
 		r := probeEngine(db, func(r gin.IRoutes) {
 			self := func(c *gin.Context) {
-				c.Set(actions.PermissionKey, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserId: 7})
+				c.Set(actions.PermissionKey, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7})
 			}
 			r.GET("/x", self, actions.Index[probeRow, probeSearch]())
-			r.GET("/x/:id", self, actions.View[probeRow, probeById]())
+			r.GET("/x/:id", self, actions.View[probeRow, probeByID]())
 			r.PUT("/x", self, actions.Update[probeRow, probeControl]())
-			r.DELETE("/x", self, actions.Delete[probeRow, probeById]())
+			r.DELETE("/x", self, actions.Delete[probeRow, probeByID]())
 		})
 		serve(r, req.method, req.path, req.body)
 		if !strings.Contains(cl.all(), "action_probe_row.create_by = ") {
@@ -226,7 +209,7 @@ func TestGenericActionsAnswerAMissingDatabase(t *testing.T) {
 // share; this holds that shape.
 func TestGenericIndexKeepsConcurrentRequestsApart(t *testing.T) {
 	db := probeDB(t, t.Name(), nil)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if err := db.Create(&probeRow{Name: fmt.Sprintf("n%d", i)}).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -234,10 +217,10 @@ func TestGenericIndexKeepsConcurrentRequestsApart(t *testing.T) {
 	r := probeEngine(db, newRoutes)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		name := fmt.Sprintf("n%d", i)
 		wg.Go(func() {
-			for j := 0; j < 10; j++ {
+			for range 10 {
 				_, body := serve(r, "GET", "/x?pageIndex=1&pageSize=10&name="+name, "")
 				var res struct {
 					Data struct{ List []probeRow }
@@ -254,4 +237,10 @@ func TestGenericIndexKeepsConcurrentRequestsApart(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func (l *capturingLogger) all() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.stmts, "\n")
 }

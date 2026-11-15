@@ -3,6 +3,7 @@ package migration
 import (
 	"fmt"
 	"log"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -10,17 +11,18 @@ import (
 
 	"gorm.io/gorm"
 
-	contractmigration "github.com/go-admin-team/go-admin-core/v2/sdk/contract/migration"
+	contractmigration "github.com/gatework/motor-core/sdk/contract/migration"
 
-	common "go-admin/common/models"
+	common "github.com/gatework/motor/common/models"
 )
 
+// Migrate holds the configured migrate value.
 var Migrate = newMigration()
 
 // contractSnapshot is contractmigration.Snapshot, indirected through a
 // package-level variable so tests can substitute an isolated
 // *contractmigration.Registry's Snapshot instead of reaching into
-// go-admin-core's single process-wide registry, which every *Migration in
+// motor-core's single process-wide registry, which every *Migration in
 // this process - test-local or the package-level Migrate - reads through the
 // same call. See mergedEntries.
 var contractSnapshot = contractmigration.Snapshot
@@ -38,17 +40,20 @@ type versionEntry struct {
 	fn      func(db *gorm.DB, version string) error
 }
 
+// Migration defines the migration contract.
 type Migration struct {
 	db      *gorm.DB
 	version map[string]versionEntry
 	mutex   sync.Mutex
 }
 
-func (e *Migration) GetDb() *gorm.DB {
+// GetDB returns the selected data.
+func (e *Migration) GetDB() *gorm.DB {
 	return e.db
 }
 
-func (e *Migration) SetDb(db *gorm.DB) {
+// SetDB updates the corresponding value.
+func (e *Migration) SetDB(db *gorm.DB) {
 	e.db = db
 }
 
@@ -58,12 +63,6 @@ func (e *Migration) SetDb(db *gorm.DB) {
 // code, which is the correct meaning of "framework".
 func (e *Migration) SetVersion(k string, f func(db *gorm.DB, version string) error) {
 	e.setVersion(k, "", f)
-}
-
-func (e *Migration) setVersion(k, appCode string, f func(db *gorm.DB, version string) error) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.version[k] = versionEntry{appCode: appCode, fn: f}
 }
 
 // AppMigrationFunc is the signature of a migration registered through ForApp.
@@ -144,47 +143,6 @@ func namespacedKey(appCode, k string) string {
 	return appCode + "-" + k
 }
 
-// mergedEntries returns every migration this process knows about: the
-// host's own registry (e.version, filled by version/*.go and
-// version-local/*.go through SetVersion/ForApp) plus whatever a third-party
-// application registered through go-admin-core's sdk/contract/migration
-// package (PRD 006, F9's host wiring).
-//
-// That package keeps its own process-wide registry, entirely separate from
-// e.version, because a third-party application cannot reach into this
-// process to call an unexported method on *Migration - contract/migration's
-// package-level ForApp/Snapshot are the only door open to it. Without this
-// merge, migrate/status/--dry-run would only ever see the host's own
-// migrations: an application's ForApp("crm").SetVersion(...) would compile,
-// register successfully into contract/migration's registry, and then never
-// run, with no error anywhere - the exact silent gap this method closes.
-//
-// Entry and versionEntry are structurally identical (an app code plus a
-// func(db, version) error); the conversion below exists only because they
-// are two distinct named types, one per package, not because the data
-// differs.
-func (e *Migration) mergedEntries() map[string]versionEntry {
-	e.mutex.Lock()
-	out := make(map[string]versionEntry, len(e.version))
-	for k, v := range e.version {
-		out[k] = v
-	}
-	e.mutex.Unlock()
-
-	for k, entry := range contractSnapshot() {
-		if _, exists := out[k]; exists {
-			// contract/migration.ForApp namespaces every app-owned key as
-			// appCode + "-" + k, and appCode is reserved from ""/"core", so
-			// this should never collide with a host-registered key. If it
-			// somehow does, the host's own registration wins rather than
-			// silently overwriting it.
-			continue
-		}
-		out[k] = versionEntry{appCode: entry.AppCode, fn: entry.Fn}
-	}
-	return out
-}
-
 // RegisteredVersions returns every migration version this binary registers,
 // sorted, without touching a database.
 //
@@ -192,7 +150,7 @@ func (e *Migration) mergedEntries() map[string]versionEntry {
 // what is applied while nothing registers it - and needs a database to do it.
 // This is the half that can be asked of the process alone, which is what a
 // readiness check needs: the check holds the databases it is asking about, and
-// reusing Status would mean calling SetDb from a request handler, writing this
+// reusing Status would mean calling SetDB from a request handler, writing this
 // package's shared state from a request path.
 func (e *Migration) RegisteredVersions() []string {
 	all := e.mergedEntries()
@@ -291,7 +249,7 @@ func (e *Migration) Migrate() error { return e.run(allApps) }
 // FrameworkAppCode for the framework's own migrations.
 func (e *Migration) MigrateApp(appCode string) error { return e.run(AppFilter(appCode)) }
 
-// VersionFailure names the migration that failed.
+// VersionError names the migration that failed.
 //
 // The caller that needs this is an installer recording which version an
 // install got stuck on. That is a diagnostic snapshot and nothing more: the
@@ -301,16 +259,18 @@ func (e *Migration) MigrateApp(appCode string) error { return e.run(AppFilter(ap
 // the version rather than leaving the caller to infer it - inferring it
 // would produce "what is pending now", a different question that happens to
 // have the same answer most of the time.
-type VersionFailure struct {
+type VersionError struct {
 	Version string
 	Err     error
 }
 
-func (e *VersionFailure) Error() string {
+// Error handles the error operation.
+func (e *VersionError) Error() string {
 	return fmt.Sprintf("migration %s failed: %v", e.Version, e.Err)
 }
 
-func (e *VersionFailure) Unwrap() error { return e.Err }
+// Unwrap handles the unwrap operation.
+func (e *VersionError) Unwrap() error { return e.Err }
 
 // NormalizeAppCode applies the same rule ForApp does, so a code typed on the
 // command line matches one written in an init().
@@ -350,6 +310,63 @@ func (e *Migration) AppCodes() []string {
 		out = append(out, code)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// allApps is the sentinel run() takes to mean "do not filter". It is distinct
+// from the empty app code, which selects the framework's own migrations.
+const allApps = "\x00all"
+
+// GetFilename derives a migration's version from its file name. The rule
+// lives in contract/migration, because an application registering through
+// that package names its files by the same convention and must land on the
+// same version string; a second copy here is a second thing to keep in step.
+func GetFilename(s string) string {
+	return contractmigration.GetFilename(s)
+}
+
+func (e *Migration) setVersion(k, appCode string, f func(db *gorm.DB, version string) error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.version[k] = versionEntry{appCode: appCode, fn: f}
+}
+
+// mergedEntries returns every migration this process knows about: the
+// host's own registry (e.version, filled by version/*.go and
+// version-local/*.go through SetVersion/ForApp) plus whatever a third-party
+// application registered through motor-core's sdk/contract/migration
+// package (PRD 006, F9's host wiring).
+//
+// That package keeps its own process-wide registry, entirely separate from
+// e.version, because a third-party application cannot reach into this
+// process to call an unexported method on *Migration - contract/migration's
+// package-level ForApp/Snapshot are the only door open to it. Without this
+// merge, migrate/status/--dry-run would only ever see the host's own
+// migrations: an application's ForApp("crm").SetVersion(...) would compile,
+// register successfully into contract/migration's registry, and then never
+// run, with no error anywhere - the exact silent gap this method closes.
+//
+// Entry and versionEntry are structurally identical (an app code plus a
+// func(db, version) error); the conversion below exists only because they
+// are two distinct named types, one per package, not because the data
+// differs.
+func (e *Migration) mergedEntries() map[string]versionEntry {
+	e.mutex.Lock()
+	out := make(map[string]versionEntry, len(e.version))
+	maps.Copy(out, e.version)
+	e.mutex.Unlock()
+
+	for k, entry := range contractSnapshot() {
+		if _, exists := out[k]; exists {
+			// contract/migration.ForApp namespaces every app-owned key as
+			// appCode + "-" + k, and appCode is reserved from ""/"core", so
+			// this should never collide with a host-registered key. If it
+			// somehow does, the host's own registration wins rather than
+			// silently overwriting it.
+			continue
+		}
+		out[k] = versionEntry{appCode: entry.AppCode, fn: entry.Fn}
+	}
 	return out
 }
 
@@ -402,7 +419,7 @@ func (e *Migration) run(appCode string) error {
 		}
 		log.Printf("applying migration %s", v)
 		if err = entries[v].fn(e.db.Debug(), v); err != nil {
-			return &VersionFailure{Version: v, Err: err}
+			return &VersionError{Version: v, Err: err}
 		}
 		applied++
 	}
@@ -412,16 +429,4 @@ func (e *Migration) run(appCode string) error {
 		log.Printf("applied %d migration(s)", applied)
 	}
 	return nil
-}
-
-// allApps is the sentinel run() takes to mean "do not filter". It is distinct
-// from the empty app code, which selects the framework's own migrations.
-const allApps = "\x00all"
-
-// GetFilename derives a migration's version from its file name. The rule
-// lives in contract/migration, because an application registering through
-// that package names its files by the same convention and must land on the
-// same version string; a second copy here is a second thing to keep in step.
-func GetFilename(s string) string {
-	return contractmigration.GetFilename(s)
 }

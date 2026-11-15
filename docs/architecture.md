@@ -49,7 +49,7 @@ type JobExec interface {
 业务自定义配置写在 `config/extend.go` 中的结构体，对应 `settings.yml` 的 `extend:`
 节点，代码中通过 `config.ExtConfig.Xxx` 访问。
 
-配置值支持环境变量占位：在 yml 中写 `${ENV_NAME}`，由 `go-admin-core` 的
+配置值支持环境变量占位：在 yml 中写 `${ENV_NAME}`，由 `motor-core` 的
 `config/reader/preprocessor.go` 在加载时替换。敏感信息可借此避免写入文件。
 
 ## 多数据源

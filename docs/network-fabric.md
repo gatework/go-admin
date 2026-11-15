@@ -15,7 +15,7 @@
 
 ## 接口与权限
 
-模块位于 `app/fabric`，前端位于 `../go-admin-ui/src/views/network/fabric`。接口前缀 `/api/v1/network-fabrics`，沿用 JWT、Casbin 和设备 DataScope。只有完整可见 Fabric 范围可预览、采集或变更；历史任务另外验证其冻结目标的当前可见范围。
+模块按 `app/net` 的 handler、router、service、models 分层组织，前端位于 `../go-admin-ui/src/views/network/fabric`。接口前缀 `/api/v1/network-fabrics`，沿用 JWT、Casbin 和设备 DataScope。只有完整可见 Fabric 范围可预览、采集或变更；历史任务另外验证其冻结目标的当前可见范围。
 
 `POST /:id/change-candidates` 归入 `network:fabric:preview`，返回 `ready`、`unchanged`、`blocked` 三组。问题入口提供明确的非空 `targetDeviceIds`，候选结果不会扩大范围；显式空数组拒绝。手工发起可以省略范围，以检查全部其他 Leaf。候选检查本身不产生可执行任务；预览及执行仍独立检查实际配置。
 
@@ -29,7 +29,7 @@
 
 ## 验证记录
 
-- Fabric / Delivery 测试及 race：`go test -race ./app/fabric/... ./app/delivery/... -count=1` 已通过，包含精准候选、历史范围和执行前后校验。
+- Fabric / Delivery 测试及 race：`go test -race ./app/net/... -count=1` 已通过，包含精准候选、历史范围和执行前后校验。
 - 静态检查：`go vet ./...`、`make fmt-check`、`git diff --check`、`make checksilent UI_DIR=../go-admin-ui/src` 通过；checksilent 为 0 errors / 0 warnings。
 - 依赖校验通过：connector 74、expect 18、vxlan 25 个源码输入。
 - 最终全仓 `go test -race -cover -p 2 ./...` 通过，退出码 0，日志为 `/tmp/fabric-problems-backend-final.log`。本轮新增 22 项 issue / Detail 回归，覆盖业务分组、四类设备状态、精准目标和接口证据边界。既有并行工作保留。
@@ -69,7 +69,7 @@
 | 100 | 4,350,737 | 96,337 | 1,638,186 | 2.271 ms |
 | 500 | 108,736,697 | 484,697 | 9,097,010 | 8.542 ms |
 
-基线在修复前记录；投影后由主执行者运行 `go test ./app/fabric/service -run '^$' -bench BenchmarkAssessmentMatrixPayload -benchtime=3x -count=1`。500 VNI 样本矩阵字节数减少约 99.55%，未引入缓存。
+基线在修复前记录；投影后由主执行者运行 `go test ./app/net/service/fabric -run '^$' -bench BenchmarkAssessmentMatrixPayload -benchtime=3x -count=1`。500 VNI 样本矩阵字节数减少约 99.55%，未引入缓存。
 
 本轮确认回归先失败再通过：历史成员变化恢复、取消时锁清理、业务健康与支持证据隔离、活动任务过滤、旧任务版本覆盖及单任务失败隔离。最终全仓 `go test -race -cover -p 2 ./...`、`go vet ./...`、fmt-check、checksilent、依赖校验通过；日志 `/tmp/fabric-audit-backend-final.log`。前端 `test:ci` 通过 69 文件 / 476 测试（40 个既有 lint 警告、0 错误），直接 Vite 构建和 22 项模拟 API 浏览器回归通过；日志 `/tmp/fabric-audit-ui-ci-final.log`、`/tmp/fabric-audit-browser-final.log`。桌面和移动端截图已人工检查。
 

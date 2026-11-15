@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-admin-team/go-admin-core/v2/sdk"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
-	corestorage "github.com/go-admin-team/go-admin-core/v2/storage"
+	"github.com/gatework/motor-core/sdk"
+	"github.com/gatework/motor-core/sdk/config"
+	corestorage "github.com/gatework/motor-core/storage"
 )
 
 func memoryJanitors() int {
@@ -23,11 +23,11 @@ func memoryJanitors() int {
 
 func TestCacheReloadRetiresMemoryJanitors(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{}
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{}
 	before := memoryJanitors()
 	for range 5 {
-		Setup()
+		setupStorage(t)
 	}
 	if err := sdk.Runtime.RunShutdown(context.Background()); err != nil {
 		t.Fatal(err)
@@ -43,23 +43,29 @@ func TestCacheReloadRetiresMemoryJanitors(t *testing.T) {
 
 func TestDefaultQueueIsOwnedAndDrained(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{Memory: struct{}{}}
-	config.QueueConfig = &config.Queue{}
-	Setup()
-	q := sdk.Runtime.GetQueuePrefix("")
+	testCacheConfig = &config.Cache{Memory: &config.CacheMemory{}}
+	testQueueConfig = &config.Queue{}
 	entered, release := make(chan struct{}), make(chan struct{})
 	var enteredOnce sync.Once
-	q.Register("t", func(corestorage.Messager) error { enteredOnce.Do(func() { close(entered) }); <-release; return nil })
-	if err := q.Append(swapMsg()); err != nil {
+	testSubscribe = func(ctx context.Context, q corestorage.Queue) error {
+		return q.Subscribe(ctx, "t", func(context.Context, corestorage.Message) error {
+			enteredOnce.Do(func() { close(entered) })
+			<-release
+			return nil
+		})
+	}
+	setupStorage(t)
+	q := sdk.Runtime.QueueForTenant("")
+	if err := q.Publish(t.Context(), swapMsg()); err != nil {
 		t.Fatal(err)
 	}
 	<-entered
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	shutdownQueue(ctx)
 	cancel()
-	err := q.Append(swapMsg())
+	err := q.Publish(t.Context(), swapMsg())
 	close(release)
-	q.Shutdown()
+	q.Shutdown(t.Context())
 	if !errors.Is(err, corestorage.ErrQueueClosed) {
 		t.Fatalf("default queue still accepts after drain: %v", err)
 	}
@@ -67,12 +73,12 @@ func TestDefaultQueueIsOwnedAndDrained(t *testing.T) {
 
 func TestShutdownDeadlineRemainsEffectiveDuringQueueReload(t *testing.T) {
 	isolate(t)
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
 	previous := newCountingQueue()
 	previous.block = make(chan struct{})
 	setInstalled(previous)
 	reloaded := make(chan struct{})
-	go func() { defer close(reloaded); setupQueue() }()
+	go func() { defer close(reloaded); setupStorage(t) }()
 	previous.waitStarted(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	returned := make(chan struct{})
@@ -93,14 +99,14 @@ func TestShutdownDeadlineRemainsEffectiveDuringQueueReload(t *testing.T) {
 
 func TestSetupCannotRecreateResourcesAfterShutdown(t *testing.T) {
 	isolate(t)
-	config.CacheConfig = &config.Cache{}
-	config.QueueConfig = &config.Queue{}
-	Setup()
+	testCacheConfig = &config.Cache{}
+	testQueueConfig = &config.Queue{}
+	setupStorage(t)
 	generation := QueueGeneration()
 	if err := sdk.Runtime.RunShutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	Setup()
+	setupStorage(t)
 	if currentInstalled() != nil || installedCache != nil || QueueGeneration() != generation {
 		t.Fatal("configuration reload recreated resources after shutdown")
 	}
@@ -108,16 +114,16 @@ func TestSetupCannotRecreateResourcesAfterShutdown(t *testing.T) {
 
 func TestRemovingQueueConfigurationClosesPreviousBackend(t *testing.T) {
 	isolate(t)
-	config.QueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
-	setupQueue()
-	previous := sdk.Runtime.GetQueuePrefix("")
+	testQueueConfig = &config.Queue{Memory: &config.QueueMemory{PoolSize: 10}}
+	setupStorage(t)
+	previous := sdk.Runtime.QueueForTenant("")
 	generation := QueueGeneration()
-	config.QueueConfig = &config.Queue{}
-	setupQueue()
+	testQueueConfig = &config.Queue{}
+	setupStorage(t)
 	if QueueGeneration() == generation {
 		t.Fatal("removing queue configuration retained previous backend")
 	}
-	if err := previous.Append(swapMsg()); !errors.Is(err, corestorage.ErrQueueClosed) {
+	if err := previous.Publish(t.Context(), swapMsg()); !errors.Is(err, corestorage.ErrQueueClosed) {
 		t.Fatalf("previous queue not closed: %v", err)
 	}
 }

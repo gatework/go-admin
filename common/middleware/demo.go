@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
+
+	"github.com/gatework/motor-core/sdk/config"
 )
 
 // defaultDemoMsg is what a refused request is told when nothing is configured.
@@ -77,7 +78,7 @@ func demoAllows(method, route, uri string) bool {
 // happened to be identical, so the setting looked like it worked. An empty
 // value falls back rather than answering with nothing.
 func demoMessage() string {
-	if msg := config.ApplicationConfig.DemoMsg; msg != "" {
+	if msg := config.Current().Settings.Application.DemoMsg; msg != "" {
 		return msg
 	}
 	return defaultDemoMsg
@@ -86,7 +87,7 @@ func demoMessage() string {
 // DemoEvn refuses anything that would change state while mode is demo.
 func DemoEvn() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if config.ApplicationConfig.Mode != "demo" {
+		if config.Current().Settings.Application.Mode != "demo" {
 			c.Next()
 			return
 		}
