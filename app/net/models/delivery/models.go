@@ -72,8 +72,8 @@ type Target struct {
 	Status            string         `gorm:"size:24;index" json:"status"`
 	CompletedSteps    int            `json:"completedSteps"`
 	Attempted         bool           `json:"-"`
-	LeaseToken        string         `gorm:"size:40" json:"-"`
-	LeaseUntil        *time.Time     `gorm:"index" json:"-"`
+	ClaimToken        string         `gorm:"size:40" json:"-"`
+	ClaimUntil        *time.Time     `gorm:"index" json:"-"`
 	StartedAt         *time.Time     `json:"startedAt,omitempty"`
 	FinishedAt        *time.Time     `json:"finishedAt,omitempty"`
 	ErrorCode         string         `gorm:"size:64" json:"errorCode,omitempty"`

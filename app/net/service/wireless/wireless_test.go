@@ -259,7 +259,7 @@ func TestRecoveryQuarantinesExpiredLeaseAndInterruptsRun(t *testing.T) {
 	s, _ := setup(t)
 	now := time.Now().UTC()
 	expired := now.Add(-time.Second)
-	job := models.Collection{ControllerID: 1, CreateBy: 1, RequestKey: "recover-job", PayloadHash: "hash", SourceHash: "source", Status: "running", Version: 1, LeaseToken: "owner", LeaseUntil: &expired}
+	job := models.Collection{ControllerID: 1, CreateBy: 1, RequestKey: "recover-job", PayloadHash: "hash", SourceHash: "source", Status: "running", Version: 1, ClaimToken: "owner", ClaimUntil: &expired}
 	if err := s.DB.Create(&job).Error; err != nil {
 		t.Fatal(err)
 	}

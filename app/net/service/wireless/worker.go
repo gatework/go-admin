@@ -45,7 +45,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 	if err := lease.Sweep(w.s.db(ctx)); err != nil {
 		return err
 	}
-	return w.s.db(ctx).Model(&models.Collection{}).Where("status = ? AND lease_until < ?", "running", now).Updates(map[string]any{"status": "interrupted", "error_code": "worker_lost", "finished_at": now, "version": gorm.Expr("version + 1")}).Error
+	return w.s.db(ctx).Model(&models.Collection{}).Where("status = ? AND claim_until < ?", "running", now).Updates(map[string]any{"status": "interrupted", "error_code": "worker_lost", "finished_at": now, "version": gorm.Expr("version + 1")}).Error
 }
 
 // Run owns the worker lifecycle until cancellation and waits for its pollers.
@@ -113,7 +113,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, held lease.Leas
 	token := held.Token
 	started := time.Now().UTC()
 	until := held.ExpiresAt
-	q := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": started, "lease_token": token, "lease_until": until, "version": gorm.Expr("version + 1")})
+	q := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": started, "claim_token": token, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil {
 		return q.Error
 	}
@@ -148,7 +148,7 @@ func (w *Worker) finishCollection(ctx, finishCtx context.Context, job models.Col
 		scoped := *w.s
 		scoped.DB = tx
 		var current models.Collection
-		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", job.ID, "running", token, time.Now().UTC()).First(&current).Error; e != nil {
+		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND claim_token = ? AND claim_until > ?", job.ID, "running", token, time.Now().UTC()).First(&current).Error; e != nil {
 			return e
 		}
 		if e := lease.Check(tx, held); e != nil {
@@ -173,7 +173,7 @@ func (w *Worker) finishCollection(ctx, finishCtx context.Context, job models.Col
 				return e
 			}
 		}
-		return tx.Model(&models.Collection{}).Where("id = ? AND status = ? AND lease_token = ?", job.ID, "running", token).Updates(map[string]any{"status": status, "error_code": code, "results": jsonText(results), "finished_at": time.Now().UTC(), "version": gorm.Expr("version + 1")}).Error
+		return tx.Model(&models.Collection{}).Where("id = ? AND status = ? AND claim_token = ?", job.ID, "running", token).Updates(map[string]any{"status": status, "error_code": code, "results": jsonText(results), "finished_at": time.Now().UTC(), "version": gorm.Expr("version + 1")}).Error
 	})
 }
 

@@ -43,7 +43,7 @@ func (w *Worker) Run(ctx context.Context) error {
 }
 
 func runnable(db *gorm.DB) *gorm.DB {
-	return db.Where("status = ? OR (status = ? AND lease_until < ?)", "queued", "running", time.Now().UTC())
+	return db.Where("status = ? OR (status = ? AND claim_until < ?)", "queued", "running", time.Now().UTC())
 }
 
 // Tick provides tick for this module.
@@ -102,11 +102,11 @@ func (w *Worker) Tick(ctx context.Context) error {
 
 func (w *Worker) claim(ctx context.Context, model any, id int) (string, bool, error) {
 	token := uuid.NewString()
-	q := runnable(w.s.db(ctx).Model(model).Where("id = ?", id)).Updates(map[string]any{"status": "running", "lease_token": token, "lease_until": time.Now().UTC().Add(6 * time.Minute)})
+	q := runnable(w.s.db(ctx).Model(model).Where("id = ?", id)).Updates(map[string]any{"status": "running", "claim_token": token, "claim_until": time.Now().UTC().Add(6 * time.Minute)})
 	return token, q.RowsAffected == 1, q.Error
 }
 func owned(db *gorm.DB, id int, token string) *gorm.DB {
-	return db.Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", id, "running", token, time.Now().UTC())
+	return db.Where("id = ? AND status = ? AND claim_token = ? AND claim_until > ?", id, "running", token, time.Now().UTC())
 }
 func errorCode(e error) string {
 	switch {
@@ -188,7 +188,7 @@ func (w *Worker) importJob(parent context.Context, job models.Import, token stri
 	}
 	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
-	q := owned(w.s.db(finish).Model(&models.Import{}), job.ID, token).Updates(map[string]any{"status": status, "revision": revision, "error_code": code, "finished_at": time.Now().UTC(), "lease_token": ""})
+	q := owned(w.s.db(finish).Model(&models.Import{}), job.ID, token).Updates(map[string]any{"status": status, "revision": revision, "error_code": code, "finished_at": time.Now().UTC(), "claim_token": ""})
 	return q.Error
 }
 func (w *Worker) loadTargets(ctx context.Context, refs []types.TargetRef) ([]types.Target, error) {
@@ -249,8 +249,8 @@ func (w *Worker) analysisJob(parent context.Context, job models.Analysis, token 
 	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
 	return w.s.db(finish).Transaction(func(tx *gorm.DB) error {
-		out := models.Analysis{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), LeaseToken: ""}
-		q := owned(tx.Model(&models.Analysis{}), job.ID, token).Select("status", "result", "error_code", "finished_at", "lease_token", "updated_at").Updates(&out)
+		out := models.Analysis{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), ClaimToken: ""}
+		q := owned(tx.Model(&models.Analysis{}), job.ID, token).Select("status", "result", "error_code", "finished_at", "claim_token", "updated_at").Updates(&out)
 		if q.Error != nil {
 			return q.Error
 		}
@@ -295,6 +295,6 @@ func (w *Worker) draftJob(parent context.Context, job models.Draft, token string
 	}
 	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
-	out := models.Draft{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), LeaseToken: ""}
-	return owned(w.s.db(finish).Model(&models.Draft{}), job.ID, token).Select("status", "result", "error_code", "finished_at", "lease_token", "updated_at").Updates(&out).Error
+	out := models.Draft{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), ClaimToken: ""}
+	return owned(w.s.db(finish).Model(&models.Draft{}), job.ID, token).Select("status", "result", "error_code", "finished_at", "claim_token", "updated_at").Updates(&out).Error
 }

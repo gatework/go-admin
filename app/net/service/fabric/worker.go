@@ -118,7 +118,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 	}
 	now := time.Now().UTC()
 	var collects []models.Collection
-	if e := opsDB(ctx, w.s).Where("status = ? AND lease_until < ?", "running", now).Find(&collects).Error; e != nil {
+	if e := opsDB(ctx, w.s).Where("status = ? AND claim_until < ?", "running", now).Find(&collects).Error; e != nil {
 		return e
 	}
 	for _, c := range collects {
@@ -127,7 +127,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 		}
 	}
 	var changes []models.Change
-	if e := opsDB(ctx, w.s).Where("status = ? AND lease_until < ?", "running", now).Find(&changes).Error; e != nil {
+	if e := opsDB(ctx, w.s).Where("status = ? AND claim_until < ?", "running", now).Find(&changes).Error; e != nil {
 		return e
 	}
 	for _, c := range changes {
@@ -213,7 +213,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	now := time.Now().UTC()
 	c.StartedAt = &now
 	until := now.Add(15 * time.Minute)
-	q := opsDB(ctx, w.s).Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "lease_until": until, "version": gorm.Expr("version + 1")})
+	q := opsDB(ctx, w.s).Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error
 	}

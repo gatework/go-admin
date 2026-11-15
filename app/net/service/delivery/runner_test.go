@@ -148,7 +148,7 @@ func TestRecoveryQuarantinesWithoutReplaying(t *testing.T) {
 	w := NewWorker(s, nil)
 	target, _ := w.Claim(ctx)
 	past := time.Now().UTC().Add(-time.Hour)
-	s.DB.Model(&models.Target{}).Where("id = ?", target.ID).Updates(map[string]any{"lease_until": past, "attempted": true, "completed_steps": 1, "output": "saved"})
+	s.DB.Model(&models.Target{}).Where("id = ?", target.ID).Updates(map[string]any{"claim_until": past, "attempted": true, "completed_steps": 1, "output": "saved"})
 	if e := w.Recover(ctx); e != nil {
 		t.Fatal(e)
 	}

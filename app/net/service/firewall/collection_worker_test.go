@@ -178,10 +178,10 @@ func TestCollectionRecoveryDoesNotReopenPublishedCapture(t *testing.T) {
 	expired := time.Now().UTC().Add(-time.Minute)
 	// The native publication and closure acknowledgement survived; final job
 	// acknowledgement did not. Recovery must use its original publication ID.
-	if err := s.DB.Model(&target).Updates(map[string]any{"status": "running", "revision": "", "lease_until": expired, "finished_at": nil}).Error; err != nil {
+	if err := s.DB.Model(&target).Updates(map[string]any{"status": "running", "revision": "", "claim_until": expired, "finished_at": nil}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DB.Create(&delivery.DeviceLease{DeviceID: i.DeviceID, Token: target.LeaseToken, ExpiresAt: expired}).Error; err != nil {
+	if err := s.DB.Create(&delivery.DeviceLease{DeviceID: i.DeviceID, Token: target.ClaimToken, ExpiresAt: expired}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := w.Tick(ctx); err != nil {
@@ -252,7 +252,7 @@ func TestCollectionTenantAdmissionAndExpiredPublicationFence(t *testing.T) {
 		t.Fatalf("tenant concurrency exceeded: %v %v", ok, err)
 	}
 	expired := time.Now().UTC().Add(-time.Minute)
-	if err = s.DB.Model(&first).Update("lease_until", expired).Error; err != nil {
+	if err = s.DB.Model(&first).Update("claim_until", expired).Error; err != nil {
 		t.Fatal(err)
 	}
 	st, _ := s.store()

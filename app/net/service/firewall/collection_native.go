@@ -178,7 +178,7 @@ func (s *collectionStore) Publish(ctx context.Context, fw *fm.Firewall, options 
 		if err := collectionOwned(tx, t).Clauses(clause.Locking{Strength: "UPDATE"}).First(&owned).Error; err != nil {
 			return ConflictErr
 		}
-		if err := lease.Check(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}); err != nil {
+		if err := lease.Check(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}); err != nil {
 			return ConflictErr
 		}
 		if err := tx.Model(&owned).Update("stage", "publishing").Error; err != nil {

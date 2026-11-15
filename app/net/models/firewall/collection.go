@@ -34,8 +34,8 @@ type CollectionTarget struct {
 	ExpectedRevision  string     `gorm:"size:64" json:"-"`
 	InstanceVersion   int64      `json:"-"`
 	ConnectionVersion int64      `json:"-"`
-	LeaseToken        string     `gorm:"size:40" json:"-"`
-	LeaseUntil        *time.Time `gorm:"index" json:"-"`
+	ClaimToken        string     `gorm:"size:40" json:"-"`
+	ClaimUntil        *time.Time `gorm:"index" json:"-"`
 	Status            string     `gorm:"size:32;index" json:"status"`
 	Stage             string     `gorm:"size:32" json:"stage"`
 	Revision          string     `gorm:"size:64" json:"revision"`

@@ -182,7 +182,7 @@ func TestImportRecoveryRetainsPublicationAfterInventoryChanges(t *testing.T) {
 	i, job := importedInstance(t, s)
 	ctx := context.Background()
 	// Simulate a process crash after native publication, before the durable receipt.
-	if err := s.DB.Model(&models.Import{}).Where("id = ?", job.ID).Updates(map[string]any{"status": "running", "revision": "", "lease_token": "expired-worker", "lease_until": time.Now().UTC().Add(-time.Minute)}).Error; err != nil {
+	if err := s.DB.Model(&models.Import{}).Where("id = ?", job.ID).Updates(map[string]any{"status": "running", "revision": "", "claim_token": "expired-worker", "claim_until": time.Now().UTC().Add(-time.Minute)}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DB.Model(&network.Device{}).Where("id = ?", i.DeviceID).Update("os_version", "new inventory version").Error; err != nil {
@@ -217,7 +217,7 @@ func TestExpiredAnalysisWorkerCannotOverwriteReclaimedJob(t *testing.T) {
 	if err != nil || !claimed {
 		t.Fatalf("claim: %t %v", claimed, err)
 	}
-	if err = s.DB.Model(&models.Analysis{}).Where("id = ?", a.ID).Update("lease_until", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
+	if err = s.DB.Model(&models.Analysis{}).Where("id = ?", a.ID).Update("claim_until", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
 		t.Fatal(err)
 	}
 	current, claimed, err := w.claim(ctx, &models.Analysis{}, a.ID)
@@ -231,7 +231,7 @@ func TestExpiredAnalysisWorkerCannotOverwriteReclaimedJob(t *testing.T) {
 	if err = s.DB.First(&stored, a.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Status != "running" || stored.LeaseToken != current {
+	if stored.Status != "running" || stored.ClaimToken != current {
 		t.Fatalf("expired worker committed: %+v", stored)
 	}
 	if err = w.analysisJob(ctx, a, current); err != nil {
@@ -240,7 +240,7 @@ func TestExpiredAnalysisWorkerCannotOverwriteReclaimedJob(t *testing.T) {
 	if err = s.DB.First(&stored, a.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Status == "running" || stored.LeaseToken != "" {
+	if stored.Status == "running" || stored.ClaimToken != "" {
 		t.Fatalf("new worker could not finish: %+v", stored)
 	}
 }

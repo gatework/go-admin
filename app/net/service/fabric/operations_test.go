@@ -308,7 +308,7 @@ func TestRecoverInterruptedChangeDoesNotRequeueAndKeepsLease(t *testing.T) {
 	c.Targets[0].Status = "running"
 	c.Targets[0].Attempted = true
 	past := time.Now().UTC().Add(-time.Minute)
-	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Updates(map[string]any{"status": "running", "targets": opsJSON(c.Targets), "lease_until": past}).Error; e != nil {
+	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Updates(map[string]any{"status": "running", "targets": opsJSON(c.Targets), "claim_until": past}).Error; e != nil {
 		t.Fatal(e)
 	}
 	s.DB.Create(&delivery.DeviceLease{DeviceID: 2, HolderID: c.Targets[0].DeliveryTargetID, Token: "dead", ExpiresAt: past})

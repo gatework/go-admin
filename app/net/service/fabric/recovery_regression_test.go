@@ -35,14 +35,14 @@ func TestRecoveryTerminalizesHistoricalTasksAfterMembershipChanges(t *testing.T)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := s.DB.Model(&job).Updates(map[string]any{"status": "running", "lease_until": past}).Error; err != nil {
+					if err := s.DB.Model(&job).Updates(map[string]any{"status": "running", "claim_until": past}).Error; err != nil {
 						t.Fatal(err)
 					}
 				} else {
 					change = previewGateway(t, s)
 					change.Targets[0].Status = "running"
 					change.Targets[0].Attempted = true
-					if err := s.DB.Model(&change).Updates(map[string]any{"status": "running", "targets": opsJSON(change.Targets), "lease_until": past}).Error; err != nil {
+					if err := s.DB.Model(&change).Updates(map[string]any{"status": "running", "targets": opsJSON(change.Targets), "claim_until": past}).Error; err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -201,7 +201,7 @@ func TestLeaseCleanupCannotReleaseAnotherOwnerAfterCancellation(t *testing.T) {
 func TestRecoverySurfacesDatabaseFailure(t *testing.T) {
 	s := operationsFixture(t)
 	past := time.Now().UTC().Add(-time.Minute)
-	job := models.Collection{FabricID: 1, RequestKey: "database-error", Status: "running", Mode: "configuration", LeaseUntil: &past, Targets: []models.CollectionTarget{{DeviceID: 1, Status: "pending", Device: delivery.DeviceSnapshot{ID: 1}}}}
+	job := models.Collection{FabricID: 1, RequestKey: "database-error", Status: "running", Mode: "configuration", ClaimUntil: &past, Targets: []models.CollectionTarget{{DeviceID: 1, Status: "pending", Device: delivery.DeviceSnapshot{ID: 1}}}}
 	if err := s.DB.Create(&job).Error; err != nil {
 		t.Fatal(err)
 	}

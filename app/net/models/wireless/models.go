@@ -72,8 +72,8 @@ type Collection struct {
 	Status       string               `gorm:"size:24;index" json:"status"`
 	ErrorCode    string               `gorm:"size:64" json:"errorCode,omitempty"`
 	Version      int64                `json:"version"`
-	LeaseToken   string               `gorm:"size:40" json:"-"`
-	LeaseUntil   *time.Time           `gorm:"index" json:"-"`
+	ClaimToken   string               `gorm:"size:40" json:"-"`
+	ClaimUntil   *time.Time           `gorm:"index" json:"-"`
 	CreatedAt    time.Time            `json:"createdAt"`
 	StartedAt    *time.Time           `json:"startedAt"`
 	FinishedAt   *time.Time           `json:"finishedAt"`

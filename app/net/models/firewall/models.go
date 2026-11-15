@@ -76,8 +76,8 @@ type Import struct {
 	Software         string    `gorm:"type:text" json:"-"`
 	ActorID          int       `gorm:"index" json:"-"`
 	PayloadHash      string    `gorm:"size:64" json:"-"`
-	LeaseToken       string    `gorm:"size:64" json:"-"`
-	LeaseUntil       time.Time `json:"-"`
+	ClaimToken       string    `gorm:"size:64" json:"-"`
+	ClaimUntil       time.Time `json:"-"`
 	FinishedAt       time.Time `json:"-"`
 	ID               int       `gorm:"primaryKey" json:"id"`
 	InstanceID       int       `gorm:"index;uniqueIndex:ux_firewall_import,priority:1" json:"instanceId"`
@@ -303,8 +303,8 @@ type Analysis struct {
 	ActorID        int                  `gorm:"index" json:"-"`
 	DomainID       int                  `gorm:"index" json:"domainId"`
 	PayloadHash    string               `gorm:"size:64" json:"-"`
-	LeaseToken     string               `gorm:"size:64" json:"-"`
-	LeaseUntil     time.Time            `json:"-"`
+	ClaimToken     string               `gorm:"size:64" json:"-"`
+	ClaimUntil     time.Time            `json:"-"`
 	FinishedAt     time.Time            `json:"-"`
 	Input          types.Normalized     `gorm:"serializer:json;type:text" json:"-"`
 	Targets        []types.TargetRef    `gorm:"serializer:json;type:text" json:"-"`
@@ -343,8 +343,8 @@ type AnalysisResult struct {
 type Draft struct {
 	ActorID     int               `gorm:"index" json:"-"`
 	PayloadHash string            `gorm:"size:64" json:"-"`
-	LeaseToken  string            `gorm:"size:64" json:"-"`
-	LeaseUntil  time.Time         `json:"-"`
+	ClaimToken  string            `gorm:"size:64" json:"-"`
+	ClaimUntil  time.Time         `json:"-"`
 	FinishedAt  time.Time         `json:"-"`
 	ID          int               `gorm:"primaryKey" json:"id"`
 	RequestID   int               `gorm:"index" json:"requestId"`

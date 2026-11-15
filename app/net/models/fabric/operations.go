@@ -22,7 +22,7 @@ type Collection struct {
 	CreatedAt    time.Time          `json:"createdAt"`
 	StartedAt    *time.Time         `json:"startedAt,omitempty"`
 	FinishedAt   *time.Time         `json:"finishedAt,omitempty"`
-	LeaseUntil   *time.Time         `gorm:"index" json:"-"`
+	ClaimUntil   *time.Time         `gorm:"index" json:"-"`
 }
 
 // TableName returns the stable database table for Collection.
@@ -64,7 +64,7 @@ type Change struct {
 	CreatedAt           time.Time      `json:"createdAt"`
 	StartedAt           *time.Time     `json:"startedAt,omitempty"`
 	FinishedAt          *time.Time     `json:"finishedAt,omitempty"`
-	LeaseUntil          *time.Time     `gorm:"index" json:"-"`
+	ClaimUntil          *time.Time     `gorm:"index" json:"-"`
 }
 
 // TableName returns the stable database table for Change.

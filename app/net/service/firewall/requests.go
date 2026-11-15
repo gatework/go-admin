@@ -222,7 +222,7 @@ func (s *Firewall) CancelAnalysis(ctx context.Context, id int, p *actions.DataPe
 	if _, e := s.Analysis(ctx, id, p); e != nil {
 		return e
 	}
-	q := s.db(ctx).Model(&models.Analysis{}).Where("id = ? AND status IN ?", id, []string{"queued", "running"}).Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC(), "lease_token": ""})
+	q := s.db(ctx).Model(&models.Analysis{}).Where("id = ? AND status IN ?", id, []string{"queued", "running"}).Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC(), "claim_token": ""})
 	if q.Error != nil {
 		return q.Error
 	}

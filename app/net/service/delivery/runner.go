@@ -196,12 +196,12 @@ func (w *Worker) Recover(ctx context.Context) error {
 		return e
 	}
 	var targets []models.Target
-	if e := w.s.db(ctx).Where("status = ? AND lease_until < ? AND order_id IN (SELECT id FROM sys_delivery_order WHERE kind <> ?)", "running", time.Now().UTC(), "fabric").Find(&targets).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ? AND claim_until < ? AND order_id IN (SELECT id FROM sys_delivery_order WHERE kind <> ?)", "running", time.Now().UTC(), "fabric").Find(&targets).Error; e != nil {
 		return e
 	}
 	for _, t := range targets {
 		if e := w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
-			q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND lease_until < ?", t.ID, "running", time.Now().UTC()).Updates(map[string]any{"status": "uncertain", "error_code": "worker_lost", "finished_at": time.Now().UTC()})
+			q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND claim_until < ?", t.ID, "running", time.Now().UTC()).Updates(map[string]any{"status": "uncertain", "error_code": "worker_lost", "finished_at": time.Now().UTC()})
 			if q.Error != nil {
 				return q.Error
 			}
@@ -210,7 +210,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 			}
 			// The lost worker's session outcome is unknown: quarantine its lease if
 			// the sweep has not already.
-			if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, lease.Unconfirmed); e != nil && !errors.Is(e, lease.LostErr) {
+			if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}, lease.Unconfirmed); e != nil && !errors.Is(e, lease.LostErr) {
 				return e
 			}
 			return summarize(tx, t.OrderID)
@@ -245,14 +245,14 @@ func (w *Worker) check(ctx context.Context, t models.Target) error {
 	if e := ctx.Err(); e != nil {
 		return e
 	}
-	if e := lease.Check(w.s.db(ctx), lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}); e != nil {
+	if e := lease.Check(w.s.db(ctx), lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}); e != nil {
 		return CancelledErr
 	}
 	var current models.Target
 	if e := w.s.db(ctx).First(&current, t.ID).Error; e != nil {
 		return e
 	}
-	if current.Status != "running" || current.LeaseToken != t.LeaseToken || current.LeaseUntil == nil || time.Now().After(*current.LeaseUntil) {
+	if current.Status != "running" || current.ClaimToken != t.ClaimToken || current.ClaimUntil == nil || time.Now().After(*current.ClaimUntil) {
 		return CancelledErr
 	}
 	var o models.Order
@@ -327,7 +327,7 @@ func (w *Worker) record(parent context.Context, t models.Target, status, code, o
 
 func (w *Worker) finish(ctx context.Context, t models.Target, status, code, output string, steps int, attempted, closed bool) error {
 	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND lease_token = ?", t.ID, "running", t.LeaseToken).Updates(map[string]any{"status": status, "error_code": code, "output": output, "completed_steps": steps, "attempted": attempted, "finished_at": time.Now().UTC()})
+		q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND claim_token = ?", t.ID, "running", t.ClaimToken).Updates(map[string]any{"status": status, "error_code": code, "output": output, "completed_steps": steps, "attempted": attempted, "finished_at": time.Now().UTC()})
 		if q.Error != nil {
 			return q.Error
 		}
@@ -336,7 +336,7 @@ func (w *Worker) finish(ctx context.Context, t models.Target, status, code, outp
 			outcome = lease.Unconfirmed
 		}
 		// A lost lease was quarantined meanwhile; the quarantine stays and the result is still recorded.
-		if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, outcome); e != nil && !errors.Is(e, lease.LostErr) {
+		if e := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}, outcome); e != nil && !errors.Is(e, lease.LostErr) {
 			return e
 		}
 		return summarize(tx, t.OrderID)
@@ -371,7 +371,7 @@ func claimTarget(tx *gorm.DB, t *models.Target, now time.Time) error {
 	if q.RowsAffected != 1 {
 		return ConflictErr
 	}
-	q = tx.Model(&models.Target{}).Where("id = ? AND status = ?", t.ID, "pending").Updates(map[string]any{"status": "running", "started_at": now, "lease_token": token, "lease_until": until})
+	q = tx.Model(&models.Target{}).Where("id = ? AND status = ?", t.ID, "pending").Updates(map[string]any{"status": "running", "started_at": now, "claim_token": token, "claim_until": until})
 	if q.Error != nil {
 		return q.Error
 	}
@@ -379,8 +379,8 @@ func claimTarget(tx *gorm.DB, t *models.Target, now time.Time) error {
 		return ConflictErr
 	}
 	t.Status = "running"
-	t.LeaseToken = token
-	t.LeaseUntil = &until
+	t.ClaimToken = token
+	t.ClaimUntil = &until
 	t.StartedAt = &now
 	return nil
 }
@@ -411,7 +411,7 @@ func (w *Worker) beforeCommand(commandCtx context.Context, t models.Target, code
 	if err := w.check(commandCtx, t); err != nil {
 		return err
 	}
-	q := w.s.db(commandCtx).Model(&models.Target{}).Where("id = ? AND status = ? AND lease_token = ?", t.ID, "running", t.LeaseToken).Update("attempted", true)
+	q := w.s.db(commandCtx).Model(&models.Target{}).Where("id = ? AND status = ? AND claim_token = ?", t.ID, "running", t.ClaimToken).Update("attempted", true)
 	if q.Error != nil {
 		*code = "persistence_failed"
 		return q.Error
@@ -440,7 +440,7 @@ func (w *Worker) recordReceipt(ctx context.Context, t models.Target, part string
 		if err := tx.Create(&models.Receipt{TargetID: t.ID, Step: next, Output: part}).Error; err != nil {
 			return err
 		}
-		q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND lease_token = ?", t.ID, "running", t.LeaseToken).Updates(map[string]any{"completed_steps": next, "output": *output})
+		q := tx.Model(&models.Target{}).Where("id = ? AND status = ? AND claim_token = ?", t.ID, "running", t.ClaimToken).Updates(map[string]any{"completed_steps": next, "output": *output})
 		if q.Error != nil {
 			return q.Error
 		}

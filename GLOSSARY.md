@@ -16,6 +16,10 @@ _Avoid_: blocked, frozen, stuck lease
 Exclusive permission to coordinate work on one Fabric as a whole, independent of any device. It guards no device session, so it expires away rather than being quarantined.
 _Avoid_: coordinator lease, negative lease
 
+**Work claim**:
+A worker replica's time-limited hold on one job row (a delivery target, a collection, an import, an analysis, a draft, a Fabric change), recorded in the row's `claim_token` and `claim_until`. It decides which replica runs the job; it says nothing about devices, and a job that opens device sessions still takes a device lease.
+_Avoid_: job lease, lease token (for the job row)
+
 **Lease sweep**:
 The pass that turns every expired device lease into a quarantine and drops every expired fabric lock, regardless of which module took them.
 _Avoid_: lease recovery, cleanup

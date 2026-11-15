@@ -172,7 +172,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 	defer cancel()
 	now := time.Now().UTC()
 	until := now.Add(15 * time.Minute)
-	q := opsDB(ctx, w.s).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "lease_until": until, "version": gorm.Expr("version + 1")})
+	q := opsDB(ctx, w.s).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error
 	}

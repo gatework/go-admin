@@ -159,11 +159,11 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 		token, until := held.Token, held.ExpiresAt
 		t.Status = "running"
 		t.Stage = "connecting"
-		t.LeaseToken = token
-		t.LeaseUntil = &until
+		t.ClaimToken = token
+		t.ClaimUntil = &until
 		t.StartedAt = &now
 		t.SessionClosed = false
-		if err := tx.Model(&t).Select("Status", "Stage", "LeaseToken", "LeaseUntil", "StartedAt", "SessionClosed").Updates(&t).Error; err != nil {
+		if err := tx.Model(&t).Select("Status", "Stage", "ClaimToken", "ClaimUntil", "StartedAt", "SessionClosed").Updates(&t).Error; err != nil {
 			return err
 		}
 		claimed = true
@@ -172,7 +172,7 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 	return t, source, claimed, err
 }
 func collectionOwned(db *gorm.DB, t models.CollectionTarget) *gorm.DB {
-	return db.Model(&models.CollectionTarget{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", t.ID, "running", t.LeaseToken, time.Now().UTC())
+	return db.Model(&models.CollectionTarget{}).Where("id = ? AND status = ? AND claim_token = ? AND claim_until > ?", t.ID, "running", t.ClaimToken, time.Now().UTC())
 }
 func (w *CollectionWorker) stage(ctx context.Context, t models.CollectionTarget, stage string) error {
 	q := collectionOwned(w.s.db(ctx), t).Update("stage", stage)
@@ -249,7 +249,7 @@ func (w *CollectionWorker) finish(ctx context.Context, t models.CollectionTarget
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&batch, t.BatchID).Error; err != nil {
 			return err
 		}
-		q := collectionOwned(tx, t).Updates(map[string]any{"status": status, "stage": "finished", "error_code": code, "revision": result.Revision, "complete": result.Complete, "session_closed": closed, "finished_at": time.Now().UTC(), "lease_until": nil})
+		q := collectionOwned(tx, t).Updates(map[string]any{"status": status, "stage": "finished", "error_code": code, "revision": result.Revision, "complete": result.Complete, "session_closed": closed, "finished_at": time.Now().UTC(), "claim_until": nil})
 		if q.Error != nil {
 			return q.Error
 		}
@@ -270,7 +270,7 @@ func releaseCollectionLease(tx *gorm.DB, t models.CollectionTarget, closed bool)
 	if !closed {
 		outcome = lease.Unconfirmed
 	}
-	if err := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.LeaseToken}, outcome); err != nil && !errors.Is(err, lease.LostErr) {
+	if err := lease.Release(tx, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}, outcome); err != nil && !errors.Is(err, lease.LostErr) {
 		return err
 	}
 	return nil
@@ -306,7 +306,7 @@ func (w *CollectionWorker) recover(ctx context.Context, st *storage.Store) error
 		return err
 	}
 	var expired []models.CollectionTarget
-	if err := w.s.db(ctx).Where("status = ? AND lease_until < ?", "running", time.Now().UTC()).Find(&expired).Error; err != nil {
+	if err := w.s.db(ctx).Where("status = ? AND claim_until < ?", "running", time.Now().UTC()).Find(&expired).Error; err != nil {
 		return err
 	}
 	if len(expired) == 0 {
@@ -421,7 +421,7 @@ func (w *CollectionWorker) recoverTarget(ctx context.Context, t models.Collectio
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&t, t.ID).Error; err != nil {
 			return err
 		}
-		if t.Status != "running" || t.LeaseUntil == nil || t.LeaseUntil.After(time.Now().UTC()) {
+		if t.Status != "running" || t.ClaimUntil == nil || t.ClaimUntil.After(time.Now().UTC()) {
 			return nil
 		}
 		status, code, revision, complete := "failed", "interrupted", "", false
@@ -446,7 +446,7 @@ func (w *CollectionWorker) recoverTarget(ctx context.Context, t models.Collectio
 				status = "partial"
 			}
 		}
-		if err := tx.Model(&t).Updates(map[string]any{"status": status, "stage": "finished", "error_code": code, "revision": revision, "complete": complete, "finished_at": time.Now().UTC(), "lease_until": nil}).Error; err != nil {
+		if err := tx.Model(&t).Updates(map[string]any{"status": status, "stage": "finished", "error_code": code, "revision": revision, "complete": complete, "finished_at": time.Now().UTC(), "claim_until": nil}).Error; err != nil {
 			return err
 		}
 		if err := releaseCollectionLease(tx, t, t.SessionClosed); err != nil {
