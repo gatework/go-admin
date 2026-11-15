@@ -187,9 +187,11 @@ func (w *CollectionWorker) stage(ctx context.Context, t models.CollectionTarget,
 func (w *CollectionWorker) run(parent context.Context, t models.CollectionTarget, source CollectionSource, st *storage.Store) error {
 	ctx, cancel := context.WithTimeout(parent, CollectionTimeout)
 	defer cancel()
-	watchDone := make(chan struct{})
-	defer func() { cancel(); <-watchDone }()
-	go w.watchCollectionCancellation(ctx, cancel, t.BatchID, watchDone)
+	defer worker.WatchCancel(ctx, cancel, func(query context.Context) (bool, error) {
+		var b models.CollectionBatch
+		err := w.s.db(query).Select("id", "cancel_requested").First(&b, t.BatchID).Error
+		return b.CancelRequested, err
+	})()
 	session := &collectionSession{worker: w, target: t, source: source}
 	var batch models.CollectionBatch
 	if err := w.s.db(ctx).First(&batch, t.BatchID).Error; err != nil {
@@ -370,24 +372,6 @@ func claimCollectionSource(ctx context.Context, tx *gorm.DB, t models.Collection
 		}
 	}
 	return source, reason, nil
-}
-
-func (w *CollectionWorker) watchCollectionCancellation(ctx context.Context, cancel context.CancelFunc, batchID int, watchDone chan<- struct{}) {
-	defer close(watchDone)
-	timer := time.NewTicker(200 * time.Millisecond)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			var b models.CollectionBatch
-			if err := w.s.db(ctx).Select("id", "cancel_requested").First(&b, batchID).Error; err != nil || b.CancelRequested {
-				cancel()
-				return
-			}
-		}
-	}
 }
 
 func collectionOutcome(result operations.CollectResult, opErr error, session *collectionSession) (string, string, bool) {

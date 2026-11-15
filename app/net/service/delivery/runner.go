@@ -127,9 +127,11 @@ func (w *Worker) RunTarget(parent context.Context, t models.Target) {
 	ctx, cancel := context.WithTimeout(parent, executionTimeout)
 	defer cancel()
 	// Observe persisted cancellation while slow authentication/commands are pending.
-	watchDone := make(chan struct{})
-	defer close(watchDone)
-	go w.watchCancellation(ctx, t.OrderID, cancel, watchDone)
+	defer worker.WatchCancel(ctx, cancel, func(query context.Context) (bool, error) {
+		var o models.Order
+		err := w.s.db(query).Select("id", "cancel_requested").First(&o, t.OrderID).Error
+		return o.CancelRequested, err
+	})()
 	status, code := "failed", "connection_failed"
 	output := t.Output
 	attempted := t.Attempted
@@ -399,28 +401,6 @@ func claimTarget(tx *gorm.DB, t *models.Target, now time.Time) error {
 	t.ClaimUntil = &until
 	t.StartedAt = &now
 	return nil
-}
-
-func (w *Worker) watchCancellation(ctx context.Context, orderID int, cancel context.CancelFunc, done <-chan struct{}) {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-done:
-			return
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			var o models.Order
-			query, c := context.WithTimeout(ctx, time.Second)
-			e := w.s.db(query).Select("id", "cancel_requested").First(&o, orderID).Error
-			c()
-			if e != nil || o.CancelRequested {
-				cancel()
-				return
-			}
-		}
-	}
 }
 
 func (w *Worker) beforeCommand(commandCtx context.Context, t models.Target, code *string, attempted *bool) error {

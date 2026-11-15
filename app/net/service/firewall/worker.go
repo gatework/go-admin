@@ -213,26 +213,11 @@ func (w *Worker) analysisJob(parent context.Context, job models.Analysis, token 
 	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
 	// Stop computation promptly when the persisted cancel transition wins.
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				var count int64
-				if e := owned(w.s.db(ctx).Model(&models.Analysis{}), job.ID, token).Count(&count).Error; e != nil || count == 0 {
-					cancel()
-					return
-				}
-			}
-		}
-	}()
+	defer worker.WatchCancel(ctx, cancel, func(query context.Context) (bool, error) {
+		var count int64
+		err := owned(w.s.db(query).Model(&models.Analysis{}), job.ID, token).Count(&count).Error
+		return count == 0, err
+	})()
 	result := types.AnalysisResult{Items: []types.AnalysisItem{}, Issues: []types.Notice{}}
 	targets, e := w.loadTargets(ctx, job.Targets)
 	if e == nil {
