@@ -261,7 +261,6 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (mode
 	var dbTable models.DBTables
 	var dbColumn models.DBColumns
 	data.TBName = tablesList[i]
-	data.CreateBy = 0
 
 	dbTable.TableName = data.TBName
 	dbtable, err := dbTable.Get(tx)
@@ -275,7 +274,6 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (mode
 		return data, err
 	}
 
-	//data.ModuleFrontName = strings.ReplaceAll(data.ModuleName, "_", "-")
 	data.PackageName = "admin"
 	data.TplCategory = "crud"
 	data.Crud = true
@@ -305,22 +303,21 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (mode
 			return data, err
 		}
 	}
-	data.CreateBy = 0
 	data.TableComment = dbtable.TableComment
 	if dbtable.TableComment == "" {
 		data.TableComment = data.ClassName
 	}
 
 	data.FunctionName = data.TableComment
-	//data.BusinessName = data.ModuleName
 	data.IsLogicalDelete = "1"
 	data.LogicalDelete = true
-	data.LogicalDeleteColumn = "is_del"
+	// Soft deletion in this project is the deleted_at marker of ModelTime.
+	data.LogicalDeleteColumn = "deleted_at"
 	data.IsActions = 2
 	data.IsDataScope = 1
 	data.IsAuth = 1
 
-	data.FunctionAuthor = "wenjianzhang"
+	data.FunctionAuthor = user.Name(c)
 	if err := initializeGeneratorColumns(&data, dbcolumn, tx.Name()); err != nil {
 		return data, err
 	}
