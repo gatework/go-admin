@@ -186,10 +186,22 @@ func TestNamedTenantProbesBypassRequestDatabaseSelection(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("probe %s failed for pod Host: %d %s", path, w.Code, w.Body.String())
 		}
+		// Every response names its correlation ID, so a client can quote it
+		// when reporting a failure.
+		if w.Header().Get("X-Request-Id") == "" {
+			t.Fatalf("probe %s answered without a request ID", path)
+		}
+	}
+	traced := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	traced.Header.Set("X-Request-Id", "caller-supplied-id")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, traced)
+	if got := w.Header().Get("X-Request-Id"); got != "caller-supplied-id" {
+		t.Fatalf("caller's request ID not kept: %q", got)
 	}
 	pool.Close()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ready", nil)
-	w := httptest.NewRecorder()
+	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != 503 {
 		t.Fatalf("unhealthy tenant database accepted: %d", w.Code)

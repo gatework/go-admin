@@ -619,7 +619,8 @@ func initRouter() {
 	}
 	//r.Use(middleware.Metrics())
 	r.Use(exemptProbes(common.Sentinel())).
-		Use(common.RequestID(pkg.TrafficKey)).
+		// Assigns or keeps the X-Request-Id, echoes it on the response and
+		// binds a request logger carrying it.
 		Use(api.SetRequestLogger)
 
 	common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDB))
