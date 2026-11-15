@@ -188,12 +188,16 @@ func run() error {
 
 	fmt.Println(pkg.Red(banner))
 	tip()
+	scheme, port := "http", config.Current().Settings.Application.Port
+	if config.Current().Settings.SSL.Enable {
+		scheme = "https"
+	}
 	fmt.Println(pkg.Green("Server run at:"))
-	fmt.Printf("-  Local:   %s://localhost:%d/ \r\n", "http", config.Current().Settings.Application.Port)
-	fmt.Printf("-  Network: %s://%s:%d/ \r\n", "http", pkg.GetLocalHost(), config.Current().Settings.Application.Port)
+	fmt.Printf("-  Local:   %s://localhost:%d/ \r\n", scheme, port)
+	fmt.Printf("-  Network: %s://%s:%d/ \r\n", scheme, pkg.GetLocalHost(), port)
 	fmt.Println(pkg.Green("Swagger run at:"))
-	fmt.Printf("-  Local:   http://localhost:%d/swagger/admin/index.html \r\n", config.Current().Settings.Application.Port)
-	fmt.Printf("-  Network: %s://%s:%d/swagger/admin/index.html \r\n", "http", pkg.GetLocalHost(), config.Current().Settings.Application.Port)
+	fmt.Printf("-  Local:   %s://localhost:%d/swagger/admin/index.html \r\n", scheme, port)
+	fmt.Printf("-  Network: %s://%s:%d/swagger/admin/index.html \r\n", scheme, pkg.GetLocalHost(), port)
 	fmt.Printf("%s Enter Control + C Shutdown Server \r\n", pkg.GetCurrentTimeStr())
 
 	<-quit
