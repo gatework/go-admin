@@ -18,6 +18,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/fabric"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
 
@@ -297,14 +298,14 @@ func (s *Fabric) changeConfig(ctx context.Context, fabric, device int) (models.O
 	if e = opsDB(ctx, s).First(&d, device).Error; e != nil {
 		return o, nil, e
 	}
-	c, e := s.deviceConnection(ctx, d)
+	c, e := s.deviceConnection(ctx, d, deviceaccess.Write)
 	if e != nil {
 		return o, nil, e
 	}
 	if e = opsDB(ctx, s).First(&m, "device_id = ? AND fabric_id = ?", device, fabric).Error; e != nil {
 		return o, nil, e
 	}
-	if o.SourceHash != sourceHash(opsDevice(d), c) || o.MembershipVersion != m.Version || o.RuleVersion != m.RuleVersion || d.Status != "active" {
+	if o.SourceHash != sourceHash(opsDevice(d), c) || o.MembershipVersion != m.Version || o.RuleVersion != m.RuleVersion || !deviceaccess.Write.Allows(d.Status) {
 		return o, nil, ConflictErr
 	}
 	return o, o.Data.Records[0], nil

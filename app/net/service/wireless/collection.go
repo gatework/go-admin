@@ -10,6 +10,7 @@ import (
 	wireless "github.com/gatework/go-wireless"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/wireless"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 )
 
@@ -22,6 +23,9 @@ func (s *Wireless) CreateCollection(ctx context.Context, controller int, req dto
 	device, err := s.controller(ctx, controller, p)
 	if err != nil {
 		return result, err
+	}
+	if !deviceaccess.Read.Allows(device.Status) {
+		return result, deviceaccess.UnavailableErr
 	}
 	conn, err := s.connection(ctx, device)
 	if err != nil {

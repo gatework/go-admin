@@ -3,6 +3,7 @@ package wireless
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	models "github.com/gatework/motor/app/net/models/wireless"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/internal/testconfig"
 )
@@ -272,5 +274,24 @@ func TestBlockedControllerCannotStarveLaterQueuedWork(t *testing.T) {
 	s.DB.First(&job, job.ID)
 	if job.Status != "succeeded" {
 		t.Fatal("eligible job starved", job.Status)
+	}
+}
+
+// Collection only reads, so a controller still pending review may be
+// collected; one in maintenance, disabled or retired may not.
+func TestCollectionFollowsTheReadUseOfDeviceStatus(t *testing.T) {
+	s, p := setup(t)
+	ctx := context.Background()
+	for i, tc := range []struct {
+		status string
+		want   error
+	}{{"pending", nil}, {"maintenance", deviceaccess.UnavailableErr}, {"retired", deviceaccess.UnavailableErr}} {
+		if e := s.DB.Model(&network.Device{}).Where("id = ?", 1).Update("status", tc.status).Error; e != nil {
+			t.Fatal(e)
+		}
+		_, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "status-" + tc.status + strconv.Itoa(i), Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p)
+		if !errors.Is(e, tc.want) {
+			t.Errorf("%s controller: %v, want %v", tc.status, e, tc.want)
+		}
 	}
 }

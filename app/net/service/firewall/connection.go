@@ -3,8 +3,6 @@ package firewall
 import (
 	"context"
 	"errors"
-	"net/netip"
-	"os/exec"
 	"regexp"
 	"strings"
 
@@ -93,9 +91,8 @@ func firewallInventory(d inventory.Device) bool {
 }
 
 func effectiveFirewallConnection(d inventory.Device, stored connection.Settings) ConnectionStatus {
+	access := deviceaccess.FromEnvironment()
 	c := ConnectionStatus{Settings: stored, Vendor: inferFirewallVendor(d)}
-	c.Ready = false
-	c.Reason = ""
 	c.ProfileSource = "automatic"
 	if stored.Profile != "" {
 		c.ProfileSource = "manual"
@@ -107,32 +104,19 @@ func effectiveFirewallConnection(d inventory.Device, stored connection.Settings)
 		c.Profile = c.InferredProfile
 	}
 	c.ContextRequired = c.Vendor == "fortinet"
+	c.CredentialsConfigured = access.Configured(c.Profile)
+	// Collection only reads, so a device still pending review may be collected.
 	switch {
-	case !firewallInventory(d) || (d.Status != "pending" && d.Status != "active"):
+	case !firewallInventory(d) || !deviceaccess.Read.Allows(d.Status):
 		c.Reason = "device_unavailable"
 	case c.InferredProfile == "":
 		c.Reason = "profile_unknown"
 	case c.Profile != c.InferredProfile:
 		c.Reason = "profile_mismatch"
-	case c.Protocol != "ssh" && c.Protocol != "telnet" || c.Port < 1 || c.Port > 65535:
-		c.Reason = "connection_invalid"
 	default:
-		if _, err := netip.ParseAddr(d.IP); err != nil {
-			c.Reason = "address_invalid"
-			break
-		}
-		_, err := deviceaccess.FromEnvironment().ConnectionConfig(d.IP, c.Settings)
-		c.CredentialsConfigured = err == nil
-		if err != nil {
-			c.Reason = "credentials_missing"
-			break
-		}
-		if _, err = exec.LookPath(c.Protocol); err != nil {
-			c.Reason = "transport_unavailable"
-			break
-		}
-		c.Ready = true
+		c.Reason = access.Check(d, c.Settings, deviceaccess.Read)
 	}
+	c.Ready = c.Reason == ""
 	return c
 }
 

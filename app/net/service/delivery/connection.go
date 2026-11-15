@@ -90,12 +90,12 @@ func (s *Workflow) Devices(ctx context.Context, r *ndto.DevicePageReq, p *action
 		if !ok {
 			c = models.Connection{DeviceID: d.ID, Protocol: "ssh", Port: 22}
 		}
-		out = append(out, Device{Device: d, Connection: s.Config.Access.Effective(d, c)})
+		out = append(out, Device{Device: d, Connection: s.Config.Access.Effective(d, c, deviceaccess.Write)})
 	}
 	return out, count, nil
 }
 func (s *Workflow) connection(ctx context.Context, d inventory.Device) (models.Connection, error) {
-	return s.Config.Access.Resolve(ctx, s.DB, d)
+	return s.Config.Access.Resolve(ctx, s.DB, d, deviceaccess.Write)
 }
 
 // ConnectionForDevice resolves the connection of an inventory row already

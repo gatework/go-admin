@@ -233,7 +233,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	if e := opsDB(ctx, w.s).First(&sd, c.SourceDeviceID).Error; e != nil {
 		return e
 	}
-	sc, e := w.s.deviceConnection(ctx, sd)
+	sc, e := w.s.deviceConnection(ctx, sd, deviceaccess.Read)
 	if e != nil {
 		return e
 	}
@@ -460,7 +460,7 @@ func (w *Worker) scheduleFabric(ctx context.Context, f models.Fabric, now time.T
 	}
 	var devices []network.Device
 	ids := opsDB(ctx, w.s).Model(&models.Membership{}).Select("device_id").Where("fabric_id = ? AND status = ?", f.ID, "assigned")
-	if e := opsDB(ctx, w.s).Where("id IN (?) AND status = ?", ids, "active").Order("id").Find(&devices).Error; e != nil {
+	if e := opsDB(ctx, w.s).Where("id IN (?) AND status IN ?", ids, []string{"pending", "active"}).Order("id").Find(&devices).Error; e != nil {
 		return e
 	}
 	if len(devices) == 0 {

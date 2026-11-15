@@ -17,6 +17,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/fabric"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/lease"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
 
@@ -85,13 +86,13 @@ func (s *Fabric) GetCollection(ctx context.Context, id int, p *actions.DataPermi
 func (s *Fabric) opsTargets(ctx context.Context, devices []network.Device) ([]models.CollectionTarget, error) {
 	out := make([]models.CollectionTarget, 0, len(devices))
 	for _, d := range devices {
-		c, err := s.deviceConnection(ctx, d)
+		c, err := s.deviceConnection(ctx, d, deviceaccess.Read)
 		snapshot := opsDevice(d)
 		t := models.CollectionTarget{DeviceID: d.ID, Device: snapshot, Connection: c, SourceHash: sourceHash(snapshot, c), Status: "pending"}
 		switch {
 		case err != nil:
 			return nil, err
-		case d.Status != "active":
+		case !deviceaccess.Read.Allows(d.Status):
 			t.Status = "failed"
 			t.ErrorCode = "device_unavailable"
 		case c.Profile == "":
@@ -285,11 +286,11 @@ func (w *Worker) checkSource(ctx context.Context, d delivery.DeviceSnapshot, c d
 	if e := opsDB(ctx, w.s).First(&current, d.ID).Error; e != nil {
 		return e
 	}
-	connection, e := w.s.deviceConnection(ctx, current)
+	connection, e := w.s.deviceConnection(ctx, current, deviceaccess.Read)
 	if e != nil {
 		return e
 	}
-	if current.Status != "active" || sourceHash(opsDevice(current), connection) != hash {
+	if !deviceaccess.Read.Allows(current.Status) || sourceHash(opsDevice(current), connection) != hash {
 		return ConflictErr
 	}
 	return nil

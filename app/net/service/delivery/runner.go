@@ -13,6 +13,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/lease"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	"github.com/gatework/motor/common/worker"
 )
 
@@ -266,7 +267,7 @@ func (w *Worker) check(ctx context.Context, t models.Target) error {
 	if e := w.s.db(ctx).First(&d, t.DeviceID).Error; e != nil {
 		return IdentityErr
 	}
-	if d.Status != "active" {
+	if !deviceaccess.Write.Allows(d.Status) {
 		return IdentityErr
 	}
 	c, e := w.s.connection(ctx, d)

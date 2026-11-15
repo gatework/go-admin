@@ -17,6 +17,7 @@ import (
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/lease"
 	models "github.com/gatework/motor/app/net/models/wireless"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 // Worker holds no device connection until an authorized collection is queued.
@@ -125,7 +126,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, held lease.Leas
 	c, ce := w.s.connection(ctx, d)
 	code := ""
 	var snap wireless.Snapshot
-	if e != nil || ce != nil || d.Status != "active" || source(d, c) != job.SourceHash {
+	if e != nil || ce != nil || !deviceaccess.Read.Allows(d.Status) || source(d, c) != job.SourceHash {
 		code = "source_changed"
 	} else {
 		run, cancel := context.WithTimeout(ctx, collectionTimeout)
@@ -208,7 +209,7 @@ func (s *Wireless) collectionSource(finishCtx context.Context, tx *gorm.DB, job 
 	if ce != nil {
 		return false, ce
 	}
-	validSource := deviceErr == nil && device.Status == "active" && source(device, connection) == job.SourceHash
+	validSource := deviceErr == nil && deviceaccess.Read.Allows(device.Status) && source(device, connection) == job.SourceHash
 	return validSource, nil
 }
 func (s *Wireless) persistCollection(finishCtx context.Context, job models.Collection, snap wireless.Snapshot, code, status string, started time.Time) (string, string, []models.DimensionResult, error) {

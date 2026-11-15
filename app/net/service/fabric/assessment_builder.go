@@ -8,6 +8,7 @@ import (
 	vxlan "github.com/gatework/go-vxlan"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
 
@@ -27,7 +28,7 @@ func (a *assessmentBuilder) assessNode(ctx context.Context, s *Fabric, d network
 	if err := s.DB.WithContext(ctx).First(&m, "device_id = ?", d.ID).Error; err != nil {
 		return err
 	}
-	connection, connectionErr := s.deviceConnection(ctx, d)
+	connection, connectionErr := s.deviceConnection(ctx, d, deviceaccess.Read)
 	currentSourceHash := sourceHash(opsDevice(d), connection)
 	n := dto.Node{DeviceID: d.ID, Name: d.Name, IP: d.IP, Role: d.DeviceRole, Version: d.Version, MembershipVersion: m.Version, State: "unknown", Model: d.HardwareModel, Platform: d.OS, Supported: connectionErr == nil && connection.Profile == "cisco_nxos", Dimensions: map[string]dto.Evidence{}, Features: []string{}}
 	a.nodeEvidence(&n, d.ID, m.Version, currentSourceHash, connectionErr, observations)

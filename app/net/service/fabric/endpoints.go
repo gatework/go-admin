@@ -14,6 +14,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
 
@@ -318,7 +319,7 @@ func (s *Fabric) deviceEndpoints(ctx context.Context, f models.Fabric, d network
 	if err := s.DB.WithContext(ctx).First(&membership, "device_id = ?", d.ID).Error; err != nil {
 		return nil, nil, err
 	}
-	connection, connectionErr := s.deviceConnection(ctx, d)
+	connection, connectionErr := s.deviceConnection(ctx, d, deviceaccess.Read)
 	currentSource := sourceHash(opsDevice(d), connection)
 
 	localRows := []dto.Endpoint{}

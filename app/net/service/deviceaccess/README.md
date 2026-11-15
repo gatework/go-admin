@@ -6,4 +6,6 @@
 - **Profile inference** (`InferProfile`): the connector profile for an inventory row, from its vendor, OS and model. Unsupported, ambiguous or contradictory evidence resolves to no profile rather than a guess. Nothing contacts the device.
 - **Resolution** (`Resolve`, `Effective`): the device's stored connection settings (`sys_delivery_connection`), with the inferred profile filled in when none was chosen, `profileSource`, and readiness (`ready`, `reason`).
 
+- **Use** (`Read`, `Write`, `Check`): a session that only reads (firewall, Fabric and wireless collection) may open to a device that is `pending` or `active`; one that writes (delivery, Fabric changes) only to an `active` device. `maintenance`, `disabled` and `retired` devices are opened for nothing. Readiness reasons, in the order checked: `device_unavailable`, `profile_unknown` (connector profiles; firewall checks its own vendors and adds `profile_mismatch`), `connection_invalid`, `address_invalid`, `credentials_missing`, `transport_unavailable`.
+
 Delivery's own switches (`NETWORK_DELIVERY_ENABLED`, `NETWORK_DELIVERY_CONCURRENCY`) stay in `service/delivery`.

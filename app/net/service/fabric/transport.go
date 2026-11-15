@@ -86,8 +86,8 @@ func opsDB(ctx context.Context, s *Fabric) *gorm.DB {
 	return s.DB.WithContext(ctx).Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
 }
 
-func (s *Fabric) deviceConnection(ctx context.Context, d network.Device) (delivery.Connection, error) {
-	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d)
+func (s *Fabric) deviceConnection(ctx context.Context, d network.Device, use deviceaccess.Use) (delivery.Connection, error) {
+	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d, use)
 }
 func opsJSON(v any) string {
 	encoded, e := models.OperationsValue(v)

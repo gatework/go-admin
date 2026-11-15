@@ -19,6 +19,7 @@ import (
 	base "github.com/gatework/motor-core/sdk/service"
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/delivery"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/database"
@@ -278,7 +279,7 @@ func (s *Workflow) targets(ctx context.Context, inputs []dto.InputTarget, p *act
 		if e := s.inventory(ctx, p).Where("id = ?", in.DeviceID).First(&d).Error; e != nil {
 			return nil, NotFoundErr
 		}
-		if d.Status != "active" || net.ParseIP(d.IP) == nil {
+		if !deviceaccess.Write.Allows(d.Status) || net.ParseIP(d.IP) == nil {
 			return nil, ConnectionErr
 		}
 		c, e := s.connection(ctx, d)

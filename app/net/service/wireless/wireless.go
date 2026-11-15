@@ -119,7 +119,7 @@ func platform(c delivery.Connection) string {
 	}
 }
 func (s *Wireless) connection(ctx context.Context, d network.Device) (delivery.Connection, error) {
-	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d)
+	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d, deviceaccess.Read)
 }
 func validManagement(r dto.ManagementReq) bool {
 	return r.Version > 0 && utf8.ValidString(r.LocalAlias+r.InstallationLocation+r.Owner+r.Notes) && utf8.RuneCountInString(r.LocalAlias) <= 255 && utf8.RuneCountInString(r.InstallationLocation) <= 255 && utf8.RuneCountInString(r.Owner) <= 255 && utf8.RuneCountInString(r.Notes) <= 4000
