@@ -487,7 +487,12 @@ func (e User) Current(c *gin.Context) {
 		mp["permissions"] = permissions
 		mp["buttons"] = buttons
 	} else {
-		list, _ := r.Permissions(c.Request.Context(), user.RoleID(c))
+		list, err := r.Permissions(c.Request.Context(), user.RoleID(c))
+		if err != nil {
+			e.Logger.Errorf("loading permissions for role %d: %v", user.RoleID(c), err)
+			e.Error(http.StatusInternalServerError, nil, "权限加载失败")
+			return
+		}
 		mp["permissions"] = list
 		mp["buttons"] = list
 	}
@@ -502,18 +507,16 @@ func (e User) Current(c *gin.Context) {
 	// and the browser went straight back to the login page.
 	err = s.Self(c.Request.Context(), &req, &sysUser)
 	if err != nil {
-		e.Error(http.StatusUnauthorized, err, "登录失败")
+		e.Error(http.StatusUnauthorized, nil, "登录失败")
 		return
 	}
-	mp["introduction"] = " am a super administrator"
-	mp["avatar"] = "https://wpimg.wallstcn.com/f778738c-e4f8-4870-b634-56703b4acafe.gif"
-	if sysUser.Avatar != "" {
-		mp["avatar"] = sysUser.Avatar
-	}
+	// No default avatar URL: the product runs offline, and the UI draws the
+	// user's initials when there is none. It used to point at a public CDN.
+	mp["introduction"] = ""
+	mp["avatar"] = sysUser.Avatar
 	mp["userName"] = sysUser.Username
 	mp["userId"] = sysUser.UserID
 	mp["deptId"] = sysUser.DeptID
 	mp["name"] = sysUser.NickName
-	mp["code"] = 200
 	e.OK(mp, "")
 }
