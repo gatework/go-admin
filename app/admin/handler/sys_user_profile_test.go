@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -85,7 +87,7 @@ func TestAvatarUsesTokenIdentity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = w.Write([]byte("avatar fixture")); err != nil {
+			if _, err = w.Write(pngFixture(t)); err != nil {
 				t.Fatal(err)
 			}
 			if err := mw.Close(); err != nil {
@@ -100,6 +102,13 @@ func TestAvatarUsesTokenIdentity(t *testing.T) {
 				want = 500
 			}
 			assertProfileCode(t, rec, want)
+			stored, err := os.ReadDir("static/uploadfile")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.missing && len(stored) != 0 {
+				t.Fatalf("failed avatar update left %d files behind", len(stored))
+			}
 			if !tc.missing {
 				var after models.SysUser
 				if err := db.First(&after, u.UserID).Error; err != nil {
@@ -271,5 +280,47 @@ func TestChangePasswordRefusesShortPasswords(t *testing.T) {
 	s := service.User{DB: db, Logger: logger.NewHelper(logger.Default())}
 	if err := s.ChangePassword(t.Context(), u.UserID, "old-password", "short", nil); !errors.Is(err, account.PasswordErr) {
 		t.Fatalf("short password accepted: %v", err)
+	}
+}
+
+func pngFixture(t *testing.T) []byte {
+	t.Helper()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	return encoded.Bytes()
+}
+
+// The content decides what an avatar is, not the file name: anything that is
+// not a supported image is refused and nothing is stored.
+func TestAvatarRefusesNonImages(t *testing.T) {
+	db, _ := setupPrivescDB(t)
+	if err := db.Create(&models.SysUser{UserID: 42, Username: "avatar-user", Status: "2"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll("static/uploadfile", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	w, err := mw.CreateFormFile("upload[]", "photo.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("<html><script>alert(1)</script></html>")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/avatar", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	profileEngine(db, 42).ServeHTTP(rec, req)
+	assertProfileCode(t, rec, 422)
+	if stored, _ := os.ReadDir("static/uploadfile"); len(stored) != 0 {
+		t.Fatalf("a non-image was stored: %v", stored)
 	}
 }

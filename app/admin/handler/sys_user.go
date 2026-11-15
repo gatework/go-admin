@@ -2,7 +2,10 @@ package handler
 
 import (
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"github.com/gatework/motor/common/account"
 
@@ -10,7 +13,6 @@ import (
 	"github.com/gatework/motor/common/request"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/gatework/motor-core/jwtauth/user"
 	_ "github.com/gatework/motor-core/response" // Swagger annotations require the response schema. // Registers the documentation or route assets used by this package.
@@ -244,51 +246,58 @@ func (e User) Delete(c *gin.Context) {
 // @Security Bearer
 func (e User) UpdateAvatar(c *gin.Context) {
 	s := service.User{}
-	req := dto.AvatarUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
 	if err != nil {
 		e.Logger.Error(err)
-		e.Error(500, err, err.Error())
+		e.Error(http.StatusInternalServerError, nil, "数据库连接获取失败")
 		return
 	}
-	req.UserID = user.ID(c)
-	if req.UserID <= 0 {
-		e.Error(http.StatusUnauthorized, errors.New("invalid user identity"), "登录失效")
+	userID := user.ID(c)
+	if userID <= 0 {
+		e.Error(http.StatusUnauthorized, nil, "登录失效")
 		return
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAvatarBytes)
 	form, err := c.MultipartForm()
 	if err != nil {
-		e.Error(http.StatusUnprocessableEntity, err, "头像上传参数错误")
+		e.Error(http.StatusUnprocessableEntity, nil, "头像上传参数错误")
 		return
 	}
 	files := form.File["upload[]"]
 	if len(files) != 1 {
-		e.Error(http.StatusUnprocessableEntity, errors.New("exactly one avatar file is required"), "请选择一张头像")
+		e.Error(http.StatusUnprocessableEntity, nil, "请选择一张头像")
 		return
 	}
-	guid := uuid.New().String()
-	filPath := "static/uploadfile/" + guid + ".jpg"
-	for _, file := range files {
-		e.Logger.Debugf("upload avatar file: %s", file.Filename)
-		// 上传文件至指定目录
-		err = c.SaveUploadedFile(file, filPath)
-		if err != nil {
-			e.Logger.Errorf("save file error, %s", err.Error())
-			e.Error(500, err, "")
-			return
-		}
+	image, err := readUpload(files[0])
+	if err != nil {
+		e.Error(http.StatusUnprocessableEntity, nil, "头像上传参数错误")
+		return
 	}
-	req.Avatar = "/" + filPath
-
-	err = s.UpdateAvatar(c.Request.Context(), &req, nil)
+	path, err := s.SetAvatar(c.Request.Context(), userID, image)
+	if errors.Is(err, service.InvalidAvatarErr) {
+		e.Error(http.StatusUnprocessableEntity, nil, "头像须为 PNG、JPEG、GIF 或 WebP 图片")
+		return
+	}
 	if err != nil {
 		e.Logger.Error(err)
-		e.Error(500, err, "操作失败")
+		e.Error(http.StatusInternalServerError, nil, "操作失败")
 		return
 	}
-	e.OK(filPath, "修改成功")
+	e.OK(strings.TrimPrefix(path, "/"), "修改成功")
+}
+
+// maxAvatarBytes bounds the whole avatar request.
+const maxAvatarBytes = 2 << 20
+
+func readUpload(header *multipart.FileHeader) ([]byte, error) {
+	file, err := header.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return io.ReadAll(io.LimitReader(file, maxAvatarBytes))
 }
 
 // UpdateStatus 修改用户状态

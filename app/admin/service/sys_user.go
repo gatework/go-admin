@@ -1,9 +1,21 @@
 package service
 
 import (
+	_ "image/gif"  // Register GIF for avatars.
+	_ "image/jpeg" // Register JPEG for avatars.
+	_ "image/png"  // Register PNG for avatars.
+
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	stdimage "image"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
+	_ "golang.org/x/image/webp" // Register WebP for avatars.
 
 	"github.com/gatework/motor/common/account"
 
@@ -155,22 +167,54 @@ func (e *User) Update(ctx context.Context, c *dto.UserUpdate, p *actions.DataPer
 	})
 }
 
-// UpdateAvatar updates the authenticated caller's avatar. The API supplies the
-// token identity; account ownership does not depend on who created that user.
-// The permission argument is retained for source compatibility.
-func (e *User) UpdateAvatar(ctx context.Context, c *dto.AvatarUpdate, _ *actions.DataPermission) error {
-	if c.UserID <= 0 {
-		return errors.New("invalid user identity")
+// AvatarDir is where avatars are stored. The engine serves it at /static,
+// sandboxed by common/middleware.Secure.
+const AvatarDir = "static/uploadfile"
+
+// avatarFormats are the image formats accepted as avatars, by decoder name.
+var avatarFormats = map[string]string{"png": ".png", "jpeg": ".jpg", "gif": ".gif", "webp": ".webp"}
+
+// InvalidAvatarErr reports an upload that is not a supported image.
+//
+//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+var InvalidAvatarErr = errors.New("avatar must be a PNG, JPEG, GIF or WebP image")
+
+//revive:enable:error-naming
+
+// SetAvatar stores image as the user's avatar and returns its public path.
+// The content decides the format, not the file name, and anything that is not
+// a supported image is refused. The file is removed again if the user's row
+// cannot be updated, so a failed request leaves nothing behind.
+func (e *User) SetAvatar(ctx context.Context, userID int, image []byte) (string, error) {
+	if userID <= 0 {
+		return "", errors.New("invalid user identity")
 	}
-	result := e.DB.WithContext(ctx).Model(&models.SysUser{}).Where("user_id = ?", c.UserID).
-		Updates(map[string]any{"avatar": c.Avatar, "update_by": c.UserID})
+	_, format, err := stdimage.DecodeConfig(bytes.NewReader(image))
+	if err != nil {
+		return "", InvalidAvatarErr
+	}
+	extension, ok := avatarFormats[format]
+	if !ok {
+		return "", InvalidAvatarErr
+	}
+	name := filepath.Join(AvatarDir, uuid.NewString()+extension)
+	if err := os.WriteFile(name, image, 0o644); err != nil { //nolint:gosec // G306: served publicly as a static file.
+		return "", fmt.Errorf("storing avatar: %w", err)
+	}
+	public := "/" + filepath.ToSlash(name)
+	result := e.DB.WithContext(ctx).Model(&models.SysUser{}).Where("user_id = ?", userID).
+		Updates(map[string]any{"avatar": public, "update_by": userID})
+	if result.Error == nil && result.RowsAffected == 0 {
+		result.Error = errors.New("无权更新该数据")
+	}
 	if result.Error != nil {
-		return result.Error
+		if removeErr := os.Remove(name); removeErr != nil {
+			e.Logger.Errorf("removing unused avatar %s: %v", name, removeErr)
+		}
+		return "", result.Error
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("无权更新该数据")
-	}
-	return nil
+	return public, nil
 }
 
 // UpdateStatus 更新用户状态

@@ -61,13 +61,6 @@ func (s *PasswordReset) Generate(model *models.SysUser) {
 	model.Password = s.Password
 }
 
-// AvatarUpdate carries validated administration request parameters.
-type AvatarUpdate struct {
-	common.ControlBy
-	UserID int    `json:"userId" comment:"用户ID" vd:"len($)>0"` // 用户ID
-	Avatar string `json:"avatar" comment:"头像" vd:"len($)>0"`
-}
-
 // UserStatusUpdate carries validated administration request parameters.
 type UserStatusUpdate struct {
 	common.ControlBy
