@@ -23,19 +23,24 @@ func testManager(t *testing.T, script string) *Manager {
 }
 func awaitJob(t *testing.T, m *Manager, owner Owner, id string) Job {
 	t.Helper()
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		job, err := m.Get(owner, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if job.Status != "running" {
-			return job
-		}
-		time.Sleep(10 * time.Millisecond)
+	m.mu.Lock()
+	running, ok := m.jobs[id]
+	m.mu.Unlock()
+	if !ok {
+		t.Fatal("job is not registered")
 	}
-	t.Fatal("job did not finish")
-	return Job{}
+	// Wait on the job's own completion signal. A wall-clock poll shorter than the
+	// job timeout fails spuriously when the whole suite competes for the CPU.
+	select {
+	case <-running.done:
+	case <-time.After(time.Minute):
+		t.Fatal("job did not finish")
+	}
+	job, err := m.Get(owner, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return job
 }
 func TestJobOutputOwnershipAndExitStatus(t *testing.T) {
 	m := testManager(t, "printf 'first\\n'; printf 'error\\n' >&2; exit 7\n")
