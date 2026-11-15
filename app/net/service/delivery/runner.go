@@ -263,18 +263,21 @@ func (w *Worker) check(ctx context.Context, t models.Target) error {
 	} else if e != nil {
 		return failed(e)
 	}
-	var current models.Target
-	if e := db.First(&current, t.ID).Error; e != nil {
-		return failed(e)
+	// The target's claim and its order's cancel flag, in one read.
+	var current struct {
+		Status          string
+		ClaimToken      string
+		ClaimUntil      *time.Time
+		CancelRequested bool
 	}
-	if current.Status != "running" || current.ClaimToken != t.ClaimToken || current.ClaimUntil == nil || time.Now().After(*current.ClaimUntil) {
-		return CancelledErr
+	read := db.Table(models.Target{}.TableName()+" t").
+		Select("t.status, t.claim_token, t.claim_until, o.cancel_requested").
+		Joins("JOIN "+models.Order{}.TableName()+" o ON o.id = t.order_id").
+		Where("t.id = ?", t.ID).Take(&current)
+	if read.Error != nil {
+		return failed(read.Error)
 	}
-	var o models.Order
-	if e := db.First(&o, t.OrderID).Error; e != nil {
-		return failed(e)
-	}
-	if o.CancelRequested {
+	if current.Status != "running" || current.ClaimToken != t.ClaimToken || current.ClaimUntil == nil || time.Now().After(*current.ClaimUntil) || current.CancelRequested {
 		return CancelledErr
 	}
 	var d inventory.Device
