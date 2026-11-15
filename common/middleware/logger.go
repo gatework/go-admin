@@ -43,9 +43,7 @@ func LoggerToFile() gin.HandlerFunc {
 		}
 
 		c.Next()
-		url := c.Request.URL.Path
-		if strings.Contains(url, "logout") ||
-			strings.Contains(url, "login") {
+		if skipsOperationLog(c.Request.URL.Path) {
 			return
 		}
 		// 结束时间
@@ -206,6 +204,14 @@ func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqURI string
 }
 
 // Account secrets, firewall configurations, delivery scripts and device output must never reach operation-log storage.
+// skipsOperationLog reports the session routes whose record is the login log,
+// not the operation log. It matches routes exactly: matching any path that
+// contains "login" also dropped every change made through /sys-login-log, so
+// deleting login records left no audit trail.
+func skipsOperationLog(path string) bool {
+	return path == "/api/v1/login" || path == "/api/v1/logout" || strings.HasPrefix(path, "/wslogout/")
+}
+
 func sensitiveAccountPath(path string) bool {
 	return strings.HasPrefix(path, "/api/v1/network-firewall/") || path == "/api/v1/network-firewall" || strings.HasPrefix(path, "/api/v1/network-wireless/") || path == "/api/v1/network-wireless" || strings.HasPrefix(path, "/api/v1/network-fabrics/") || path == "/api/v1/network-fabrics" || strings.HasPrefix(path, "/api/v1/network-delivery/") || path == "/api/v1/network-delivery" || strings.HasPrefix(path, "/api/v1/account/") || path == "/api/v1/login" || strings.HasPrefix(path, "/api/v1/user/pwd/")
 }

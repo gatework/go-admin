@@ -71,3 +71,19 @@ func TestOperaLogStatusMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestOnlySessionRoutesSkipTheOperationLog(t *testing.T) {
+	for path, skipped := range map[string]bool{
+		"/api/v1/login":                   true,
+		"/api/v1/logout":                  true,
+		"/wslogout/1/job":                 true,
+		"/api/v1/sys-login-log":           false, // deleting login records must be audited
+		"/api/v1/sys-login-log/clean":     false,
+		"/api/v1/account/email-login":     false,
+		"/api/v1/network-firewall/logins": false,
+	} {
+		if got := skipsOperationLog(path); got != skipped {
+			t.Errorf("skipsOperationLog(%q) = %v, want %v", path, got, skipped)
+		}
+	}
+}
