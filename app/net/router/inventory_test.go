@@ -119,7 +119,7 @@ func TestInventoryRoutesRequireJWTAndCasbinAndApplyScope(t *testing.T) {
 				if route.path == "/api/v1/network-device" && (result.Code != 200 || result.Data.Count != 1 || len(result.Data.List) != 1 || result.Data.List[0].Name != "visible") {
 					t.Errorf("route lost PermissionAction: %s", response.Body.String())
 				}
-				if strings.HasSuffix(route.path, "/sync") && (result.Code != 403 || !strings.Contains(result.Msg, "全量数据权限")) {
+				if strings.HasSuffix(route.path, "/sync") && (result.Code != 403 || result.Msg != "inventory.sync_scope_required") {
 					t.Errorf("route did not enforce full-scope sync: %s", response.Body.String())
 				}
 			}

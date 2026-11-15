@@ -89,7 +89,7 @@ func TestCircuitAPIDuplicateNumberIsRetryableValidationAndCASRemainsConflict(t *
 	}
 	firstID := int(result["data"].(map[string]any)["id"].(float64))
 	_, result = serve(t, engine, "POST", "/circuits", `{"circuitNo":" c-1 ","name":"duplicate","provider":"carrier"}`)
-	if result["code"] != float64(422) {
+	if result["code"] != float64(400) || result["msg"] != "inventory.circuit_duplicate_number" {
 		t.Errorf("duplicate create must be editable validation, not stale version: %+v", result)
 	}
 	_, result = serve(t, engine, "POST", "/circuits", `{"circuitNo":"C-2","name":"editable","provider":"carrier"}`)
@@ -99,7 +99,7 @@ func TestCircuitAPIDuplicateNumberIsRetryableValidationAndCASRemainsConflict(t *
 	secondID := int(result["data"].(map[string]any)["id"].(float64))
 	path := fmt.Sprintf("/circuits/%d", secondID)
 	_, result = serve(t, engine, "PUT", path, `{"circuitNo":"C-1","name":"must not persist","provider":"carrier","version":1}`)
-	if result["code"] != float64(422) {
+	if result["code"] != float64(400) || result["msg"] != "inventory.circuit_duplicate_number" {
 		t.Errorf("duplicate update must be editable validation: %+v", result)
 	}
 	var unchanged models.Circuit
@@ -119,11 +119,11 @@ func TestCircuitAPIDuplicateNumberIsRetryableValidationAndCASRemainsConflict(t *
 		t.Fatal(result)
 	}
 	_, result = serve(t, engine, "POST", "/circuits", `{"circuitNo":"C-1","name":"reuse deleted","provider":"carrier"}`)
-	if result["code"] != float64(422) {
+	if result["code"] != float64(400) || result["msg"] != "inventory.circuit_duplicate_number" {
 		t.Errorf("deleted number was reused or treated as CAS: %+v", result)
 	}
 	_, result = serve(t, engine, "PUT", path, `{"circuitNo":"C-1","name":"reuse deleted","provider":"carrier","version":2}`)
-	if result["code"] != float64(422) {
+	if result["code"] != float64(400) || result["msg"] != "inventory.circuit_duplicate_number" {
 		t.Errorf("update reused deleted number or was treated as CAS: %+v", result)
 	}
 }

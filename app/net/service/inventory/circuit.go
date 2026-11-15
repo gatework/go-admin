@@ -225,7 +225,7 @@ func (s *Circuit) Options(ctx context.Context, p *actions.DataPermission) (dto.C
 	return result, nil
 }
 func safeCircuitSourceError(err error) error {
-	for _, safe := range []*inventory.Error{inventory.InvalidInputErr, inventory.CircuitBindingErr, inventory.ZabbixNotConfiguredErr, inventory.ZabbixTimeoutErr} {
+	for _, safe := range []error{inventory.InvalidInputErr, inventory.CircuitBindingErr, inventory.ZabbixNotConfiguredErr, inventory.ZabbixTimeoutErr} {
 		if errors.Is(err, safe) {
 			return safe
 		}

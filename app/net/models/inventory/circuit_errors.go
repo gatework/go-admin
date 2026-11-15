@@ -1,25 +1,37 @@
 package inventory
 
+import "github.com/gatework/motor/common/errkind"
+
+// Circuit failures.
+//
+//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// CircuitNotFoundErr identifies circuit not found failures.
-	CircuitNotFoundErr = &Error{404, "专线不存在或无权查看"}
-	// CircuitDuplicateErr identifies circuit duplicate failures.
-	CircuitDuplicateErr = &Error{422, "线路编号已存在，请使用其他编号"}
-	// CircuitLifecycleErr identifies circuit lifecycle failures.
-	CircuitLifecycleErr = &Error{400, "已终止专线不能恢复状态，只有规划中专线允许删除"}
-	// CircuitScopeErr identifies circuit scope failures.
-	CircuitScopeErr = &Error{403, "缺少专线数据权限"}
-	// CircuitDeviceErr identifies circuit device failures.
-	CircuitDeviceErr = &Error{400, "端点设备不存在或无权查看"}
-	// CircuitBindingErr identifies circuit binding failures.
-	CircuitBindingErr = &Error{400, "监控绑定无效，请重新选择主机及其启用的速率监控项"}
-	// CircuitExportLimitErr identifies circuit export limit failures.
-	CircuitExportLimitErr = &Error{400, "导出结果超过 10000 条，请缩小筛选范围"}
-	// ZabbixNotConfiguredErr identifies zabbix not configured failures.
-	ZabbixNotConfiguredErr = &Error{503, "Zabbix 尚未配置，请联系管理员完成配置"}
-	// ZabbixUpstreamErr identifies zabbix upstream failures.
-	ZabbixUpstreamErr = &Error{502, "无法读取 Zabbix 监控数据，请稍后重试"}
-	// ZabbixTimeoutErr identifies zabbix timeout failures.
-	ZabbixTimeoutErr = &Error{504, "Zabbix 查询超时或已取消，请稍后重试"}
+	// CircuitNotFoundErr is a circuit that does not exist or is out of scope.
+	CircuitNotFoundErr = errkind.New(errkind.NotFound, "inventory.circuit_not_found")
+	// CircuitDuplicateErr is a circuit number already in use. It is a
+	// validation failure the user corrects and retries, unlike ConflictErr,
+	// which asks them to reload.
+	CircuitDuplicateErr = errkind.New(errkind.Invalid, "inventory.circuit_duplicate_number")
+	// CircuitLifecycleErr is a status change the lifecycle forbids: a
+	// terminated circuit cannot be revived, and only planned circuits can be
+	// deleted.
+	CircuitLifecycleErr = errkind.New(errkind.Invalid, "inventory.circuit_lifecycle")
+	// CircuitScopeErr is a caller without the circuit data scope.
+	CircuitScopeErr = errkind.New(errkind.Forbidden, "inventory.circuit_scope_required")
+	// CircuitDeviceErr is an endpoint device that does not exist or is out of scope.
+	CircuitDeviceErr = errkind.New(errkind.Invalid, "inventory.circuit_device_invalid")
+	// CircuitBindingErr is a monitoring binding to a host or item that is not
+	// an enabled rate item.
+	CircuitBindingErr = errkind.New(errkind.Invalid, "inventory.circuit_binding_invalid")
+	// CircuitExportLimitErr is an export over 10000 rows.
+	CircuitExportLimitErr = errkind.New(errkind.Invalid, "inventory.circuit_export_limit")
+	// ZabbixNotConfiguredErr is a traffic query while Zabbix is not configured.
+	ZabbixNotConfiguredErr = errkind.New(errkind.Unavailable, "inventory.zabbix_not_configured")
+	// ZabbixUpstreamErr is Zabbix failing to answer a query.
+	ZabbixUpstreamErr = errkind.New(errkind.Upstream, "inventory.zabbix_unavailable")
+	// ZabbixTimeoutErr is a Zabbix query that timed out or was cancelled.
+	ZabbixTimeoutErr = errkind.New(errkind.Timeout, "inventory.zabbix_timeout")
 )
+
+//revive:enable:error-naming

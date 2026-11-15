@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -257,15 +256,10 @@ func prepareDevice(e *Device, c *gin.Context) (*service.Device, bool) {
 	return s, true
 }
 
-func (e Device) respond(err error) {
-	code, message := 500, "台账操作失败，请稍后重试"
-	if safe, ok := errors.AsType[*inventory.Error](err); ok {
-		code, message = safe.Code, safe.Message
-	}
-	// response.Error may log the supplied error. Give it only the public
-	// message, never raw upstream/SQL text or a request containing credentials.
-	e.Error(code, nil, message)
-}
+// respond answers err by its kind and code. Inventory errors are declared
+// safe to show; anything unclassified is logged and answered internal_error,
+// never with upstream, SQL or credential text.
+func (e Device) respond(err error) { request.Fail(&e.API, err) }
 
 func (e Device) pageRequest(c *gin.Context) (*dto.DevicePageReq, bool) {
 	req := &dto.DevicePageReq{}

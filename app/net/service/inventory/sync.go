@@ -15,6 +15,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/common/errkind"
 )
 
 const syncTimeout = 25 * time.Second
@@ -38,7 +39,7 @@ type SyncResult struct {
 func (s *Device) SyncStatus(ctx context.Context) (SyncStatus, error) {
 	result := SyncStatus{Configured: s.source().Configured(), Status: "idle"}
 	now := time.Now().UTC()
-	if err := s.DB.WithContext(ctx).Model(&inventory.SyncState{}).Where("id = 1 AND status = ? AND (lease_expires_at <= ? OR lease_expires_at IS NULL)", "running", now).Updates(map[string]any{"status": "failed", "finished_at": now, "token": "", "lease_expires_at": nil, "message": "上次同步已中断，请重新同步"}).Error; err != nil {
+	if err := s.DB.WithContext(ctx).Model(&inventory.SyncState{}).Where("id = 1 AND status = ? AND (lease_expires_at <= ? OR lease_expires_at IS NULL)", "running", now).Updates(map[string]any{"status": "failed", "finished_at": now, "token": "", "lease_expires_at": nil, "message": inventory.InterruptedErr.Code()}).Error; err != nil {
 		return result, err
 	}
 	err := s.DB.WithContext(ctx).First(&result.SyncState, 1).Error
@@ -46,7 +47,7 @@ func (s *Device) SyncStatus(ctx context.Context) (SyncStatus, error) {
 		err = nil
 	}
 	if !result.Configured {
-		result.Message = inventory.NotConfiguredErr.Message
+		result.Message = inventory.NotConfiguredErr.Code()
 	}
 	return result, err
 }
@@ -100,7 +101,7 @@ func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission,
 			err = inventory.TimeoutErr
 		}
 		s.fail(ctx, token, err)
-		if _, ok := errors.AsType[*inventory.Error](err); !ok {
+		if kind, _ := errkind.Of(err); kind == errkind.Unknown {
 			err = inventory.PersistenceErr
 		}
 		return SyncResult{}, err
@@ -130,9 +131,9 @@ func (s *Device) fail(ctx context.Context, token string, cause error) {
 	// token prevents an expired writer from clearing its successor's lease.
 	cleanup, cancel := worker.Cleanup(ctx, 3*time.Second)
 	defer cancel()
-	message := inventory.PersistenceErr.Message
-	if safe, ok := errors.AsType[*inventory.Error](cause); ok {
-		message = safe.Message
+	message := inventory.PersistenceErr.Code()
+	if _, code := errkind.Of(cause); code != "" {
+		message = code
 	}
 	err := s.DB.WithContext(cleanup).Model(&inventory.SyncState{}).Where("id = 1 AND token = ? AND status = ?", token, "running").Updates(map[string]any{"status": "failed", "finished_at": time.Now().UTC(), "token": "", "lease_expires_at": nil, "message": message}).Error
 	if err != nil && s.Logger != nil {

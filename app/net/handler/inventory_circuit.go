@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -297,13 +296,10 @@ func prepareCircuit(e *Circuit, c *gin.Context) (*service.Circuit, bool) {
 	return s, true
 }
 
-func (e Circuit) respond(err error) {
-	code, message := 500, "专线操作失败，请稍后重试"
-	if safe, ok := errors.AsType[*inventory.Error](err); ok {
-		code, message = safe.Code, safe.Message
-	}
-	e.Error(code, nil, message)
-}
+// respond answers err by its kind and code. Inventory errors are declared
+// safe to show; anything unclassified is logged and answered internal_error,
+// never with upstream, SQL or credential text.
+func (e Circuit) respond(err error) { request.Fail(&e.API, err) }
 
 func (e Circuit) id(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
