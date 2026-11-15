@@ -41,10 +41,6 @@ stop:
 	@if [ $(shell docker ps -aq --filter name=motor --filter publish=8000) ]; then docker-compose down; fi
 
 
-# -race is worth the extra minute here: common/actions reuses model instances
-# across concurrent requests, so a Generate() that returns in place instead of
-# a copy leaks data between them - and that is invisible to a single-threaded
-# test run.
 # The end-to-end install, which `test` above cannot reach: test/e2e-apporder
 # is its own module, so `./...` in this one does not include it. It builds a
 # motor binary with the example application linked in and drives

@@ -3,9 +3,8 @@
 package matched
 
 import (
-	"github.com/gatework/motor/app/demo/models"
-	"github.com/gatework/motor/app/demo/service/dto"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/actions/testdata/fixture"
 )
 
-var _ = actions.Create[models.DemoProduct, dto.DemoProductControl]
+var _ = actions.Create[fixture.Widget, fixture.WidgetControl]

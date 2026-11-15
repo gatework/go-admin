@@ -24,14 +24,10 @@ const (
 	DataScopeSelf     = contractactions.DataScopeSelf
 )
 
-// PermissionAction installs request data permissions from the core contract.
-// Permission, GetPermissionFromContext and
-// IsValidDataScope forward to motor-core's sdk/contract/actions (PRD 006
-// F3/F5). create.go/delete.go/index.go/update.go/view.go in this package
-// (the generic CRUD actions, which do not move to core) call Permission and
-// GetPermissionFromContext by these same names and are unchanged by the
-// move: the names now resolve to forwards instead of local definitions, and
-// the behaviour is identical either way.
+// PermissionAction installs the caller's data permission on the request.
+// Permission, GetPermissionFromContext and IsValidDataScope forward to
+// motor-core's sdk/contract/actions; the generic actions in generic.go use
+// them under these names.
 func PermissionAction() gin.HandlerFunc {
 	return contractactions.PermissionAction(dataPermissionEnabled)
 }

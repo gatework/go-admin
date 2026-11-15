@@ -4,9 +4,8 @@
 package mismatch
 
 import (
-	"github.com/gatework/motor/app/demo/models"
-	jobdto "github.com/gatework/motor/app/jobs/service/dto"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/actions/testdata/fixture"
 )
 
-var _ = actions.Create[models.DemoProduct, jobdto.SysJobControl]
+var _ = actions.Create[fixture.Widget, fixture.GadgetControl]

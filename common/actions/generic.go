@@ -36,7 +36,7 @@ import (
 //     500. The older actions logged it and wrote nothing, which reaches the
 //     client as an empty 200.
 //   - The key is matched against the model's primary-key column as a value.
-//     The older actions passed GetId() to Where, which GORM reads as a SQL
+//     The older actions passed the key to Where, which GORM reads as a SQL
 //     condition when it is a string.
 //   - There is no GenerateM, so no error of its to drop.
 //
@@ -63,7 +63,7 @@ type searchReq[S any] interface {
 }
 
 // idReq is a request naming rows by key: one from the URI, or several from a
-// DELETE body, as dto.ObjectById binds them.
+// DELETE body, as dto.ObjectByID binds them.
 type idReq[I any] interface {
 	*I
 	Bind(c *gin.Context) error
@@ -105,13 +105,12 @@ func Index[T, S any, PT record[T], PS searchReq[S]]() gin.HandlerFunc {
 			).
 			Find(&list).Limit(-1).Offset(-1).
 			Count(&count).Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err != nil {
 			log.Errorf("MsgID[%s] Index error: %s", msgID, err)
-			response.Error(c, 500, err, "查询失败")
+			response.Error(c, http.StatusInternalServerError, nil, "查询失败")
 			return
 		}
 		response.PageOK(c, &list, int(count), PS(&req).GetPageIndex(), PS(&req).GetPageSize(), "查询成功")
-		c.Next()
 	}
 }
 
@@ -145,16 +144,15 @@ func ViewAs[T, I, R any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 			Permission(PT(&object).TableName(), p),
 		).Where(keyIs(PI(&req).GetID())).First(&rsp).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.Error(c, http.StatusNotFound, nil, "查看对象不存在或无权查看")
+			response.Error(c, http.StatusNotFound, nil, unreachableMsg)
 			return
 		}
 		if err != nil {
 			log.Errorf("MsgID[%s] View error: %s", msgID, err)
-			response.Error(c, 500, err, "查看失败")
+			response.Error(c, http.StatusInternalServerError, nil, "查看失败")
 			return
 		}
 		response.OK(c, &rsp, "查询成功")
-		c.Next()
 	}
 }
 
@@ -174,17 +172,16 @@ func Create[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		}
 		object, err := PC(&req).ToModel()
 		if err != nil {
-			response.Error(c, 500, err, "模型生成失败")
+			response.Error(c, http.StatusUnprocessableEntity, nil, "参数验证失败")
 			return
 		}
 		PT(object).SetCreateBy(user.ID(c))
 		if err = db.WithContext(c.Request.Context()).Create(object).Error; err != nil {
-			log.Errorf("Create error: %s", err)
-			response.Error(c, 500, err, "创建失败")
+			log.Errorf("MsgID[%s] Create error: %s", pkg.RequestID(c), err)
+			response.Error(c, http.StatusInternalServerError, nil, "创建失败")
 			return
 		}
 		response.OK(c, PT(object).GetID(), "创建成功")
-		c.Next()
 	}
 }
 
@@ -215,14 +212,15 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		}
 		object, err := PC(&req).ToModel()
 		if err != nil {
-			response.Error(c, 500, err, "模型生成失败")
+			response.Error(c, http.StatusUnprocessableEntity, nil, "参数验证失败")
 			return
 		}
 		PT(object).SetUpdateBy(user.ID(c))
 
 		query, err := updateSelection(db.WithContext(c.Request.Context()), object, PC(&req))
 		if err != nil {
-			response.Error(c, 500, err, "更新失败")
+			log.Errorf("MsgID[%s] Update selection error: %s", msgID, err)
+			response.Error(c, http.StatusInternalServerError, nil, "更新失败")
 			return
 		}
 		p := GetPermissionFromContext(c)
@@ -231,15 +229,14 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		).Where(keyIs(PT(object).GetID())).Updates(object)
 		if err = result.Error; err != nil {
 			log.Errorf("MsgID[%s] Update error: %s", msgID, err)
-			response.Error(c, 500, err, "更新失败")
+			response.Error(c, http.StatusInternalServerError, nil, "更新失败")
 			return
 		}
 		if result.RowsAffected == 0 {
-			response.Error(c, http.StatusForbidden, nil, "无权更新该数据")
+			response.Error(c, http.StatusNotFound, nil, unreachableMsg)
 			return
 		}
 		response.OK(c, PT(object).GetID(), "更新成功")
-		c.Next()
 	}
 }
 
@@ -269,26 +266,30 @@ func Delete[T, I any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 		).Where(keyIs(PI(&req).GetID())).Delete(&object)
 		if err := result.Error; err != nil {
 			log.Errorf("MsgID[%s] Delete error: %s", msgID, err)
-			response.Error(c, 500, err, "删除失败")
+			response.Error(c, http.StatusInternalServerError, nil, "删除失败")
 			return
 		}
 		if result.RowsAffected == 0 {
-			response.Error(c, http.StatusForbidden, nil, "无权删除该数据")
+			response.Error(c, http.StatusNotFound, nil, unreachableMsg)
 			return
 		}
 		// The key of the empty model, as DeleteAction answers: the rows are
 		// named by the request, not by a model.
 		response.OK(c, PT(&object).GetID(), "删除成功")
-		c.Next()
 	}
 }
+
+// unreachableMsg answers a row that is missing and a row outside the caller's
+// data permission alike, so that a client cannot tell the two apart and probe
+// for rows it may not see.
+const unreachableMsg = "对象不存在或无权操作"
 
 // genericOrm reads the request's database, answering 500 when there is none.
 func genericOrm(c *gin.Context) (*gorm.DB, bool) {
 	db, err := pkg.GetORM(c)
 	if err != nil {
 		api.GetRequestLogger(c).Error(err)
-		response.Error(c, 500, err, "数据库连接获取失败")
+		response.Error(c, http.StatusInternalServerError, nil, "数据库连接获取失败")
 		return nil, false
 	}
 	return db, true

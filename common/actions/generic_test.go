@@ -244,3 +244,43 @@ func (l *capturingLogger) all() string {
 	defer l.mu.Unlock()
 	return strings.Join(l.stmts, "\n")
 }
+
+// A row that is missing and a row outside the caller's data permission answer
+// alike - 404, as View does - so a client cannot probe for rows it may not see.
+// Update and Delete used to answer 403 "no permission" for a missing row too.
+func TestGenericChangesToUnreachableRowsAnswerNotFound(t *testing.T) {
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = true
+	})
+	db := probeDB(t, t.Name(), nil)
+	someoneElses := probeRow{Name: "theirs"}
+	someoneElses.SetCreateBy(99)
+	if err := db.Create(&someoneElses).Error; err != nil {
+		t.Fatal(err)
+	}
+	r := probeEngine(db, func(r gin.IRoutes) {
+		self := func(c *gin.Context) {
+			c.Set(actions.PermissionKey, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7})
+		}
+		r.PUT("/x", self, actions.Update[probeRow, probeControl]())
+		r.DELETE("/x", self, actions.Delete[probeRow, probeByID]())
+	})
+	for _, req := range []struct{ method, body string }{
+		{"PUT", fmt.Sprintf(`{"id":%d,"name":"mine now"}`, someoneElses.ID)},
+		{"PUT", `{"id":4242,"name":"missing"}`},
+		{"DELETE", fmt.Sprintf(`{"ids":[%d]}`, someoneElses.ID)},
+		{"DELETE", `{"ids":[4242]}`},
+	} {
+		status, body := serve(r, req.method, "/x", req.body)
+		var res struct{ Code int }
+		_ = json.Unmarshal([]byte(body), &res)
+		if res.Code != http.StatusNotFound {
+			t.Errorf("%s %s: status %d body %s; want not found", req.method, req.body, status, body)
+		}
+	}
+	var stored probeRow
+	if err := db.First(&stored, someoneElses.ID).Error; err != nil || stored.Name != "theirs" {
+		t.Fatalf("row outside the caller's scope changed: %+v %v", stored, err)
+	}
+}
