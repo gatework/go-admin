@@ -30,18 +30,11 @@ type Menu struct {
 
 // List 获取SysMenu列表
 func (e *Menu) List(ctx context.Context, c *dto.MenuSearch, menus *[]models.SysMenu) error {
-	var menu = make([]models.SysMenu, 0)
-	err := e.getPage(ctx, c, &menu)
-	if err != nil {
+	var rows []models.SysMenu
+	if err := e.getPage(ctx, c, &rows); err != nil {
 		return err
 	}
-	for i := range menu {
-		if menu[i].ParentID != 0 {
-			continue
-		}
-		menusInfo := menuCall(&menu, menu[i])
-		*menus = append(*menus, menusInfo)
-	}
+	*menus = append(*menus, forest(rows, menuID, menuParent, isNotButton, withMenuChildren)...)
 	return nil
 }
 
@@ -185,90 +178,12 @@ func (e *Menu) ListFlat(ctx context.Context, c *dto.MenuSearch, list *[]models.S
 // Labels 修改角色中 设置菜单基础数据
 func (e *Menu) Labels(ctx context.Context) (m []dto.MenuLabel, err error) {
 	var list []models.SysMenu
-	err = e.ListFlat(ctx, &dto.MenuSearch{}, &list)
-
-	m = make([]dto.MenuLabel, 0)
-	for i := range list {
-		if list[i].ParentID != 0 {
-			continue
-		}
-		e := dto.MenuLabel{}
-		e.ID = list[i].MenuID
-		e.Label = list[i].Title
-		deptsInfo := menuLabelCall(&list, e)
-
-		m = append(m, deptsInfo)
+	if err = e.ListFlat(ctx, &dto.MenuSearch{}, &list); err != nil {
+		return nil, err
 	}
-	return
-}
-
-// menuLabelCall 递归构造组织数据
-func menuLabelCall(eList *[]models.SysMenu, dept dto.MenuLabel) dto.MenuLabel {
-	list := *eList
-
-	children := make([]dto.MenuLabel, 0)
-	for j := range list {
-
-		if dept.ID != list[j].ParentID {
-			continue
-		}
-		mi := dto.MenuLabel{}
-		mi.ID = list[j].MenuID
-		mi.Label = list[j].Title
-		mi.Children = []dto.MenuLabel{}
-		if list[j].MenuType != "F" {
-			ms := menuLabelCall(eList, mi)
-			children = append(children, ms)
-		} else {
-			children = append(children, mi)
-		}
-	}
-	if len(children) > 0 {
-		dept.Children = children
-	} else {
-		dept.Children = nil
-	}
-	return dept
-}
-
-// menuCall 构建菜单树
-func menuCall(menuList *[]models.SysMenu, menu models.SysMenu) models.SysMenu {
-	list := *menuList
-
-	children := make([]models.SysMenu, 0)
-	for j := range list {
-
-		if menu.MenuID != list[j].ParentID {
-			continue
-		}
-		mi := models.SysMenu{
-			MenuID:     list[j].MenuID,
-			MenuName:   list[j].MenuName,
-			Title:      list[j].Title,
-			Icon:       list[j].Icon,
-			Path:       list[j].Path,
-			MenuType:   list[j].MenuType,
-			Action:     list[j].Action,
-			Permission: list[j].Permission,
-			ParentID:   list[j].ParentID,
-			NoCache:    list[j].NoCache,
-			Breadcrumb: list[j].Breadcrumb,
-			Component:  list[j].Component,
-			Sort:       list[j].Sort,
-			Visible:    list[j].Visible,
-			CreatedAt:  list[j].CreatedAt,
-			SysAPI:     list[j].SysAPI,
-			Children:   []models.SysMenu{}}
-
-		if mi.MenuType != cModels.Button {
-			ms := menuCall(menuList, mi)
-			children = append(children, ms)
-		} else {
-			children = append(children, mi)
-		}
-	}
-	menu.Children = children
-	return menu
+	return forest(list, menuID, menuParent, isNotButton, func(menu models.SysMenu, children []dto.MenuLabel) dto.MenuLabel {
+		return dto.MenuLabel{ID: menu.MenuID, Label: menu.Title, Children: children}
+	}), nil
 }
 
 func menuDistinct(menuList []models.SysMenu) (result []models.SysMenu) {
@@ -308,15 +223,10 @@ func recursiveSetMenu(orm *gorm.DB, mIDs []int, menus *[]models.SysMenu) error {
 // ForRole 获取左侧菜单树使用
 func (e *Menu) ForRole(ctx context.Context, roleName string) (m []models.SysMenu, err error) {
 	menus, err := e.getByRoleName(ctx, roleName)
-	m = make([]models.SysMenu, 0)
-	for i := range menus {
-		if menus[i].ParentID != 0 {
-			continue
-		}
-		menusInfo := menuCall(&menus, menus[i])
-		m = append(m, menusInfo)
+	if err != nil {
+		return nil, err
 	}
-	return
+	return forest(menus, menuID, menuParent, isNotButton, withMenuChildren), nil
 }
 
 // getPage 菜单分页列表
@@ -397,4 +307,15 @@ func (e *Menu) getByRoleName(ctx context.Context, roleName string) ([]models.Sys
 
 	sort.Sort(models.SysMenuSlice(data))
 	return data, err
+}
+
+func menuID(m models.SysMenu) int     { return m.MenuID }
+func menuParent(m models.SysMenu) int { return m.ParentID }
+
+// isNotButton keeps buttons as leaves: they carry permissions, not children.
+func isNotButton(m models.SysMenu) bool { return m.MenuType != cModels.Button }
+
+func withMenuChildren(m models.SysMenu, children []models.SysMenu) models.SysMenu {
+	m.Children = children
+	return m
 }

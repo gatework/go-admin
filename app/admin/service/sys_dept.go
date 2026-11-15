@@ -172,51 +172,22 @@ func (e *Department) Delete(ctx context.Context, d *dto.DepartmentDelete) error 
 // Tree 设置组织数据
 func (e *Department) Tree(ctx context.Context, c *dto.DepartmentSearch) (m []dto.DepartmentLabel, err error) {
 	var list []models.SysDept
-	err = e.getList(ctx, c, &list)
-
-	m = make([]dto.DepartmentLabel, 0)
-	for i := range list {
-		if list[i].ParentID != 0 {
-			continue
-		}
-		e := dto.DepartmentLabel{}
-		e.ID = list[i].DeptID
-		e.Label = list[i].DeptName
-		deptsInfo := deptTreeCall(&list, e)
-
-		m = append(m, deptsInfo)
+	if err = e.getList(ctx, c, &list); err != nil {
+		return nil, err
 	}
-	return
-}
-
-// Call 递归构造组织数据
-func deptTreeCall(deptList *[]models.SysDept, dept dto.DepartmentLabel) dto.DepartmentLabel {
-	list := *deptList
-	childrenList := make([]dto.DepartmentLabel, 0)
-	for j := range list {
-		if dept.ID != list[j].ParentID {
-			continue
-		}
-		mi := dto.DepartmentLabel{ID: list[j].DeptID, Label: list[j].DeptName, Children: []dto.DepartmentLabel{}}
-		ms := deptTreeCall(deptList, mi)
-		childrenList = append(childrenList, ms)
-	}
-	dept.Children = childrenList
-	return dept
+	return forest(list, departmentID, departmentParent, always[models.SysDept], departmentLabel), nil
 }
 
 // List 设置dept页面数据
 func (e *Department) List(ctx context.Context, c *dto.DepartmentSearch) (m []models.SysDept, err error) {
 	var list []models.SysDept
-	err = e.getList(ctx, c, &list)
-	for i := range list {
-		if list[i].ParentID != 0 {
-			continue
-		}
-		info := e.deptPageCall(&list, list[i])
-		m = append(m, info)
+	if err = e.getList(ctx, c, &list); err != nil {
+		return nil, err
 	}
-	return
+	return forest(list, departmentID, departmentParent, always[models.SysDept], func(d models.SysDept, children []models.SysDept) models.SysDept {
+		d.Children = children
+		return d
+	}), nil
 }
 
 // IDsForRole performs the get with role id administration operation.
@@ -245,36 +216,7 @@ func (e *Department) Labels(ctx context.Context) (m []dto.DepartmentLabel, err e
 		log.NewHelper(log.Default()).Errorf("find dept list error, %s", err.Error())
 		return
 	}
-	m = make([]dto.DepartmentLabel, 0)
-	var item dto.DepartmentLabel
-	for i := range list {
-		if list[i].ParentID != 0 {
-			continue
-		}
-		item = dto.DepartmentLabel{}
-		item.ID = list[i].DeptID
-		item.Label = list[i].DeptName
-		deptInfo := deptLabelCall(&list, item)
-		m = append(m, deptInfo)
-	}
-	return
-}
-
-// deptLabelCall
-func deptLabelCall(deptList *[]models.SysDept, dept dto.DepartmentLabel) dto.DepartmentLabel {
-	list := *deptList
-	var mi dto.DepartmentLabel
-	childrenList := make([]dto.DepartmentLabel, 0)
-	for j := range list {
-		if dept.ID != list[j].ParentID {
-			continue
-		}
-		mi = dto.DepartmentLabel{ID: list[j].DeptID, Label: list[j].DeptName, Children: []dto.DepartmentLabel{}}
-		ms := deptLabelCall(deptList, mi)
-		childrenList = append(childrenList, ms)
-	}
-	dept.Children = childrenList
-	return dept
+	return forest(list, departmentID, departmentParent, always[models.SysDept], departmentLabel), nil
 }
 
 // GetSysDeptList 获取组织数据
@@ -294,28 +236,9 @@ func (e *Department) getList(ctx context.Context, c *dto.DepartmentSearch, list 
 	return nil
 }
 
-func (e *Department) deptPageCall(deptlist *[]models.SysDept, menu models.SysDept) models.SysDept {
-	list := *deptlist
-	childrenList := make([]models.SysDept, 0)
-	for j := range list {
-		if menu.DeptID != list[j].ParentID {
-			continue
-		}
-		mi := models.SysDept{
-			DeptID:    list[j].DeptID,
-			ParentID:  list[j].ParentID,
-			DeptPath:  list[j].DeptPath,
-			DeptName:  list[j].DeptName,
-			Sort:      list[j].Sort,
-			Leader:    list[j].Leader,
-			Phone:     list[j].Phone,
-			Email:     list[j].Email,
-			Status:    list[j].Status,
-			CreatedAt: list[j].CreatedAt,
-			Children:  []models.SysDept{}}
-		ms := e.deptPageCall(deptlist, mi)
-		childrenList = append(childrenList, ms)
-	}
-	menu.Children = childrenList
-	return menu
+func departmentID(d models.SysDept) int     { return d.DeptID }
+func departmentParent(d models.SysDept) int { return d.ParentID }
+
+func departmentLabel(d models.SysDept, children []dto.DepartmentLabel) dto.DepartmentLabel {
+	return dto.DepartmentLabel{ID: d.DeptID, Label: d.DeptName, Children: children}
 }
