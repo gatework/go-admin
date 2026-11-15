@@ -8,8 +8,11 @@ settings:
     name: motor
     # 端口号
     port: 8000 # 服务端口号
-    readtimeout: 3000
-    writertimeout: 2000
+    # 秒。readtimeout 覆盖整个请求体的读取，需容纳最大的上传（防火墙配置导入）；
+    # writertimeout 从读完请求头算起，需长于最慢的同步接口（Netdisco 同步约 25 秒、导出）。
+    # 超时后连接被关闭，客户端拿不到响应。
+    readtimeout: 60
+    writertimeout: 60
     # 数据权限功能开关
     enabledp: false
   logger:

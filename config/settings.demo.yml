@@ -6,8 +6,11 @@ settings:
     mode: demo
     name: motor
     port: 8000
-    readtimeout: 10000
-    writertimeout: 20000
+    # 秒。readtimeout 覆盖整个请求体的读取，需容纳最大的上传（防火墙配置导入）；
+    # writertimeout 从读完请求头算起，需长于最慢的同步接口（Netdisco 同步约 25 秒、导出）。
+    # 超时后连接被关闭，客户端拿不到响应。
+    readtimeout: 60
+    writertimeout: 60
   database:
     driver: sqlite3
     source: ./motor-db.db

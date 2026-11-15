@@ -173,12 +173,7 @@ func run() error {
 	buildRouter()
 	reportGeneratorWriteRoutes()
 
-	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", config.Current().Settings.Application.Host, config.Current().Settings.Application.Port),
-		Handler:      sdk.Runtime.Engine(),
-		ReadTimeout:  time.Duration(config.Current().Settings.Application.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(config.Current().Settings.Application.WriterTimeout) * time.Second,
-	}
+	srv := newHTTPServer(config.Current().Settings.Application, sdk.Runtime.Engine())
 
 	if apiCheck {
 		routes, err := json.Marshal(sdk.Runtime.Routers())
@@ -347,6 +342,28 @@ const (
 	dockerStopGraceSeconds = 10
 	kubernetesGraceSeconds = 30
 )
+
+// Header and idle limits are not configurable: they protect the listener from
+// clients that hold connections open, and no legitimate client needs more.
+const (
+	readHeaderTimeout = 10 * time.Second
+	idleTimeout       = 2 * time.Minute
+)
+
+// newHTTPServer applies the configured body timeouts plus fixed header and
+// idle limits. Without ReadHeaderTimeout a client that sends headers slowly
+// holds a connection for as long as ReadTimeout allows, or forever when it is
+// zero; without IdleTimeout keep-alive connections fall back to ReadTimeout.
+func newHTTPServer(app config.Application, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              fmt.Sprintf("%s:%d", app.Host, app.Port),
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       time.Duration(app.ReadTimeout) * time.Second,
+		WriteTimeout:      time.Duration(app.WriterTimeout) * time.Second,
+		IdleTimeout:       idleTimeout,
+	}
+}
 
 // reportGeneratorWriteRoutes says whether this process serves the code
 // generator's writing endpoints, and to whom.
