@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/motor-core/logger"
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/lease"
@@ -52,6 +53,11 @@ func NewWorker(s *Workflow, f Factory) *Worker {
 	if f == nil {
 		f = ConnectorFactory(s.Config)
 	}
+	// A background worker has no caller to return an error to; its log line is the
+	// only trace of a failed tick, so it must never depend on the host's wiring.
+	if s.Logger == nil {
+		s.Logger = logger.NewHelper(logger.Default())
+	}
 	return &Worker{s: s, factory: f}
 }
 
@@ -66,14 +72,14 @@ func (w *Worker) Run(ctx context.Context) error {
 			return
 		}
 		if err := w.Recover(ctx); err != nil {
-			if ctx.Err() == nil && w.s.Logger != nil {
+			if ctx.Err() == nil {
 				w.s.Logger.Errorf("delivery recovery failed: %v", err)
 			}
 			return
 		}
 		target, err := w.Claim(ctx)
 		if err != nil {
-			if !errors.Is(err, NoWorkErr) && ctx.Err() == nil && w.s.Logger != nil {
+			if !errors.Is(err, NoWorkErr) && ctx.Err() == nil {
 				w.s.Logger.Errorf("delivery claim failed: %v", err)
 			}
 			return

@@ -37,9 +37,9 @@ func Workers(databases map[string]*gorm.DB) []Worker {
 		log := logger.NewHelper(logger.Default())
 		policy := &firewall.Firewall{DB: db, Logger: log, Root: root}
 		workers = append(workers,
-			Worker{Name: "fabric", Run: fabric.NewWorker(&fabric.Fabric{DB: db}, nil).Run},
+			Worker{Name: "fabric", Run: fabric.NewWorker(&fabric.Fabric{DB: db, Logger: log}, nil).Run},
 			Worker{Name: "wireless", Run: wireless.NewWorker(&wireless.Wireless{DB: db, Logger: log}, nil).Run},
-			Worker{Name: "delivery", Run: delivery.NewWorker(&delivery.Workflow{DB: db, Config: delivery.FromEnvironment()}, nil).Run},
+			Worker{Name: "delivery", Run: delivery.NewWorker(&delivery.Workflow{DB: db, Logger: log, Config: delivery.FromEnvironment()}, nil).Run},
 			Worker{Name: "firewall offline", Run: firewall.NewWorker(policy).Run},
 			Worker{Name: "firewall collection", Run: firewall.NewCollectionWorker(&firewall.Firewall{DB: db, Logger: log, Root: root}, nil).Run},
 		)

@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	vxlan "github.com/gatework/go-vxlan"
+	"github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/fabric"
@@ -33,13 +34,18 @@ func NewWorker(s *Fabric, t Transport) *Worker {
 	if t == nil {
 		t = nativeTransport{config: ds.FromEnvironment()}
 	}
+	// A background worker has no caller to return an error to; its log line is the
+	// only trace of a failed tick, so it must never depend on the host's wiring.
+	if s.Logger == nil {
+		s.Logger = logger.NewHelper(logger.Default())
+	}
 	return &Worker{s: s, transport: t}
 }
 
 // Run owns the worker lifecycle until cancellation and waits for its pollers.
 func (w *Worker) Run(ctx context.Context) error {
 	return w.loop.Run(ctx, 1, func(ctx context.Context) {
-		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
+		if err := w.Tick(ctx); err != nil && ctx.Err() == nil {
 			w.s.Logger.Errorf("fabric worker failed: %v", err)
 		}
 	})
