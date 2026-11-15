@@ -4,24 +4,30 @@ import (
 	"github.com/gin-gonic/gin"
 
 	jwt "github.com/gatework/motor-core/jwtauth"
-	"github.com/gatework/motor/app/admin/handler"
+
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 )
 
 //nolint:gochecknoinits // The host seals startup registries after these module declarations are loaded.
 func init() {
-	routerCheckRole = append(routerCheckRole, registerSyPostRouter)
+	routerCheckRole = append(routerCheckRole, registerPostRouter)
 }
 
-// 需认证的路由代码
-func registerSyPostRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	h := handler.Post{}
-	r := v1.Group("/post").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
+// registerPostRouter mounts post CRUD on the generic actions. Posts are
+// system-wide reference data, so the routes are not data-scoped.
+func registerPostRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
+	r := v1.Group("/post").
+		Use(authMiddleware.MiddlewareFunc()).
+		Use(middleware.AuthCheckRole()).
+		Use(actions.Unscoped)
 	{
-		r.GET("", h.List)
-		r.GET("/:id", h.Get)
-		r.POST("", h.Create)
-		r.PUT("/:id", h.Update)
-		r.DELETE("", h.Delete)
+		r.GET("", actions.Index[models.SysPost, dto.PostSearch]())
+		r.GET("/:id", actions.View[models.SysPost, dto.PostByID]())
+		r.POST("", actions.Create[models.SysPost, dto.PostControl]())
+		r.PUT("/:id", actions.Update[models.SysPost, dto.PostControl]())
+		r.DELETE("", actions.Delete[models.SysPost, dto.PostByID]())
 	}
 }

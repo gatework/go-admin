@@ -23,10 +23,12 @@ func init() {
 // registerDemoProductRouter 标准 CRUD 的推荐写法。
 //
 // 五个通用 Action 覆盖了增删改查的全部样板逻辑——参数绑定、数据权限过滤、
-// 操作人注入、分页、错误响应，因此本模块没有 apis 与 service 文件。
+// 操作人注入、分页、错误响应，因此本模块没有 handler 与 service 文件。
+// 不受数据权限约束的系统级参考数据（如岗位）在路由上加 actions.Unscoped，
+// 见 app/admin/router/sys_post.go。
 //
 // 仅当业务逻辑超出单表 CRUD（如跨表事务、外部调用、复杂校验）时，才需要
-// 自行编写 Handler 与 Service，写法参照 app/admin/handler/sys_post.go。
+// 自行编写 Handler 与 Service，写法参照 app/admin/handler/sys_role.go。
 func registerDemoProductRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	r := v1.Group("/demo-product").
 		Use(authMiddleware.MiddlewareFunc()). // JWT 认证

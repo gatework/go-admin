@@ -1,118 +1,81 @@
 package dto
 
 import (
-	"github.com/gatework/motor/app/admin/models"
-	common "github.com/gatework/motor/common/models"
+	"errors"
+	"net/http"
 
+	"github.com/gin-gonic/gin"
+
+	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/common/dto"
 )
 
-// SysPostPageReq 列表或者搜索使用结构体
-type SysPostPageReq struct {
+// PostSearch filters the post list.
+type PostSearch struct {
 	dto.Pagination `search:"-"`
-	PostID         int    `form:"postId" search:"type:exact;column:post_id;table:sys_post" comment:"id"`        // id
-	PostName       string `form:"postName" search:"type:contains;column:post_name;table:sys_post" comment:"名称"` // 名称
-	PostCode       string `form:"postCode" search:"type:contains;column:post_code;table:sys_post" comment:"编码"` // 编码
-	Sort           int    `form:"sort" search:"type:exact;column:sort;table:sys_post" comment:"排序"`             // 排序
-	Status         int    `form:"status" search:"type:exact;column:status;table:sys_post" comment:"状态"`         // 状态
-	Remark         string `form:"remark" search:"type:exact;column:remark;table:sys_post" comment:"备注"`         // 备注
+	PostID         int    `form:"postId" search:"type:exact;column:post_id;table:sys_post"`
+	PostName       string `form:"postName" search:"type:contains;column:post_name;table:sys_post"`
+	PostCode       string `form:"postCode" search:"type:contains;column:post_code;table:sys_post"`
+	Sort           int    `form:"sort" search:"type:exact;column:sort;table:sys_post"`
+	Status         int    `form:"status" search:"type:exact;column:status;table:sys_post"`
+	Remark         string `form:"remark" search:"type:exact;column:remark;table:sys_post"`
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysPostPageReq) GetNeedSearch() any {
-	return *m
+func (s *PostSearch) GetNeedSearch() any { return *s }
+
+// Bind decodes the query.
+func (s *PostSearch) Bind(c *gin.Context) error { return c.ShouldBind(s) }
+
+// PostControl is the body of creating a post and of replacing one.
+type PostControl struct {
+	PostID   int    `json:"postId" uri:"id"`
+	PostName string `json:"postName"`
+	PostCode string `json:"postCode"`
+	Sort     int    `json:"sort"`
+	Status   int    `json:"status"`
+	Remark   string `json:"remark"`
 }
 
-// SysPostInsertReq 增使用的结构体
-type SysPostInsertReq struct {
-	common.ControlBy
-	PostID   int    `uri:"id"  comment:"id"`
-	PostName string `form:"postName"  comment:"名称"`
-	PostCode string `form:"postCode" comment:"编码"`
-	Sort     int    `form:"sort" comment:"排序"`
-	Status   int    `form:"status"   comment:"状态"`
-	Remark   string `form:"remark"   comment:"备注"`
-}
-
-// Generate copies request fields into a new request or supplied model.
-func (s *SysPostInsertReq) Generate(model *models.SysPost) {
-	model.PostName = s.PostName
-	model.PostCode = s.PostCode
-	model.Sort = s.Sort
-	model.Status = s.Status
-	model.Remark = s.Remark
-	if s.UpdateBy != 0 {
-		model.UpdateBy = s.UpdateBy
+// Bind decodes the body, takes the key from the URI on update, and requires a
+// name and a code.
+func (s *PostControl) Bind(c *gin.Context) error {
+	if err := c.ShouldBindJSON(s); err != nil {
+		return err
 	}
-	if s.CreateBy != 0 {
-		model.CreateBy = s.CreateBy
+	if c.Request.Method != http.MethodPost {
+		if err := c.ShouldBindUri(s); err != nil {
+			return err
+		}
+		if s.PostID <= 0 {
+			return errors.New("postId must be positive")
+		}
 	}
-}
-
-// GetID returns the selected resource identity.
-func (s *SysPostInsertReq) GetID() any {
-	return s.PostID
-}
-
-// SysPostUpdateReq 改使用的结构体
-type SysPostUpdateReq struct {
-	common.ControlBy
-	PostID   int    `uri:"id"  comment:"id"`
-	PostName string `form:"postName"  comment:"名称"`
-	PostCode string `form:"postCode" comment:"编码"`
-	Sort     int    `form:"sort" comment:"排序"`
-	Status   int    `form:"status"   comment:"状态"`
-	Remark   string `form:"remark"   comment:"备注"`
-}
-
-// Generate copies request fields into a new request or supplied model.
-func (s *SysPostUpdateReq) Generate(model *models.SysPost) {
-	model.PostID = s.PostID
-	model.PostName = s.PostName
-	model.PostCode = s.PostCode
-	model.Sort = s.Sort
-	model.Status = s.Status
-	model.Remark = s.Remark
-	if s.UpdateBy != 0 {
-		model.UpdateBy = s.UpdateBy
+	if s.PostName == "" || s.PostCode == "" {
+		return errors.New("postName and postCode are required")
 	}
-	if s.CreateBy != 0 {
-		model.CreateBy = s.CreateBy
-	}
+	return nil
 }
 
-// GetID returns the selected resource identity.
-func (s *SysPostUpdateReq) GetID() any {
-	return s.PostID
+// UpdateFields makes an update a full replace of the writable columns, as the
+// post form always sends all of them: a cleared remark is written as empty.
+func (*PostControl) UpdateFields() []string {
+	return []string{"post_name", "post_code", "sort", "status", "remark"}
 }
 
-// SysPostGetReq 获取单个的结构体
-type SysPostGetReq struct {
-	ID int `uri:"id"`
+// ToModel builds the row to write; the actions stamp creator and updater.
+func (s *PostControl) ToModel() (*models.SysPost, error) {
+	return &models.SysPost{
+		PostID:   s.PostID,
+		PostName: s.PostName,
+		PostCode: s.PostCode,
+		Sort:     s.Sort,
+		Status:   s.Status,
+		Remark:   s.Remark,
+	}, nil
 }
 
-// GetID returns the selected resource identity.
-func (s *SysPostGetReq) GetID() any {
-	return s.ID
-}
-
-// SysPostDeleteReq 删除的结构体
-type SysPostDeleteReq struct {
-	common.ControlBy
-	IDs []int `json:"ids"`
-}
-
-// Generate copies request fields into a new request or supplied model.
-func (s *SysPostDeleteReq) Generate(model *models.SysPost) {
-	if s.UpdateBy != 0 {
-		model.UpdateBy = s.UpdateBy
-	}
-	if s.CreateBy != 0 {
-		model.CreateBy = s.CreateBy
-	}
-}
-
-// GetID returns the selected resource identity.
-func (s *SysPostDeleteReq) GetID() any {
-	return s.IDs
+// PostByID names one post in the URI, or several in a DELETE body.
+type PostByID struct {
+	dto.ObjectByID
 }
