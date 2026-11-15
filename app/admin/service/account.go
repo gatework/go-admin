@@ -74,7 +74,7 @@ func (e *Account) Execute(ctx context.Context, operation string, id int, ip stri
 			return nil, err
 		}
 		var count int64
-		err = e.DB.Model(&account.Recovery{}).Where("user_id = ?", id).Count(&count).Error
+		err = e.DB.WithContext(ctx).Model(&account.Recovery{}).Where("user_id = ?", id).Count(&count).Error
 		return map[string]any{"enabled": state.Enabled, "recoveryCodesRemaining": count, "configured": len(s.Key) == 32}, err
 	case "setup":
 		return s.Setup(id, r.Password)

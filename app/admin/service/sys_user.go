@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -23,11 +24,11 @@ type User struct {
 }
 
 // List 获取SysUser列表
-func (e *User) List(c *dto.UserSearch, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
+func (e *User) List(ctx context.Context, c *dto.UserSearch, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
 	var err error
 	var data models.SysUser
 
-	err = e.DB.Debug().Preload("Dept").
+	err = e.DB.WithContext(ctx).Debug().Preload("Dept").
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -52,8 +53,8 @@ func (e *User) List(c *dto.UserSearch, p *actions.DataPermission, list *[]models
 // every user who did not create their own account.
 //
 // GetProfile has always read the same row this way, with no scope at all.
-func (e *User) Self(d *dto.UserByID, model *models.SysUser) error {
-	err := e.DB.First(model, d.GetID()).Error
+func (e *User) Self(ctx context.Context, d *dto.UserByID, model *models.SysUser) error {
+	err := e.DB.WithContext(ctx).First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
 		e.Logger.Errorf("db error: %s", err)
@@ -67,10 +68,10 @@ func (e *User) Self(d *dto.UserByID, model *models.SysUser) error {
 }
 
 // Get 获取SysUser对象
-func (e *User) Get(d *dto.UserByID, p *actions.DataPermission, model *models.SysUser) error {
+func (e *User) Get(ctx context.Context, d *dto.UserByID, p *actions.DataPermission, model *models.SysUser) error {
 	var data models.SysUser
 
-	err := e.DB.Model(&data).Debug().
+	err := e.DB.WithContext(ctx).Model(&data).Debug().
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).
@@ -88,11 +89,11 @@ func (e *User) Get(d *dto.UserByID, p *actions.DataPermission, model *models.Sys
 }
 
 // Create 创建SysUser对象
-func (e *User) Create(c *dto.UserCreate) error {
+func (e *User) Create(ctx context.Context, c *dto.UserCreate) error {
 	var err error
 	var data models.SysUser
 	var i int64
-	err = e.DB.Model(&data).Where("username = ?", c.Username).Count(&i).Error
+	err = e.DB.WithContext(ctx).Model(&data).Where("username = ?", c.Username).Count(&i).Error
 	if err != nil {
 		e.Logger.Errorf("db error: %s", err)
 		return err
@@ -103,7 +104,7 @@ func (e *User) Create(c *dto.UserCreate) error {
 		return err
 	}
 	c.Generate(&data)
-	err = e.DB.Create(&data).Error
+	err = e.DB.WithContext(ctx).Create(&data).Error
 	if err != nil {
 		e.Logger.Errorf("db error: %s", err)
 		return err
@@ -121,13 +122,13 @@ func (e *User) Create(c *dto.UserCreate) error {
 // the check in the API handler ahead of this call), and letting a caller
 // grant themselves a different role or department through it would be a
 // privilege escalation the exclusion was never meant to open.
-func (e *User) Update(c *dto.UserUpdate, p *actions.DataPermission, callerID int) error {
+func (e *User) Update(ctx context.Context, c *dto.UserUpdate, p *actions.DataPermission, callerID int) error {
 	var err error
 	var model models.SysUser
 	if callerID <= 0 || c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
-	query := e.DB
+	query := e.DB.WithContext(ctx)
 	if c.UserID != callerID {
 		query = query.Scopes(actions.Permission(model.TableName(), p))
 	}
@@ -147,7 +148,7 @@ func (e *User) Update(c *dto.UserUpdate, p *actions.DataPermission, callerID int
 	}
 	c.Generate(&model)
 	model.UpdateBy = callerID
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return e.persistUserUpdate(tx, model, p, model.UserID == callerID)
 	})
 }
@@ -155,11 +156,11 @@ func (e *User) Update(c *dto.UserUpdate, p *actions.DataPermission, callerID int
 // UpdateAvatar updates the authenticated caller's avatar. The API supplies the
 // token identity; account ownership does not depend on who created that user.
 // The permission argument is retained for source compatibility.
-func (e *User) UpdateAvatar(c *dto.AvatarUpdate, _ *actions.DataPermission) error {
+func (e *User) UpdateAvatar(ctx context.Context, c *dto.AvatarUpdate, _ *actions.DataPermission) error {
 	if c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
-	result := e.DB.Model(&models.SysUser{}).Where("user_id = ?", c.UserID).
+	result := e.DB.WithContext(ctx).Model(&models.SysUser{}).Where("user_id = ?", c.UserID).
 		Updates(map[string]any{"avatar": c.Avatar, "update_by": c.UserID})
 	if result.Error != nil {
 		return result.Error
@@ -171,12 +172,12 @@ func (e *User) UpdateAvatar(c *dto.AvatarUpdate, _ *actions.DataPermission) erro
 }
 
 // UpdateStatus 更新用户状态
-func (e *User) UpdateStatus(c *dto.UserStatusUpdate, p *actions.DataPermission) error {
+func (e *User) UpdateStatus(ctx context.Context, c *dto.UserStatusUpdate, p *actions.DataPermission) error {
 	if c.UserID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid user status")
 	}
 	var model models.SysUser
-	result := e.DB.Table(model.TableName()).Scopes(actions.Permission(model.TableName(), p)).
+	result := e.DB.WithContext(ctx).Table(model.TableName()).Scopes(actions.Permission(model.TableName(), p)).
 		Where("user_id = ? AND deleted_at = 0", c.UserID).
 		Updates(map[string]any{
 			"auth_version": gorm.Expr("CASE WHEN status <> ? THEN auth_version + 1 ELSE auth_version END", c.Status),
@@ -188,7 +189,7 @@ func (e *User) UpdateStatus(c *dto.UserStatusUpdate, p *actions.DataPermission) 
 	if result.RowsAffected == 0 {
 		// MySQL may report zero changed rows for an idempotent status request.
 		var count int64
-		if err := e.DB.Model(&models.SysUser{}).Scopes(actions.Permission(model.TableName(), p)).Where("user_id = ?", c.UserID).Count(&count).Error; err != nil {
+		if err := e.DB.WithContext(ctx).Model(&models.SysUser{}).Scopes(actions.Permission(model.TableName(), p)).Where("user_id = ?", c.UserID).Count(&count).Error; err != nil {
 			return err
 		}
 		if count == 0 {
@@ -199,10 +200,10 @@ func (e *User) UpdateStatus(c *dto.UserStatusUpdate, p *actions.DataPermission) 
 }
 
 // ResetPassword 重置用户密码
-func (e *User) ResetPassword(c *dto.PasswordReset, p *actions.DataPermission) error {
+func (e *User) ResetPassword(ctx context.Context, c *dto.PasswordReset, p *actions.DataPermission) error {
 	var err error
 	var model models.SysUser
-	db := e.DB.Scopes(
+	db := e.DB.WithContext(ctx).Scopes(
 		actions.Permission(model.TableName(), p),
 	).First(&model, c.GetID())
 	if err = db.Error; err != nil {
@@ -214,7 +215,7 @@ func (e *User) ResetPassword(c *dto.PasswordReset, p *actions.DataPermission) er
 	}
 	c.Generate(&model)
 	model.UpdateBy = c.UpdateBy
-	result := e.DB.Model(&model).Scopes(actions.Permission(model.TableName(), p)).
+	result := e.DB.WithContext(ctx).Model(&model).Scopes(actions.Permission(model.TableName(), p)).
 		Where("user_id = ?", model.UserID).Select("Password", "Salt", "UpdateBy").Updates(&model)
 	if result.Error != nil {
 		return result.Error
@@ -227,11 +228,11 @@ func (e *User) ResetPassword(c *dto.PasswordReset, p *actions.DataPermission) er
 }
 
 // Delete 删除SysUser
-func (e *User) Delete(c *dto.UserByID, p *actions.DataPermission) error {
+func (e *User) Delete(ctx context.Context, c *dto.UserByID, p *actions.DataPermission) error {
 	var err error
 	var data models.SysUser
 
-	db := e.DB.Model(&data).
+	db := e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).Delete(&data, c.GetID())
@@ -248,7 +249,7 @@ func (e *User) Delete(c *dto.UserByID, p *actions.DataPermission) error {
 // ChangePassword 修改SysUser对象密码
 // id must be the authenticated caller's identity, not a request-body user ID.
 // The permission argument is retained for source compatibility.
-func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *actions.DataPermission) error {
+func (e *User) ChangePassword(ctx context.Context, id int, oldPassword, newPassword string, _ *actions.DataPermission) error {
 	var err error
 
 	if id <= 0 || oldPassword == "" || newPassword == "" {
@@ -256,7 +257,7 @@ func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *action
 	}
 	c := &models.SysUser{}
 
-	err = e.DB.Model(c).
+	err = e.DB.WithContext(ctx).Model(c).
 		Select("user_id", "password", "salt").
 		First(c, id).Error
 	if err != nil {
@@ -278,7 +279,7 @@ func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *action
 		return err
 	}
 	c.Password = newPassword
-	db := e.DB.Model(c).Where("user_id = ?", id).
+	db := e.DB.WithContext(ctx).Model(c).Where("user_id = ?", id).
 		Select("Password", "Salt").
 		Updates(c)
 	if err = db.Error; err != nil {
@@ -294,16 +295,16 @@ func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *action
 }
 
 // Profile loads the authenticated user's profile.
-func (e *User) Profile(c *dto.UserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
-	err := e.DB.Preload("Dept").First(user, c.GetID()).Error
+func (e *User) Profile(ctx context.Context, c *dto.UserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
+	err := e.DB.WithContext(ctx).Preload("Dept").First(user, c.GetID()).Error
 	if err != nil {
 		return err
 	}
-	err = e.DB.Find(roles, user.RoleID).Error
+	err = e.DB.WithContext(ctx).Find(roles, user.RoleID).Error
 	if err != nil {
 		return err
 	}
-	err = e.DB.Find(posts, user.PostIDs).Error
+	err = e.DB.WithContext(ctx).Find(posts, user.PostIDs).Error
 	if err != nil {
 		return err
 	}

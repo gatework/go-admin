@@ -143,9 +143,9 @@ func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 				s.Logger = logger.NewHelper(logger.Default())
 				var err error
 				if method == "UpdateExistingSettings" {
-					err = s.UpdateExistingSettings(&req)
+					err = s.UpdateExistingSettings(t.Context(), &req)
 				} else {
-					err = s.ReplaceSettings(&req)
+					err = s.ReplaceSettings(t.Context(), &req)
 				}
 				skip := method == "UpdateExistingSettings" && failure == "missing"
 				if skip && err != nil {
@@ -193,7 +193,7 @@ func TestConfigByKeyExcludesDeletedRows(t *testing.T) {
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	var got dto.ConfigEntry
-	if err := s.ByKey(&dto.ConfigByKey{ConfigKey: "deleted"}, &got); err == nil {
+	if err := s.ByKey(t.Context(), &dto.ConfigByKey{ConfigKey: "deleted"}, &got); err == nil {
 		t.Fatalf("deleted config returned: %+v", got)
 	}
 }
@@ -214,7 +214,7 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.DictionaryEntryCreate{DictType: "new"}
 				req.CreateBy = 42
-				if err := s.Create(req); err != nil {
+				if err := s.Create(t.Context(), req); err != nil {
 					t.Fatal(err)
 				}
 				id = req.ID
@@ -229,7 +229,7 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				s.Logger = logger.NewHelper(logger.Default())
 				req := &dto.DictionaryCreate{DictType: "new"}
 				req.CreateBy = 42
-				if err := s.Create(req); err != nil {
+				if err := s.Create(t.Context(), req); err != nil {
 					t.Fatal(err)
 				}
 				id = req.ID
@@ -268,9 +268,9 @@ func TestConfigSetReturnsCommitFailure(t *testing.T) {
 			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if method == "UpdateExistingSettings" {
-				err = s.UpdateExistingSettings(&req)
+				err = s.UpdateExistingSettings(t.Context(), &req)
 			} else {
-				err = s.ReplaceSettings(&req)
+				err = s.ReplaceSettings(t.Context(), &req)
 			}
 			if err == nil || !strings.Contains(err.Error(), "injected config commit failure") {
 				t.Fatalf("commit error=%v", err)

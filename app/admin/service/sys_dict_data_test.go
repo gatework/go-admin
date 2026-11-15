@@ -16,7 +16,7 @@ func TestDictDataUpdateBoundaries(t *testing.T) {
 		s := &DictionaryEntry{}
 		s.DB = db
 		s.Logger = logger.NewHelper(logger.Default())
-		return s.Update(&dto.DictionaryEntryUpdate{ID: id, DictType: "one", DictLabel: "changed"})
+		return s.Update(t.Context(), &dto.DictionaryEntryUpdate{ID: id, DictType: "one", DictLabel: "changed"})
 	}})
 }
 
@@ -36,7 +36,7 @@ func TestDictDataUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
 	req := &dto.DictionaryEntryUpdate{ID: 1, DictType: "one"}
 	req.CreateBy = 999
 	req.UpdateBy = 20
-	if err := s.Update(req); err != nil {
+	if err := s.Update(t.Context(), req); err != nil {
 		t.Fatal(err)
 	}
 	var got models.SysDictData
@@ -57,12 +57,12 @@ func TestDictDataRejectsMissingTargetType(t *testing.T) {
 			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if name == "insert" {
-				err = s.Create(&dto.DictionaryEntryCreate{DictType: "missing"})
+				err = s.Create(t.Context(), &dto.DictionaryEntryCreate{DictType: "missing"})
 			} else {
 				if err := db.Create(&models.SysDictData{DictCode: 1, DictType: "original"}).Error; err != nil {
 					t.Fatal(err)
 				}
-				err = s.Update(&dto.DictionaryEntryUpdate{ID: 1, DictType: "missing"})
+				err = s.Update(t.Context(), &dto.DictionaryEntryUpdate{ID: 1, DictType: "missing"})
 			}
 			if err == nil {
 				t.Fatal("accepted missing dictionary parent")

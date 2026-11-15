@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -18,16 +19,16 @@ type Config struct {
 }
 
 // UpdateExistingSettings 修改已有配置，保留跳过不存在配置键的历史行为。
-func (e *Config) UpdateExistingSettings(c *[]dto.ConfigSetting) error {
-	return e.setValues(c, true)
+func (e *Config) UpdateExistingSettings(ctx context.Context, c *[]dto.ConfigSetting) error {
+	return e.setValues(ctx, c, true)
 }
 
 // Settings loads configuration values for the settings form.
-func (e *Config) Settings(c *[]dto.ConfigSetting) error {
+func (e *Config) Settings(ctx context.Context, c *[]dto.ConfigSetting) error {
 	var err error
 	var data models.SysConfig
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Find(c).Error
 	if err != nil {
 		e.Logger.Errorf("loading settings: %s", err)
@@ -37,15 +38,15 @@ func (e *Config) Settings(c *[]dto.ConfigSetting) error {
 }
 
 // ReplaceSettings 原子更新设置页中的全部配置，不存在的键视为错误。
-func (e *Config) ReplaceSettings(c *[]dto.ConfigSetting) error {
-	return e.setValues(c, false)
+func (e *Config) ReplaceSettings(ctx context.Context, c *[]dto.ConfigSetting) error {
+	return e.setValues(ctx, c, false)
 }
 
 // ByKey 根据Key获取SysConfig
-func (e *Config) ByKey(c *dto.ConfigByKey, resp *dto.ConfigEntry) error {
+func (e *Config) ByKey(ctx context.Context, c *dto.ConfigByKey, resp *dto.ConfigEntry) error {
 	var err error
 	var data models.SysConfig
-	err = e.DB.Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
+	err = e.DB.WithContext(ctx).Model(&data).Where("config_key = ?", c.ConfigKey).First(resp).Error
 	if err != nil {
 		e.Logger.Errorf("loading configuration by key: %s", err)
 		return err
@@ -55,8 +56,8 @@ func (e *Config) ByKey(c *dto.ConfigByKey, resp *dto.ConfigEntry) error {
 }
 
 // Values loads the configuration values selected by their keys.
-func (e *Config) Values(c *dto.ConfigVisibility, list *[]models.SysConfig) error {
-	err := e.DB.
+func (e *Config) Values(ctx context.Context, c *dto.ConfigVisibility, list *[]models.SysConfig) error {
+	err := e.DB.WithContext(ctx).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).
@@ -68,8 +69,8 @@ func (e *Config) Values(c *dto.ConfigVisibility, list *[]models.SysConfig) error
 	return nil
 }
 
-func (e *Config) setValues(c *[]dto.ConfigSetting, skipMissing bool) error {
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Config) setValues(ctx context.Context, c *[]dto.ConfigSetting, skipMissing bool) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, req := range *c {
 			var model models.SysConfig
 			if err := tx.Where("config_key = ?", req.ConfigKey).First(&model).Error; err != nil {

@@ -56,7 +56,7 @@ func (e User) List(c *gin.Context) {
 	list := make([]models.SysUser, 0)
 	var count int64
 
-	err = s.List(&req, p, &list, &count)
+	err = s.List(c.Request.Context(), &req, p, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -90,7 +90,7 @@ func (e User) Get(c *gin.Context) {
 	var object models.SysUser
 	//数据权限检查
 	p := actions.GetPermissionFromContext(c)
-	err = s.Get(&req, p, &object)
+	err = s.Get(c.Request.Context(), &req, p, &object)
 	if err != nil {
 		e.Error(http.StatusUnprocessableEntity, err, "查询失败")
 		return
@@ -124,7 +124,7 @@ func (e User) Create(c *gin.Context) {
 	}
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Create(&req)
+	err = s.Create(c.Request.Context(), &req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, err.Error())
@@ -186,7 +186,7 @@ func (e User) Update(c *gin.Context) {
 	//数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.Update(&req, p, callerID)
+	err = s.Update(c.Request.Context(), &req, p, callerID)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -224,7 +224,7 @@ func (e User) Delete(c *gin.Context) {
 	// 数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.Delete(&req, p)
+	err = s.Delete(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -282,7 +282,7 @@ func (e User) UpdateAvatar(c *gin.Context) {
 	}
 	req.Avatar = "/" + filPath
 
-	err = s.UpdateAvatar(&req, nil)
+	err = s.UpdateAvatar(c.Request.Context(), &req, nil)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -321,7 +321,7 @@ func (e User) UpdateStatus(c *gin.Context) {
 	//数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.UpdateStatus(&req, p)
+	err = s.UpdateStatus(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -360,7 +360,7 @@ func (e User) ResetPassword(c *gin.Context) {
 	//数据权限检查
 	p := actions.GetPermissionFromContext(c)
 
-	err = s.ResetPassword(&req, p)
+	err = s.ResetPassword(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "操作失败")
@@ -394,7 +394,7 @@ func (e User) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	err = s.ChangePassword(user.ID(c), req.OldPassword, req.NewPassword, nil)
+	err = s.ChangePassword(c.Request.Context(), user.ID(c), req.OldPassword, req.NewPassword, nil)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(http.StatusForbidden, err, "密码修改失败")
@@ -428,7 +428,7 @@ func (e User) Profile(c *gin.Context) {
 	sysUser := models.SysUser{}
 	roles := make([]models.SysRole, 0)
 	posts := make([]models.SysPost, 0)
-	err = s.Profile(&req, &sysUser, &roles, &posts)
+	err = s.Profile(c.Request.Context(), &req, &sysUser, &roles, &posts)
 	if err != nil {
 		e.Logger.Errorf("get user profile error, %s", err.Error())
 		e.Error(500, err, "获取用户信息失败")
@@ -474,7 +474,7 @@ func (e User) Current(c *gin.Context) {
 		mp["permissions"] = permissions
 		mp["buttons"] = buttons
 	} else {
-		list, _ := r.Permissions(user.RoleID(c))
+		list, _ := r.Permissions(c.Request.Context(), user.RoleID(c))
 		mp["permissions"] = list
 		mp["buttons"] = list
 	}
@@ -487,7 +487,7 @@ func (e User) Current(c *gin.Context) {
 	// scopes started failing closed rather than silently matching everything,
 	// every login on a deployment with enabledp: true ended here with a 401
 	// and the browser went straight back to the login page.
-	err = s.Self(&req, &sysUser)
+	err = s.Self(c.Request.Context(), &req, &sysUser)
 	if err != nil {
 		e.Error(http.StatusUnauthorized, err, "登录失败")
 		return

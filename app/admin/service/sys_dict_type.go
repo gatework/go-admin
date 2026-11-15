@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,11 +21,11 @@ type Dictionary struct {
 }
 
 // List 获取列表
-func (e *Dictionary) List(c *dto.DictionarySearch, list *[]models.SysDictType, count *int64) error {
+func (e *Dictionary) List(ctx context.Context, c *dto.DictionarySearch, list *[]models.SysDictType, count *int64) error {
 	var err error
 	var data models.SysDictType
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -39,10 +40,10 @@ func (e *Dictionary) List(c *dto.DictionarySearch, list *[]models.SysDictType, c
 }
 
 // Get 获取对象
-func (e *Dictionary) Get(d *dto.DictionaryByID, model *models.SysDictType) error {
+func (e *Dictionary) Get(ctx context.Context, d *dto.DictionaryByID, model *models.SysDictType) error {
 	var err error
 
-	db := e.DB.First(model, d.GetID())
+	db := e.DB.WithContext(ctx).First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
@@ -57,7 +58,7 @@ func (e *Dictionary) Get(d *dto.DictionaryByID, model *models.SysDictType) error
 }
 
 // Create 创建对象
-func (e *Dictionary) Create(c *dto.DictionaryCreate) error {
+func (e *Dictionary) Create(ctx context.Context, c *dto.DictionaryCreate) error {
 	if strings.TrimSpace(c.DictType) == "" {
 		return errors.New("字典类型不能为空")
 	}
@@ -68,14 +69,14 @@ func (e *Dictionary) Create(c *dto.DictionaryCreate) error {
 	var count int64
 	// The error was dropped, so a query that failed left count at zero and the
 	// insert went ahead as though the name were free.
-	if err = e.DB.Model(&data).Where("dict_type = ?", data.DictType).Count(&count).Error; err != nil {
+	if err = e.DB.WithContext(ctx).Model(&data).Where("dict_type = ?", data.DictType).Count(&count).Error; err != nil {
 		e.Logger.Errorf("db error: %s", err)
 		return err
 	}
 	if count > 0 {
 		return fmt.Errorf("当前字典类型[%s]已经存在！", data.DictType)
 	}
-	err = e.DB.Create(&data).Error
+	err = e.DB.WithContext(ctx).Create(&data).Error
 	if err != nil {
 		e.Logger.Errorf("db error: %s", err)
 		return err
@@ -85,14 +86,14 @@ func (e *Dictionary) Create(c *dto.DictionaryCreate) error {
 }
 
 // Update 修改对象
-func (e *Dictionary) Update(c *dto.DictionaryUpdate) error {
+func (e *Dictionary) Update(ctx context.Context, c *dto.DictionaryUpdate) error {
 	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
 	if strings.TrimSpace(c.DictType) == "" {
 		return errors.New("字典类型不能为空")
 	}
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var model models.SysDictType
 		if err := lockAdminRows(tx, model.TableName()).First(&model, c.GetID()).Error; err != nil {
 			return err
@@ -122,8 +123,8 @@ func (e *Dictionary) Update(c *dto.DictionaryUpdate) error {
 }
 
 // Delete 删除
-func (e *Dictionary) Delete(d *dto.DictionaryDelete) error {
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Dictionary) Delete(ctx context.Context, d *dto.DictionaryDelete) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var types []models.SysDictType
 		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.IDs).Order("dict_id").Find(&types).Error; err != nil {
 			return err
@@ -145,11 +146,11 @@ func (e *Dictionary) Delete(d *dto.DictionaryDelete) error {
 }
 
 // All 获取所有
-func (e *Dictionary) All(c *dto.DictionarySearch, list *[]models.SysDictType) error {
+func (e *Dictionary) All(ctx context.Context, c *dto.DictionarySearch, list *[]models.SysDictType) error {
 	var err error
 	var data models.SysDictType
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).

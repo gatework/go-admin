@@ -46,7 +46,7 @@ func TestSysAPIUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 
 	// User 2, scope 5: only rows they created.
 	outsider := &actions.DataPermission{DataScope: "5", UserID: 2, DeptID: 1, RoleID: 2}
-	err = e.Update(req, outsider)
+	err = e.Update(t.Context(), req, outsider)
 	if err == nil {
 		t.Fatal("the update was allowed on a row the data permission excludes")
 	}
@@ -66,7 +66,7 @@ func TestSysAPIUpdateRefusesARowOutsideTheDataPermission(t *testing.T) {
 	// The owner still gets through, so the scope is refusing rather than
 	// everything failing.
 	owner := &actions.DataPermission{DataScope: "5", UserID: 1, DeptID: 1, RoleID: 1}
-	if err := e.Update(&dto.RouteUpdate{ID: row.ID, Title: "by owner"}, owner); err != nil {
+	if err := e.Update(t.Context(), &dto.RouteUpdate{ID: row.ID, Title: "by owner"}, owner); err != nil {
 		t.Fatalf("the owner could not update their own row: %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestSysAPIUpdateRechecksExistenceAndPermissionAtWrite(t *testing.T) {
 				t.Fatal(err)
 			}
 			s := Route{DB: db, Logger: logger.NewHelper(logger.Default())}
-			err = s.Update(&dto.RouteUpdate{ID: row.ID, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserID: 1})
+			err = s.Update(t.Context(), &dto.RouteUpdate{ID: row.ID, Title: "must not write"}, &actions.DataPermission{DataScope: "5", UserID: 1})
 			if err == nil {
 				t.Fatal("write accepted after row disappeared or left permission scope")
 			}

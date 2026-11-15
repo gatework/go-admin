@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -28,9 +29,9 @@ type Menu struct {
 }
 
 // List 获取SysMenu列表
-func (e *Menu) List(c *dto.MenuSearch, menus *[]models.SysMenu) error {
+func (e *Menu) List(ctx context.Context, c *dto.MenuSearch, menus *[]models.SysMenu) error {
 	var menu = make([]models.SysMenu, 0)
-	err := e.getPage(c, &menu)
+	err := e.getPage(ctx, c, &menu)
 	if err != nil {
 		return err
 	}
@@ -45,11 +46,11 @@ func (e *Menu) List(c *dto.MenuSearch, menus *[]models.SysMenu) error {
 }
 
 // Get 获取SysMenu对象
-func (e *Menu) Get(d *dto.MenuByID, model *models.SysMenu) error {
+func (e *Menu) Get(ctx context.Context, d *dto.MenuByID, model *models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 
-	db := e.DB.Model(&data).Preload("SysAPI").
+	db := e.DB.WithContext(ctx).Model(&data).Preload("SysAPI").
 		First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
@@ -76,9 +77,9 @@ func lockMenuTree(tx *gorm.DB) error {
 }
 
 // Create 创建SysMenu对象
-func (e *Menu) Create(c *dto.MenuCreate) error {
+func (e *Menu) Create(ctx context.Context, c *dto.MenuCreate) error {
 	var data models.SysMenu
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMenuTree(tx); err != nil {
 			return err
 		}
@@ -99,8 +100,8 @@ func (e *Menu) Create(c *dto.MenuCreate) error {
 }
 
 // Update 修改SysMenu对象
-func (e *Menu) Update(c *dto.MenuUpdate) error {
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Menu) Update(ctx context.Context, c *dto.MenuUpdate) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMenuTree(tx); err != nil {
 			return err
 		}
@@ -148,11 +149,11 @@ func (e *Menu) Update(c *dto.MenuUpdate) error {
 }
 
 // Delete 删除SysMenu
-func (e *Menu) Delete(d *dto.MenuDelete) error {
+func (e *Menu) Delete(ctx context.Context, d *dto.MenuDelete) error {
 	var err error
 	var data models.SysMenu
 
-	db := e.DB.Model(&data).Delete(&data, d.IDs)
+	db := e.DB.WithContext(ctx).Model(&data).Delete(&data, d.IDs)
 	if err = db.Error; err != nil {
 		e.Logger.Errorf("Delete error: %s", err)
 		return err
@@ -165,11 +166,11 @@ func (e *Menu) Delete(d *dto.MenuDelete) error {
 }
 
 // ListFlat 获取菜单数据
-func (e *Menu) ListFlat(c *dto.MenuSearch, list *[]models.SysMenu) error {
+func (e *Menu) ListFlat(ctx context.Context, c *dto.MenuSearch, list *[]models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).
@@ -182,9 +183,9 @@ func (e *Menu) ListFlat(c *dto.MenuSearch, list *[]models.SysMenu) error {
 }
 
 // Labels 修改角色中 设置菜单基础数据
-func (e *Menu) Labels() (m []dto.MenuLabel, err error) {
+func (e *Menu) Labels(ctx context.Context) (m []dto.MenuLabel, err error) {
 	var list []models.SysMenu
-	err = e.ListFlat(&dto.MenuSearch{}, &list)
+	err = e.ListFlat(ctx, &dto.MenuSearch{}, &list)
 
 	m = make([]dto.MenuLabel, 0)
 	for i := range list {
@@ -305,8 +306,8 @@ func recursiveSetMenu(orm *gorm.DB, mIDs []int, menus *[]models.SysMenu) error {
 }
 
 // ForRole 获取左侧菜单树使用
-func (e *Menu) ForRole(roleName string) (m []models.SysMenu, err error) {
-	menus, err := e.getByRoleName(roleName)
+func (e *Menu) ForRole(ctx context.Context, roleName string) (m []models.SysMenu, err error) {
+	menus, err := e.getByRoleName(ctx, roleName)
 	m = make([]models.SysMenu, 0)
 	for i := range menus {
 		if menus[i].ParentID != 0 {
@@ -319,11 +320,11 @@ func (e *Menu) ForRole(roleName string) (m []models.SysMenu, err error) {
 }
 
 // getPage 菜单分页列表
-func (e *Menu) getPage(c *dto.MenuSearch, list *[]models.SysMenu) error {
+func (e *Menu) getPage(ctx context.Context, c *dto.MenuSearch, list *[]models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.OrderDest("sort", false),
 			cDto.MakeCondition(c.GetNeedSearch()),
@@ -363,7 +364,7 @@ func (e *Menu) initPaths(tx *gorm.DB, menu *models.SysMenu) error {
 	return err
 }
 
-func (e *Menu) getByRoleName(roleName string) ([]models.SysMenu, error) {
+func (e *Menu) getByRoleName(ctx context.Context, roleName string) ([]models.SysMenu, error) {
 	var role models.SysRole
 	var err error
 	data := make([]models.SysMenu, 0)
@@ -373,20 +374,20 @@ func (e *Menu) getByRoleName(roleName string) ([]models.SysMenu, error) {
 		// model's DeletedAt field on every query. Writing it by hand duplicates
 		// that and hard-codes what "deleted" looks like — a column that stops
 		// being nullable turns this clause into one that matches nothing.
-		err = e.DB.Where("menu_type in ('M','C')").
+		err = e.DB.WithContext(ctx).Where("menu_type in ('M','C')").
 			Order("sort").
 			Find(&data).
 			Error
 	} else {
 		role.RoleKey = roleName
-		err = e.DB.Model(&role).Where("role_key = ? ", roleName).Preload("SysMenu").First(&role).Error
+		err = e.DB.WithContext(ctx).Model(&role).Where("role_key = ? ", roleName).Preload("SysMenu").First(&role).Error
 
 		if role.SysMenu != nil {
 			mIDs := make([]int, 0)
 			for _, menu := range *role.SysMenu {
 				mIDs = append(mIDs, menu.MenuID)
 			}
-			if err := recursiveSetMenu(e.DB, mIDs, &data); err != nil {
+			if err := recursiveSetMenu(e.DB.WithContext(ctx), mIDs, &data); err != nil {
 				return nil, err
 			}
 

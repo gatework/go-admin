@@ -25,17 +25,17 @@ func TestAdminMutationLockSQL(t *testing.T) {
 			{"role update", "sys_role", func(db *gorm.DB) error {
 				s := &Role{}
 				s.DB = db
-				return s.Update(&dto.RoleUpdate{RoleID: 7, RoleKey: "operator"}, nil)
+				return s.Update(t.Context(), &dto.RoleUpdate{RoleID: 7, RoleKey: "operator"}, nil)
 			}},
 			{"role remove", "sys_role", func(db *gorm.DB) error {
 				s := &Role{}
 				s.DB = db
-				return s.Delete(&dto.RoleDelete{IDs: []int{7, 8}}, nil)
+				return s.Delete(t.Context(), &dto.RoleDelete{IDs: []int{7, 8}}, nil)
 			}},
 			{"role scope", "sys_role", func(db *gorm.DB) error {
 				s := &Role{}
 				s.DB = db
-				return s.UpdateDataScope(&dto.RoleDataScopeUpdate{RoleID: 7, DataScope: "2"})
+				return s.UpdateDataScope(t.Context(), &dto.RoleDataScopeUpdate{RoleID: 7, DataScope: "2"})
 			}},
 			{"dept tree", "sys_dept", lockDeptTree},
 			{"menu tree", "sys_menu", lockMenuTree},

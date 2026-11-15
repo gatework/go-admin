@@ -47,7 +47,7 @@ func (e DictionaryEntry) List(c *gin.Context) {
 
 	list := make([]models.SysDictData, 0)
 	var count int64
-	err = s.List(&req, &list, &count)
+	err = s.List(c.Request.Context(), &req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -81,7 +81,7 @@ func (e DictionaryEntry) Get(c *gin.Context) {
 
 	var object models.SysDictData
 
-	err = s.Get(&req, &object)
+	err = s.Get(c.Request.Context(), &req, &object)
 	if err != nil {
 		e.Logger.Warnf("Get error: %s", err.Error())
 		e.Error(500, err, "查询失败")
@@ -116,7 +116,7 @@ func (e DictionaryEntry) Create(c *gin.Context) {
 		return
 	}
 	req.SetCreateBy(user.ID(c))
-	err = s.Create(&req)
+	err = s.Create(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -150,7 +150,7 @@ func (e DictionaryEntry) Update(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Update(&req)
+	err = s.Update(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "更新失败")
 		return
@@ -181,7 +181,7 @@ func (e DictionaryEntry) Delete(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Delete(&req)
+	err = s.Delete(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "删除失败")
 		return
@@ -212,7 +212,7 @@ func (e DictionaryEntry) All(c *gin.Context) {
 		return
 	}
 	list := make([]models.SysDictData, 0)
-	err = s.All(&req, &list)
+	err = s.All(c.Request.Context(), &req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return

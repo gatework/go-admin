@@ -22,7 +22,7 @@ func TestDictTypeUpdateBoundaries(t *testing.T) {
 		s := &Dictionary{}
 		s.DB = db
 		s.Logger = logger.NewHelper(logger.Default())
-		return s.Update(&dto.DictionaryUpdate{ID: id, DictType: "one", DictName: "changed"})
+		return s.Update(t.Context(), &dto.DictionaryUpdate{ID: id, DictType: "one", DictName: "changed"})
 	}})
 }
 
@@ -39,7 +39,7 @@ func TestDictTypeUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
 	req := &dto.DictionaryUpdate{ID: 1, DictType: "one"}
 	req.CreateBy = 999
 	req.UpdateBy = 20
-	if err := s.Update(req); err != nil {
+	if err := s.Update(t.Context(), req); err != nil {
 		t.Fatal(err)
 	}
 	var got models.SysDictType
@@ -67,7 +67,7 @@ func TestDictTypeRenameMovesOnlyActiveChildren(t *testing.T) {
 	s := &Dictionary{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
-	if err := s.Update(&dto.DictionaryUpdate{ID: 1, DictType: "old-renamed"}); err != nil {
+	if err := s.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: "old-renamed"}); err != nil {
 		t.Fatal(err)
 	}
 	var active, historical models.SysDictData
@@ -84,7 +84,7 @@ func TestDictTypeRenameMovesOnlyActiveChildren(t *testing.T) {
 	data.DB = db
 	data.Logger = logger.NewHelper(logger.Default())
 	var oldOptions []models.SysDictData
-	if err := data.All(&dto.DictionaryEntrySearch{DictType: "old"}, &oldOptions); err != nil {
+	if err := data.All(t.Context(), &dto.DictionaryEntrySearch{DictType: "old"}, &oldOptions); err != nil {
 		t.Fatal(err)
 	}
 	if len(oldOptions) != 0 {
@@ -119,7 +119,7 @@ func TestDictTypeRenameRollbackAndDuplicateKey(t *testing.T) {
 			s := &Dictionary{}
 			s.DB = db
 			s.Logger = logger.NewHelper(logger.Default())
-			if err := s.Update(&dto.DictionaryUpdate{ID: 1, DictType: "new"}); err == nil {
+			if err := s.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: "new"}); err == nil {
 				t.Fatal("invalid rename succeeded")
 			}
 			var parent models.SysDictType
@@ -151,7 +151,7 @@ func TestDictTypeDeleteRefusesActiveChildrenAndRetainsHistory(t *testing.T) {
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	req := &dto.DictionaryDelete{IDs: []int{1, 2}}
-	if err := s.Delete(req); err == nil {
+	if err := s.Delete(t.Context(), req); err == nil {
 		t.Fatal("deleted dictionary type with active children")
 	}
 	var count int64
@@ -164,7 +164,7 @@ func TestDictTypeDeleteRefusesActiveChildrenAndRetainsHistory(t *testing.T) {
 	if err := db.Delete(&child).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(req); err != nil {
+	if err := s.Delete(t.Context(), req); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Model(&models.SysDictType{}).Count(&count).Error; err != nil {
@@ -213,13 +213,13 @@ func TestDictionaryMutationsReturnCommitFailure(t *testing.T) {
 			var err error
 			switch name {
 			case "rename":
-				err = parent.Update(&dto.DictionaryUpdate{ID: 1, DictType: "new"})
+				err = parent.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: "new"})
 			case "delete type":
-				err = parent.Delete(&dto.DictionaryDelete{IDs: []int{1}})
+				err = parent.Delete(t.Context(), &dto.DictionaryDelete{IDs: []int{1}})
 			case "insert data":
-				err = child.Create(&dto.DictionaryEntryCreate{ID: 2, DictType: "old"})
+				err = child.Create(t.Context(), &dto.DictionaryEntryCreate{ID: 2, DictType: "old"})
 			case "update data":
-				err = child.Update(&dto.DictionaryEntryUpdate{ID: 1, DictType: "old", DictLabel: "changed"})
+				err = child.Update(t.Context(), &dto.DictionaryEntryUpdate{ID: 1, DictType: "old", DictLabel: "changed"})
 			}
 			if err == nil || !strings.Contains(err.Error(), "injected dictionary commit failure") {
 				t.Fatalf("commit error=%v", err)
@@ -289,9 +289,9 @@ func TestConcurrentDictionaryParentChangeRejectsLateChild(t *testing.T) {
 				s := &Dictionary{}
 				s.DB = db.WithContext(context.WithValue(ctx, requestKey{}, "parent"))
 				if action == "rename" {
-					parentResult <- s.Update(&dto.DictionaryUpdate{ID: 1, DictType: "new"})
+					parentResult <- s.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: "new"})
 				} else {
-					parentResult <- s.Delete(&dto.DictionaryDelete{IDs: []int{1}})
+					parentResult <- s.Delete(t.Context(), &dto.DictionaryDelete{IDs: []int{1}})
 				}
 			}()
 			select {
@@ -302,7 +302,7 @@ func TestConcurrentDictionaryParentChangeRejectsLateChild(t *testing.T) {
 			go func() {
 				s := &DictionaryEntry{}
 				s.DB = db.WithContext(context.WithValue(ctx, requestKey{}, "child"))
-				childResult <- s.Create(&dto.DictionaryEntryCreate{DictType: "old"})
+				childResult <- s.Create(t.Context(), &dto.DictionaryEntryCreate{DictType: "old"})
 			}()
 			select {
 			case <-childStarted:
@@ -339,9 +339,9 @@ func TestDictTypeRejectsBlankKey(t *testing.T) {
 			s.Logger = logger.NewHelper(logger.Default())
 			var err error
 			if operation == "insert" {
-				err = s.Create(&dto.DictionaryCreate{DictType: " "})
+				err = s.Create(t.Context(), &dto.DictionaryCreate{DictType: " "})
 			} else {
-				err = s.Update(&dto.DictionaryUpdate{ID: 1, DictType: " "})
+				err = s.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: " "})
 			}
 			if err == nil {
 				t.Fatal("blank dictionary key accepted")

@@ -44,7 +44,7 @@ func (e Config) AppConfig(c *gin.Context) {
 	// 控制只读前台的数据
 	req.IsFrontend = "1"
 	list := make([]models.SysConfig, 0)
-	err = s.Values(&req, &list)
+	err = s.Values(c.Request.Context(), &req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -79,7 +79,7 @@ func (e Config) Settings(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	err = s.Settings(&req)
+	err = s.Settings(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -116,7 +116,7 @@ func (e Config) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	err = s.ReplaceSettings(&req)
+	err = s.ReplaceSettings(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
@@ -149,7 +149,7 @@ func (e Config) GetByKey(c *gin.Context) {
 		return
 	}
 
-	err = s.ByKey(req, resp)
+	err = s.ByKey(c.Request.Context(), req, resp)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		e.Error(404, nil, "配置不存在")
 		return

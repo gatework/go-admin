@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -20,11 +21,11 @@ type Route struct {
 }
 
 // List 获取SysAPI列表
-func (e *Route) List(c *dto.RouteSearch, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
+func (e *Route) List(ctx context.Context, c *dto.RouteSearch, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
 	var err error
 	var data models.SysAPI
 
-	orm := e.DB.Debug().Model(&data).
+	orm := e.DB.WithContext(ctx).Debug().Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -48,9 +49,9 @@ func (e *Route) List(c *dto.RouteSearch, p *actions.DataPermission, list *[]mode
 }
 
 // Get 获取SysAPI对象with id
-func (e *Route) Get(d *dto.RouteByID, p *actions.DataPermission, model *models.SysAPI) error {
+func (e *Route) Get(ctx context.Context, d *dto.RouteByID, p *actions.DataPermission, model *models.SysAPI) error {
 	var data models.SysAPI
-	err := e.DB.Model(&data).
+	err := e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			actions.Permission(data.TableName(), p),
 		).
@@ -68,9 +69,9 @@ func (e *Route) Get(d *dto.RouteByID, p *actions.DataPermission, model *models.S
 }
 
 // Update 修改SysAPI对象
-func (e *Route) Update(c *dto.RouteUpdate, p *actions.DataPermission) error {
+func (e *Route) Update(ctx context.Context, c *dto.RouteUpdate, p *actions.DataPermission) error {
 	var model = models.SysAPI{}
-	db := e.DB.Scopes(
+	db := e.DB.WithContext(ctx).Scopes(
 		actions.Permission(model.TableName(), p),
 	).First(&model, c.GetID())
 	if err := db.Error; err != nil {
@@ -85,7 +86,7 @@ func (e *Route) Update(c *dto.RouteUpdate, p *actions.DataPermission) error {
 	}
 	c.Generate(&model)
 	model.UpdateBy = c.UpdateBy
-	db = e.DB.Scopes(actions.Permission(model.TableName(), p)).
+	db = e.DB.WithContext(ctx).Scopes(actions.Permission(model.TableName(), p)).
 		Omit("create_by", "created_at").Select("*").Updates(&model)
 	if err := db.Error; err != nil {
 		e.Logger.Errorf("updating route: %s", err)

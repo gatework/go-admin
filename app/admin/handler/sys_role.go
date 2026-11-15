@@ -54,7 +54,7 @@ func (e Role) List(c *gin.Context) {
 	list := make([]models.SysRole, 0)
 	var count int64
 
-	err = s.List(&req, &list, &count)
+	err = s.List(c.Request.Context(), &req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -88,7 +88,7 @@ func (e Role) Get(c *gin.Context) {
 
 	var object models.SysRole
 
-	err = s.Get(&req, &object)
+	err = s.Get(c.Request.Context(), &req, &object)
 	if err != nil {
 		e.Error(http.StatusUnprocessableEntity, err, "查询失败")
 		return
@@ -128,7 +128,7 @@ func (e Role) Create(c *gin.Context) {
 		req.Status = "2"
 	}
 	cb := sdk.Runtime.Casbin(c.Request.Host)
-	err = s.Create(&req, cb)
+	err = s.Create(c.Request.Context(), &req, cb)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "创建失败,"+err.Error())
@@ -166,7 +166,7 @@ func (e Role) Update(c *gin.Context) {
 
 	req.SetUpdateBy(user.ID(c))
 
-	err = s.Update(&req, cb)
+	err = s.Update(c.Request.Context(), &req, cb)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "更新失败,"+err.Error())
@@ -200,7 +200,7 @@ func (e Role) Delete(c *gin.Context) {
 	}
 
 	cb := sdk.Runtime.Casbin(c.Request.Host)
-	err = s.Delete(&req, cb)
+	err = s.Delete(c.Request.Context(), &req, cb)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "")
@@ -235,7 +235,7 @@ func (e Role) UpdateStatus(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.UpdateStatus(&req)
+	err = s.UpdateStatus(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("更新角色状态失败，失败原因：%s ", err.Error()))
 		return
@@ -267,7 +267,7 @@ func (e Role) UpdateDataScope(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	err = s.UpdateDataScope(&req)
+	err = s.UpdateDataScope(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, fmt.Sprintf("更新角色数据权限失败！错误详情：%s", err.Error()))
 		return

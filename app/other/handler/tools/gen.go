@@ -216,20 +216,20 @@ func (e Generator) CreateMenu(c *gin.Context) {
 	tab.MLTBName = strings.ReplaceAll(tab.TBName, "_", "-")
 
 	Mmenu := generatedParentMenu(tab)
-	if err := s.Create(&Mmenu); err != nil {
+	if err := s.Create(c.Request.Context(), &Mmenu); err != nil {
 		e.Error(500, err, "menu creation failed")
 		return
 	}
 
 	Cmenu := generatedChildMenu(tab, Mmenu.MenuID)
-	if err := s.Create(&Cmenu); err != nil {
+	if err := s.Create(c.Request.Context(), &Cmenu); err != nil {
 		e.Error(500, err, "menu creation failed")
 		return
 	}
 
 	for _, action := range []struct{ title, permission string }{{"分页获取", "query"}, {"创建", "add"}, {"修改", "edit"}, {"删除", "remove"}} {
 		menu := generatedActionMenu(tab, Cmenu.MenuID, action.title, action.permission)
-		if err := s.Create(&menu); err != nil {
+		if err := s.Create(c.Request.Context(), &menu); err != nil {
 			e.Error(500, err, "menu creation failed")
 			return
 		}

@@ -116,7 +116,7 @@ func TestRoleBatchDelete(t *testing.T) {
 	}
 	s := &Role{}
 	s.DB = db
-	if err := s.Delete(&dto.RoleDelete{IDs: []int{101, 102}}, integrityEnforcer(t)); err != nil {
+	if err := s.Delete(t.Context(), &dto.RoleDelete{IDs: []int{101, 102}}, integrityEnforcer(t)); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
@@ -138,7 +138,7 @@ func TestRoleRenameRevokesOldKey(t *testing.T) {
 	}
 	s := &Role{}
 	s.DB = db
-	if err := s.Update(&dto.RoleUpdate{RoleID: 103, RoleKey: "new-role", RoleName: "role", DataScope: "1", Status: "2"}, cb); err != nil {
+	if err := s.Update(t.Context(), &dto.RoleUpdate{RoleID: 103, RoleKey: "new-role", RoleName: "role", DataScope: "1", Status: "2"}, cb); err != nil {
 		t.Fatal(err)
 	}
 	if err := cb.LoadPolicy(); err != nil {
@@ -180,7 +180,7 @@ func TestRoleRollbackKeepsOldPolicies(t *testing.T) {
 	s := &Role{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
-	err := s.Update(&dto.RoleUpdate{RoleID: 501, RoleKey: "rollback-role", RoleName: "changed", DataScope: "1", Status: "2", MenuIDs: []int{302}}, cb)
+	err := s.Update(t.Context(), &dto.RoleUpdate{RoleID: 501, RoleKey: "rollback-role", RoleName: "changed", DataScope: "1", Status: "2", MenuIDs: []int{302}}, cb)
 	if err == nil {
 		t.Fatal("expected injected policy insertion failure")
 	}
@@ -216,7 +216,7 @@ func TestRoleBatchDeleteRemovesAllAssociationsAndPolicies(t *testing.T) {
 	}
 	s := &Role{}
 	s.DB = db
-	if err := s.Delete(&dto.RoleDelete{IDs: []int{1, 2, 2, 999}}, cb); err != nil {
+	if err := s.Delete(t.Context(), &dto.RoleDelete{IDs: []int{1, 2, 2, 999}}, cb); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"sys_role_menu", "sys_role_dept"} {
@@ -253,11 +253,11 @@ func TestRoleUpdatesDoNotCreateMissingRows(t *testing.T) {
 			var err error
 			switch name {
 			case "update":
-				err = s.Update(&dto.RoleUpdate{RoleID: 999, RoleKey: "missing"}, cb)
+				err = s.Update(t.Context(), &dto.RoleUpdate{RoleID: 999, RoleKey: "missing"}, cb)
 			case "scope":
-				err = s.UpdateDataScope(&dto.RoleDataScopeUpdate{RoleID: 999, DataScope: "1"})
+				err = s.UpdateDataScope(t.Context(), &dto.RoleDataScopeUpdate{RoleID: 999, DataScope: "1"})
 			case "status":
-				err = s.UpdateStatus(&dto.RoleStatusUpdate{RoleID: 999, Status: "2"})
+				err = s.UpdateStatus(t.Context(), &dto.RoleStatusUpdate{RoleID: 999, Status: "2"})
 			}
 			if err == nil {
 				t.Fatal("missing role mutation succeeded")
@@ -291,7 +291,7 @@ func TestRolePolicyReloadFailureIsExplicitAndDeniesStalePolicy(t *testing.T) {
 	cb.SetAdapter(failingPolicyLoader{cb.GetAdapter()})
 	s := &Role{}
 	s.DB = db
-	err := s.Update(&dto.RoleUpdate{RoleID: 1, RoleKey: "changed"}, cb)
+	err := s.Update(t.Context(), &dto.RoleUpdate{RoleID: 1, RoleKey: "changed"}, cb)
 	if err == nil || !strings.Contains(err.Error(), "committed but policy reload failed") {
 		t.Fatalf("error = %v, want explicit post-commit failure", err)
 	}
@@ -352,11 +352,11 @@ func TestRolePolicyWriteFailureRollsBackDatabaseAndKeepsCache(t *testing.T) {
 			var err error
 			switch name {
 			case "insert":
-				err = s.Create(&dto.RoleCreate{RoleID: 1, RoleKey: "existing", MenuIDs: []int{1}}, cb)
+				err = s.Create(t.Context(), &dto.RoleCreate{RoleID: 1, RoleKey: "existing", MenuIDs: []int{1}}, cb)
 			case "update":
-				err = s.Update(&dto.RoleUpdate{RoleID: 1, RoleKey: "existing", RoleName: "changed", MenuIDs: []int{1}}, cb)
+				err = s.Update(t.Context(), &dto.RoleUpdate{RoleID: 1, RoleKey: "existing", RoleName: "changed", MenuIDs: []int{1}}, cb)
 			case "delete":
-				err = s.Delete(&dto.RoleDelete{IDs: []int{1}}, cb)
+				err = s.Delete(t.Context(), &dto.RoleDelete{IDs: []int{1}}, cb)
 			}
 			if !errors.Is(err, injected) {
 				t.Fatalf("error=%v, want policy failure", err)
@@ -419,7 +419,7 @@ func TestRoleRenameCannotTakeAnotherRolesPoliciesWithoutUniqueIndex(t *testing.T
 	}
 	s := &Role{}
 	s.DB = db
-	if err := s.Update(&dto.RoleUpdate{RoleID: 1, RoleKey: "two"}, cb); err == nil {
+	if err := s.Update(t.Context(), &dto.RoleUpdate{RoleID: 1, RoleKey: "two"}, cb); err == nil {
 		t.Fatal("rename to another active role key succeeded")
 	}
 	for _, key := range []string{"one", "two"} {
@@ -449,9 +449,9 @@ func TestRoleRejectsBlankKey(t *testing.T) {
 			}
 			var err error
 			if name == "insert" {
-				err = s.Create(&dto.RoleCreate{RoleKey: " "}, cb)
+				err = s.Create(t.Context(), &dto.RoleCreate{RoleKey: " "}, cb)
 			} else {
-				err = s.Update(&dto.RoleUpdate{RoleID: 1, RoleKey: " "}, cb)
+				err = s.Update(t.Context(), &dto.RoleUpdate{RoleID: 1, RoleKey: " "}, cb)
 			}
 			if err == nil {
 				t.Fatal("blank role key accepted")

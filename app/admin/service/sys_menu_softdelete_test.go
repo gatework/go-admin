@@ -41,7 +41,7 @@ func TestSoftDeletedMenusAreNotReturned(t *testing.T) {
 	// test did.
 	e := &Menu{}
 	e.DB = db
-	got, err := e.getByRoleName("admin")
+	got, err := e.getByRoleName(t.Context(), "admin")
 	if err != nil {
 		t.Fatalf("getByRoleName: %v", err)
 	}

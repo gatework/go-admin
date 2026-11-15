@@ -43,7 +43,7 @@ func (e Department) List(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	list, err := s.List(&req)
+	list, err := s.List(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -75,7 +75,7 @@ func (e Department) Get(c *gin.Context) {
 	}
 	var object models.SysDept
 
-	err = s.Get(&req, &object)
+	err = s.Get(c.Request.Context(), &req, &object)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -112,7 +112,7 @@ func (e Department) Create(c *gin.Context) {
 
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Create(&req)
+	err = s.Create(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -147,7 +147,7 @@ func (e Department) Update(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Update(&req)
+	err = s.Update(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
@@ -179,7 +179,7 @@ func (e Department) Delete(c *gin.Context) {
 		return
 	}
 
-	err = s.Delete(&req)
+	err = s.Delete(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "删除失败")
 		return
@@ -202,7 +202,7 @@ func (e Department) Tree(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	list, err := s.Tree(&req)
+	list, err := s.Tree(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -227,14 +227,14 @@ func (e Department) RoleTree(c *gin.Context) {
 		e.Error(400, err, "invalid role id")
 		return
 	}
-	result, err := s.Labels()
+	result, err := s.Labels(c.Request.Context())
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
 	}
 	menuIDs := make([]int, 0)
 	if id != 0 {
-		menuIDs, err = s.IDsForRole(id)
+		menuIDs, err = s.IDsForRole(c.Request.Context(), id)
 		if err != nil {
 			e.Error(500, err, err.Error())
 			return

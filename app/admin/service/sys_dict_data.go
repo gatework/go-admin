@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -18,11 +19,11 @@ type DictionaryEntry struct {
 }
 
 // List 获取列表
-func (e *DictionaryEntry) List(c *dto.DictionaryEntrySearch, list *[]models.SysDictData, count *int64) error {
+func (e *DictionaryEntry) List(ctx context.Context, c *dto.DictionaryEntrySearch, list *[]models.SysDictData, count *int64) error {
 	var err error
 	var data models.SysDictData
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -37,11 +38,11 @@ func (e *DictionaryEntry) List(c *dto.DictionaryEntrySearch, list *[]models.SysD
 }
 
 // Get 获取对象
-func (e *DictionaryEntry) Get(d *dto.DictionaryEntryByID, model *models.SysDictData) error {
+func (e *DictionaryEntry) Get(ctx context.Context, d *dto.DictionaryEntryByID, model *models.SysDictData) error {
 	var err error
 	var data models.SysDictData
 
-	db := e.DB.Model(&data).
+	db := e.DB.WithContext(ctx).Model(&data).
 		First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
@@ -57,9 +58,9 @@ func (e *DictionaryEntry) Get(d *dto.DictionaryEntryByID, model *models.SysDictD
 }
 
 // Create 创建对象
-func (e *DictionaryEntry) Create(c *dto.DictionaryEntryCreate) error {
+func (e *DictionaryEntry) Create(ctx context.Context, c *dto.DictionaryEntryCreate) error {
 	var data models.SysDictData
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var parent models.SysDictType
 		if err := lockAdminRows(tx, parent.TableName()).Where("dict_type = ?", c.DictType).First(&parent).Error; err != nil {
 			return err
@@ -75,11 +76,11 @@ func (e *DictionaryEntry) Create(c *dto.DictionaryEntryCreate) error {
 }
 
 // Update 修改对象，锁定目标字典类型以免并发重命名或删除产生孤立数据。
-func (e *DictionaryEntry) Update(c *dto.DictionaryEntryUpdate) error {
+func (e *DictionaryEntry) Update(ctx context.Context, c *dto.DictionaryEntryUpdate) error {
 	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var parent models.SysDictType
 		if err := lockAdminRows(tx, parent.TableName()).Where("dict_type = ?", c.DictType).First(&parent).Error; err != nil {
 			return err
@@ -102,11 +103,11 @@ func (e *DictionaryEntry) Update(c *dto.DictionaryEntryUpdate) error {
 }
 
 // Delete 删除
-func (e *DictionaryEntry) Delete(c *dto.DictionaryEntryDelete) error {
+func (e *DictionaryEntry) Delete(ctx context.Context, c *dto.DictionaryEntryDelete) error {
 	var err error
 	var data models.SysDictData
 
-	db := e.DB.Delete(&data, c.GetID())
+	db := e.DB.WithContext(ctx).Delete(&data, c.GetID())
 	if err = db.Error; err != nil {
 		e.Logger.Errorf("Delete error: %s", err)
 		return err
@@ -119,11 +120,11 @@ func (e *DictionaryEntry) Delete(c *dto.DictionaryEntryDelete) error {
 }
 
 // All 获取所有
-func (e *DictionaryEntry) All(c *dto.DictionaryEntrySearch, list *[]models.SysDictData) error {
+func (e *DictionaryEntry) All(ctx context.Context, c *dto.DictionaryEntrySearch, list *[]models.SysDictData) error {
 	var err error
 	var data models.SysDictData
 
-	query := e.DB.Model(&data)
+	query := e.DB.WithContext(ctx).Model(&data)
 	if c.DictType != "" {
 		query = query.Where("dict_type = ?", c.DictType)
 	}

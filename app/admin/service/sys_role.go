@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,11 +24,11 @@ type Role struct {
 }
 
 // List 获取SysRole列表
-func (e *Role) List(c *dto.RoleSearch, list *[]models.SysRole, count *int64) error {
+func (e *Role) List(ctx context.Context, c *dto.RoleSearch, list *[]models.SysRole, count *int64) error {
 	var err error
 	var data models.SysRole
 
-	err = e.DB.Model(&data).Preload("SysMenu").
+	err = e.DB.WithContext(ctx).Model(&data).Preload("SysMenu").
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
@@ -42,9 +43,9 @@ func (e *Role) List(c *dto.RoleSearch, list *[]models.SysRole, count *int64) err
 }
 
 // Get 获取SysRole对象
-func (e *Role) Get(d *dto.RoleByID, model *models.SysRole) error {
+func (e *Role) Get(ctx context.Context, d *dto.RoleByID, model *models.SysRole) error {
 	var err error
-	db := e.DB.First(model, d.GetID())
+	db := e.DB.WithContext(ctx).First(model, d.GetID())
 	err = db.Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
@@ -55,7 +56,7 @@ func (e *Role) Get(d *dto.RoleByID, model *models.SysRole) error {
 		e.Logger.Errorf("db error:%s", err)
 		return err
 	}
-	model.MenuIDs, err = e.MenuIDs(model.RoleID)
+	model.MenuIDs, err = e.MenuIDs(ctx, model.RoleID)
 	if err != nil {
 		e.Logger.Errorf("get menuIds error, %s", err.Error())
 		return err
@@ -64,12 +65,12 @@ func (e *Role) Get(d *dto.RoleByID, model *models.SysRole) error {
 }
 
 // Create 创建SysRole对象
-func (e *Role) Create(c *dto.RoleCreate, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Create(ctx context.Context, c *dto.RoleCreate, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
 	var data models.SysRole
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var menus []models.SysMenu
 		if err := tx.Preload("SysAPI").Where("menu_id IN ?", c.MenuIDs).Find(&menus).Error; err != nil {
 			return err
@@ -97,11 +98,11 @@ func (e *Role) Create(c *dto.RoleCreate, cb *casbin.SyncedEnforcer) error {
 }
 
 // Update 修改SysRole对象
-func (e *Role) Update(c *dto.RoleUpdate, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Update(ctx context.Context, c *dto.RoleUpdate, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var model models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).First(&model, c.GetID()).Error; err != nil {
 			return err
@@ -177,8 +178,8 @@ func reloadRolePolicies(cb *casbin.SyncedEnforcer) error {
 }
 
 // Delete 删除SysRole
-func (e *Role) Delete(c *dto.RoleDelete, cb *casbin.SyncedEnforcer) error {
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Role) Delete(ctx context.Context, c *dto.RoleDelete, cb *casbin.SyncedEnforcer) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var roles []models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Where("role_id IN ?", c.IDs).Order("role_id").Find(&roles).Error; err != nil {
 			return err
@@ -203,11 +204,11 @@ func (e *Role) Delete(c *dto.RoleDelete, cb *casbin.SyncedEnforcer) error {
 }
 
 // MenuIDs performs the get role menu id administration operation.
-func (e *Role) MenuIDs(roleID int) ([]int, error) {
+func (e *Role) MenuIDs(ctx context.Context, roleID int) ([]int, error) {
 	menuIDs := make([]int, 0)
 	model := models.SysRole{}
 	model.RoleID = roleID
-	if err := e.DB.Model(&model).Preload("SysMenu").First(&model).Error; err != nil {
+	if err := e.DB.WithContext(ctx).Model(&model).Preload("SysMenu").First(&model).Error; err != nil {
 		return nil, err
 	}
 	l := *model.SysMenu
@@ -218,8 +219,8 @@ func (e *Role) MenuIDs(roleID int) ([]int, error) {
 }
 
 // UpdateDataScope performs the update data scope administration operation.
-func (e *Role) UpdateDataScope(c *dto.RoleDataScopeUpdate) error {
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Role) UpdateDataScope(ctx context.Context, c *dto.RoleDataScopeUpdate) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var model models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Preload("SysDept").First(&model, c.RoleID).Error; err != nil {
 			return err
@@ -255,11 +256,11 @@ func (e *Role) UpdateDataScope(c *dto.RoleDataScopeUpdate) error {
 }
 
 // UpdateStatus 修改SysRole对象status
-func (e *Role) UpdateStatus(c *dto.RoleStatusUpdate) error {
+func (e *Role) UpdateStatus(ctx context.Context, c *dto.RoleStatusUpdate) error {
 	if c.RoleID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid role status")
 	}
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var model models.SysRole
 		if err := lockAdminRows(tx, model.TableName()).First(&model, c.RoleID).Error; err != nil {
 			return err
@@ -281,11 +282,11 @@ func revokeRoleSessions(tx *gorm.DB, roleID int) error {
 }
 
 // Permissions performs the get by id administration operation.
-func (e *Role) Permissions(roleID int) ([]string, error) {
+func (e *Role) Permissions(ctx context.Context, roleID int) ([]string, error) {
 	permissions := make([]string, 0)
 	model := models.SysRole{}
 	model.RoleID = roleID
-	if err := e.DB.Model(&model).Preload("SysMenu").First(&model).Error; err != nil {
+	if err := e.DB.WithContext(ctx).Model(&model).Preload("SysMenu").First(&model).Error; err != nil {
 		return nil, err
 	}
 	l := *model.SysMenu

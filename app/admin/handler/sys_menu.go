@@ -40,7 +40,7 @@ func (e Menu) List(c *gin.Context) {
 		return
 	}
 	var list = make([]models.SysMenu, 0)
-	err = s.List(&req, &list)
+	err = s.List(c.Request.Context(), &req, &list)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -72,7 +72,7 @@ func (e Menu) Get(c *gin.Context) {
 	}
 	var object = models.SysMenu{}
 
-	err = s.Get(&req, &object)
+	err = s.Get(c.Request.Context(), &req, &object)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -106,7 +106,7 @@ func (e Menu) Create(c *gin.Context) {
 	}
 	// 设置创建人
 	req.SetCreateBy(user.ID(c))
-	err = s.Create(&req)
+	err = s.Create(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "创建失败")
 		return
@@ -141,7 +141,7 @@ func (e Menu) Update(c *gin.Context) {
 	}
 
 	req.SetUpdateBy(user.ID(c))
-	err = s.Update(&req)
+	err = s.Update(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, "更新失败")
 		return
@@ -171,7 +171,7 @@ func (e Menu) Delete(c *gin.Context) {
 		e.Error(500, err, err.Error())
 		return
 	}
-	err = s.Delete(control)
+	err = s.Delete(c.Request.Context(), control)
 	if err != nil {
 		e.Logger.Errorf("RemoveSysMenu error, %s", err)
 		e.Error(500, err, "删除失败")
@@ -198,7 +198,7 @@ func (e Menu) RoleTree(c *gin.Context) {
 		return
 	}
 
-	result, err := s.ForRole(user.RoleName(c))
+	result, err := s.ForRole(c.Request.Context(), user.RoleName(c))
 
 	if err != nil {
 		e.Error(500, err, "查询失败")
@@ -235,7 +235,7 @@ func (e Menu) Tree(c *gin.Context) {
 		return
 	}
 
-	result, err := m.Labels()
+	result, err := m.Labels(c.Request.Context())
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -243,7 +243,7 @@ func (e Menu) Tree(c *gin.Context) {
 
 	menuIDs := make([]int, 0)
 	if req.RoleID != 0 {
-		menuIDs, err = r.MenuIDs(req.RoleID)
+		menuIDs, err = r.MenuIDs(c.Request.Context(), req.RoleID)
 		if err != nil {
 			e.Error(500, err, "")
 			return

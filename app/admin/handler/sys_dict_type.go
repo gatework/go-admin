@@ -48,7 +48,7 @@ func (e Dictionary) List(c *gin.Context) {
 	}
 	list := make([]models.SysDictType, 0)
 	var count int64
-	err = s.List(&req, &list, &count)
+	err = s.List(c.Request.Context(), &req, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -79,7 +79,7 @@ func (e Dictionary) Get(c *gin.Context) {
 		return
 	}
 	var object models.SysDictType
-	err = s.Get(&req, &object)
+	err = s.Get(c.Request.Context(), &req, &object)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -112,7 +112,7 @@ func (e Dictionary) Create(c *gin.Context) {
 		return
 	}
 	req.SetCreateBy(user.ID(c))
-	err = s.Create(&req)
+	err = s.Create(c.Request.Context(), &req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, fmt.Sprintf(" 创建字典类型失败，详情：%s", err.Error()))
@@ -146,7 +146,7 @@ func (e Dictionary) Update(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Update(&req)
+	err = s.Update(c.Request.Context(), &req)
 	if err != nil {
 		e.Logger.Error(err)
 		e.Error(500, err, "更新失败")
@@ -178,7 +178,7 @@ func (e Dictionary) Delete(c *gin.Context) {
 		return
 	}
 	req.SetUpdateBy(user.ID(c))
-	err = s.Delete(&req)
+	err = s.Delete(c.Request.Context(), &req)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return
@@ -211,7 +211,7 @@ func (e Dictionary) All(c *gin.Context) {
 		return
 	}
 	list := make([]models.SysDictType, 0)
-	err = s.All(&req, &list)
+	err = s.All(c.Request.Context(), &req, &list)
 	if err != nil {
 		e.Error(500, err, err.Error())
 		return

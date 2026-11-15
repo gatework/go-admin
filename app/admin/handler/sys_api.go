@@ -50,7 +50,7 @@ func (e Route) List(c *gin.Context) {
 	p := actions.GetPermissionFromContext(c)
 	list := make([]models.SysAPI, 0)
 	var count int64
-	err = s.List(&req, p, &list, &count)
+	err = s.List(c.Request.Context(), &req, p, &list, &count)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -82,7 +82,7 @@ func (e Route) Get(c *gin.Context) {
 	}
 	p := actions.GetPermissionFromContext(c)
 	var object models.SysAPI
-	err = s.Get(&req, p, &object)
+	err = s.Get(c.Request.Context(), &req, p, &object)
 	if err != nil {
 		e.Error(500, err, "查询失败")
 		return
@@ -115,7 +115,7 @@ func (e Route) Update(c *gin.Context) {
 	}
 	req.SetUpdateBy(user.ID(c))
 	p := actions.GetPermissionFromContext(c)
-	err = s.Update(&req, p)
+	err = s.Update(c.Request.Context(), &req, p)
 	if err != nil {
 		e.Error(500, err, "更新失败")
 		return

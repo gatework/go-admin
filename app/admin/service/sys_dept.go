@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -38,11 +39,11 @@ type Department struct {
 //}
 
 // Get 获取SysDept对象
-func (e *Department) Get(d *dto.DepartmentByID, model *models.SysDept) error {
+func (e *Department) Get(ctx context.Context, d *dto.DepartmentByID, model *models.SysDept) error {
 	var err error
 	var data models.SysDept
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		FirstOrInit(model, d.GetID()).
 		Error
 	if err != nil {
@@ -87,9 +88,9 @@ func deptParentPath(tx *gorm.DB, parentID, deptID int) (string, error) {
 }
 
 // Create 创建SysDept对象
-func (e *Department) Create(c *dto.DepartmentCreate) error {
+func (e *Department) Create(ctx context.Context, c *dto.DepartmentCreate) error {
 	var data models.SysDept
-	err := e.DB.Transaction(func(tx *gorm.DB) error {
+	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockDeptTree(tx); err != nil {
 			return err
 		}
@@ -111,8 +112,8 @@ func (e *Department) Create(c *dto.DepartmentCreate) error {
 }
 
 // Update 修改SysDept对象及整棵子树的路径。
-func (e *Department) Update(c *dto.DepartmentUpdate) error {
-	return e.DB.Transaction(func(tx *gorm.DB) error {
+func (e *Department) Update(ctx context.Context, c *dto.DepartmentUpdate) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockDeptTree(tx); err != nil {
 			return err
 		}
@@ -152,11 +153,11 @@ func (e *Department) Update(c *dto.DepartmentUpdate) error {
 }
 
 // Delete 删除SysDept
-func (e *Department) Delete(d *dto.DepartmentDelete) error {
+func (e *Department) Delete(ctx context.Context, d *dto.DepartmentDelete) error {
 	var err error
 	var data models.SysDept
 
-	db := e.DB.Model(&data).Delete(&data, d.GetID())
+	db := e.DB.WithContext(ctx).Model(&data).Delete(&data, d.GetID())
 	if err = db.Error; err != nil {
 		e.Logger.Errorf("Delete error: %s", err)
 		return err
@@ -169,9 +170,9 @@ func (e *Department) Delete(d *dto.DepartmentDelete) error {
 }
 
 // Tree 设置组织数据
-func (e *Department) Tree(c *dto.DepartmentSearch) (m []dto.DepartmentLabel, err error) {
+func (e *Department) Tree(ctx context.Context, c *dto.DepartmentSearch) (m []dto.DepartmentLabel, err error) {
 	var list []models.SysDept
-	err = e.getList(c, &list)
+	err = e.getList(ctx, c, &list)
 
 	m = make([]dto.DepartmentLabel, 0)
 	for i := range list {
@@ -205,9 +206,9 @@ func deptTreeCall(deptList *[]models.SysDept, dept dto.DepartmentLabel) dto.Depa
 }
 
 // List 设置dept页面数据
-func (e *Department) List(c *dto.DepartmentSearch) (m []models.SysDept, err error) {
+func (e *Department) List(ctx context.Context, c *dto.DepartmentSearch) (m []models.SysDept, err error) {
 	var list []models.SysDept
-	err = e.getList(c, &list)
+	err = e.getList(ctx, c, &list)
 	for i := range list {
 		if list[i].ParentID != 0 {
 			continue
@@ -219,10 +220,10 @@ func (e *Department) List(c *dto.DepartmentSearch) (m []models.SysDept, err erro
 }
 
 // IDsForRole performs the get with role id administration operation.
-func (e *Department) IDsForRole(roleID int) ([]int, error) {
+func (e *Department) IDsForRole(ctx context.Context, roleID int) ([]int, error) {
 	deptIDs := make([]int, 0)
 	deptList := make([]dto.DepartmentRef, 0)
-	if err := e.DB.Table("sys_role_dept").
+	if err := e.DB.WithContext(ctx).Table("sys_role_dept").
 		Select("sys_role_dept.dept_id").
 		Joins("LEFT JOIN sys_dept on sys_dept.dept_id=sys_role_dept.dept_id").
 		Where("role_id = ? ", roleID).
@@ -237,9 +238,9 @@ func (e *Department) IDsForRole(roleID int) ([]int, error) {
 }
 
 // Labels sets the department display label.
-func (e *Department) Labels() (m []dto.DepartmentLabel, err error) {
+func (e *Department) Labels(ctx context.Context) (m []dto.DepartmentLabel, err error) {
 	list := make([]models.SysDept, 0)
-	err = e.DB.Find(&list).Error
+	err = e.DB.WithContext(ctx).Find(&list).Error
 	if err != nil {
 		log.NewHelper(log.Default()).Errorf("find dept list error, %s", err.Error())
 		return
@@ -277,11 +278,11 @@ func deptLabelCall(deptList *[]models.SysDept, dept dto.DepartmentLabel) dto.Dep
 }
 
 // GetSysDeptList 获取组织数据
-func (e *Department) getList(c *dto.DepartmentSearch, list *[]models.SysDept) error {
+func (e *Department) getList(ctx context.Context, c *dto.DepartmentSearch, list *[]models.SysDept) error {
 	var err error
 	var data models.SysDept
 
-	err = e.DB.Model(&data).
+	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
 			cDto.MakeCondition(c.GetNeedSearch()),
 		).

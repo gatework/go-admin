@@ -133,7 +133,7 @@ func TestSelfPasswordIgnoresCreatorScope(t *testing.T) {
 	s := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
-	err := s.ChangePassword(u.UserID, "old-password", "new-password", &actions.DataPermission{UserID: u.UserID, DataScope: actions.DataScopeSelf})
+	err := s.ChangePassword(t.Context(), u.UserID, "old-password", "new-password", &actions.DataPermission{UserID: u.UserID, DataScope: actions.DataScopeSelf})
 	if err != nil {
 		t.Fatalf("user created by admin cannot change own password: %v", err)
 	}
