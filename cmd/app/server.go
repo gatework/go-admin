@@ -55,7 +55,7 @@ func genFile() error {
 	if err != nil {
 		return err
 	}
-	apiPath := appPath + "/apis/"
+	apiPath := appPath + "/handler/"
 	err = utils.IsNotExistMkDir(apiPath)
 	if err != nil {
 		return err

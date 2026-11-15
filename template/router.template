@@ -1,75 +1,30 @@
+// Package router mounts this module's routes. Register a route group by
+// appending to routerCheckRole from an init function in this package.
 package router
-
 
 import (
 	"github.com/gin-gonic/gin"
-	_ "github.com/gin-gonic/gin"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
 	log "github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk"
-	// "github.com/gatework/motor-core/sdk/pkg"
-	"github.com/gatework/motor-core/jwtauth"
-	jwt "github.com/gatework/motor-core/jwtauth"
-	common "github.com/gatework/motor/common/middleware"
-	"os"
+
+	"github.com/gatework/motor/common/middleware"
 )
 
-var (
-	routerNoCheckRole = make([]func(*gin.RouterGroup), 0)
-	routerCheckRole   = make([]func(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware), 0)
-)
+// routerCheckRole collects the module's authenticated route registrations.
+var routerCheckRole = make([]func(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware), 0)
 
-// InitRouter 路由初始化
+// InitRouter mounts the module's routes on the host engine.
 func InitRouter() {
-	var r *gin.Engine
-	h := sdk.Runtime.GetEngine()
-	if h == nil {
-		h = gin.New()
-		sdk.Runtime.SetEngine(h)
+	r, ok := sdk.Runtime.Engine().(*gin.Engine)
+	if !ok || r == nil {
+		log.NewHelper(log.Default()).Error("router: Gin engine is required")
+		return
 	}
-	switch h.(type) {
-	case *gin.Engine:
-		r = h.(*gin.Engine)
-	default:
-		log.Fatal("not support other engine")
-		os.Exit(-1)
-	}
-
-	// the jwt middleware
-	authMiddleware, err := common.AuthInit()
-	if err != nil {
-		log.Fatalf("JWT Init Error, %s", err.Error())
-	}
-
-	// 注册业务路由
-	InitBusinessRouter(r, authMiddleware)
-}
-
-func InitBusinessRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *gin.Engine {
-
-	// 无需认证的路由
-	noCheckRoleRouter(r)
-	// 需要认证的路由
-	checkRoleRouter(r, authMiddleware)
-
-	return r
-}
-
-// noCheckRoleRouter 无需认证的路由
-func noCheckRoleRouter(r *gin.Engine) {
-	// 可根据业务需求来设置接口版本
-	v := r.Group("/api/v1")
-
-	for _, f := range routerNoCheckRole {
-		f(v)
-	}
-}
-
-// checkRoleRouter 需要认证的路由
-func checkRoleRouter(r *gin.Engine, authMiddleware *jwtauth.GinJWTMiddleware) {
-	// 可根据业务需求来设置接口版本
-	v := r.Group("/api/v1")
-
-	for _, f := range routerCheckRole {
-		f(v, authMiddleware)
+	authMiddleware := middleware.GetAuthMiddleware()
+	v1 := r.Group("/api/v1")
+	for _, register := range routerCheckRole {
+		register(v1, authMiddleware)
 	}
 }
