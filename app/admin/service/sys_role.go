@@ -69,6 +69,10 @@ func (e *Role) Create(ctx context.Context, c *dto.RoleCreate, cb *casbin.SyncedE
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
+	// A role created without a status is enabled ("2"), whoever creates it.
+	if c.Status == "" {
+		c.Status = "2"
+	}
 	var data models.SysRole
 	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var menus []models.SysMenu

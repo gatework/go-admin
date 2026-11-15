@@ -124,9 +124,6 @@ func (e Role) Create(c *gin.Context) {
 
 	// 设置创建人
 	req.CreateBy = user.ID(c)
-	if req.Status == "" {
-		req.Status = "2"
-	}
 	cb := sdk.Runtime.Casbin(c.Request.Host)
 	err = s.Create(c.Request.Context(), &req, cb)
 	if err != nil {
