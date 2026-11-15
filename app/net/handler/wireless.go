@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -344,15 +345,11 @@ func prepareWireless(e *Wireless, c *gin.Context) (wirelessCall, bool) {
 	return call, true
 }
 
+// respond answers err by its kind. A missing row reads as ScopeErr: whether
+// it does not exist or is out of scope is not the caller's to learn.
 func (e Wireless) respond(err error) {
-	code, msg := 500, "wireless.operation_failed"
-	switch {
-	case errors.Is(err, service.InvalidErr):
-		code, msg = 400, service.InvalidErr.Error()
-	case errors.Is(err, service.ConflictErr):
-		code, msg = 409, service.ConflictErr.Error()
-	case errors.Is(err, service.ScopeErr), errors.Is(err, gorm.ErrRecordNotFound):
-		code, msg = 404, service.ScopeErr.Error()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = fmt.Errorf("%w: %w", service.ScopeErr, err)
 	}
-	e.Error(code, nil, msg)
+	request.Fail(&e.API, err)
 }
