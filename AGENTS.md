@@ -34,4 +34,4 @@ PostgreSQL generation uses the request database and `current_schema()`. Validate
 
 ## Local delivery
 
-Preserve unrelated staged, modified and untracked work. Do not publish commits, versions or remote changes without authorization. Never record real credentials in source, logs or documentation. Use English Conventional Commit subjects; keep structural changes separate from behavior fixes.
+Preserve unrelated staged, modified and untracked work. Do not publish commits, versions or remote changes without authorization. Never record real credentials in source, logs or documentation. Write commit subjects as `type+emoji: 中文描述`, matching the existing history (`feat✨:`, `fix🐛:`, `refactor🎨:`, `chore🔧:`); keep structural changes separate from behavior fixes.
