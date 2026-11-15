@@ -2,14 +2,10 @@ package handler
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/gatework/motor-core/jwtauth/user"
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
@@ -331,12 +327,8 @@ func prepareWireless(e *Wireless, c *gin.Context) (wirelessCall, bool) {
 		c: c,
 	}
 	for key, dst := range map[string]*int{"controllerId": &call.controller, "id": &call.item} {
-		raw := c.Param(key)
-		if raw == "" {
-			continue
-		}
-		v, err := strconv.Atoi(raw)
-		if err != nil || v <= 0 {
+		v, ok := optionalPathID(c, key)
+		if !ok {
 			e.respond(service.InvalidErr)
 			return wirelessCall{}, false
 		}
@@ -347,9 +339,4 @@ func prepareWireless(e *Wireless, c *gin.Context) (wirelessCall, bool) {
 
 // respond answers err by its kind. A missing row reads as ScopeErr: whether
 // it does not exist or is out of scope is not the caller's to learn.
-func (e Wireless) respond(err error) {
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = fmt.Errorf("%w: %w", service.ScopeErr, err)
-	}
-	request.Fail(&e.API, err)
-}
+func (e Wireless) respond(err error) { fail(&e.API, err, service.ScopeErr) }

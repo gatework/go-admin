@@ -1,14 +1,9 @@
 package handler
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
-
 	"github.com/gatework/motor/common/request"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/gatework/motor-core/jwtauth/user"
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
@@ -332,20 +327,14 @@ func prepareFabric(e *Fabric, c *gin.Context) (*service.Fabric, bool) {
 }
 
 // respond answers err by its kind; a missing row is NotFoundErr.
-func (e Fabric) respond(err error) {
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = fmt.Errorf("%w: %w", service.NotFoundErr, err)
-	}
-	request.Fail(&e.API, err)
-}
+func (e Fabric) respond(err error) { fail(&e.API, err, service.NotFoundErr) }
 
 func (e Fabric) id(c *gin.Context, key string) (int, bool) {
-	id, err := strconv.Atoi(c.Param(key))
-	if err != nil || id <= 0 {
+	id, ok := pathID(c, key)
+	if !ok {
 		e.respond(service.InvalidErr)
-		return 0, false
 	}
-	return id, true
+	return id, ok
 }
 
 func (e Fabric) page(c *gin.Context) (*dto.PageReq, bool) {

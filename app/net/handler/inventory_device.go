@@ -3,7 +3,6 @@ package handler
 import (
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gatework/motor/common/account"
@@ -271,10 +270,9 @@ func (e Device) pageRequest(c *gin.Context) (*dto.DevicePageReq, bool) {
 }
 
 func (e Device) id(c *gin.Context) (int, bool) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id, ok := pathID(c, "id")
+	if !ok {
 		e.respond(inventory.InvalidErr)
-		return 0, false
 	}
-	return id, true
+	return id, ok
 }

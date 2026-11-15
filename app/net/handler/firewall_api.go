@@ -3,13 +3,11 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/gatework/motor/common/request"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/snapshot"
@@ -63,12 +61,8 @@ func (e Firewall) Normalize(c *gin.Context) {
 	})
 }
 func id(c *gin.Context, key string) (int, error) {
-	value := c.Param(key)
-	if value == "" {
-		return 0, nil
-	}
-	v, e := strconv.Atoi(value)
-	if e != nil || v <= 0 {
+	v, ok := optionalPathID(c, key)
+	if !ok {
 		return 0, service.InvalidErr
 	}
 	return v, nil
@@ -97,13 +91,10 @@ func permission(c *gin.Context) *actions.DataPermission { return actions.GetPerm
 // adapter answer by kind. Anything else unclassified is logged and reported
 // as an internal error without its detail.
 func (e Firewall) respond(err error) {
-	switch {
-	case errors.Is(err, snapshot.ErrConflict):
+	if errors.Is(err, snapshot.ErrConflict) {
 		err = fmt.Errorf("%w: %w", service.ConflictErr, err)
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		err = fmt.Errorf("%w: %w", service.NotFoundErr, err)
 	}
-	request.Fail(&e.API, err)
+	fail(&e.API, err, service.NotFoundErr)
 }
 
 func (e Firewall) run(c *gin.Context, fn operation) {

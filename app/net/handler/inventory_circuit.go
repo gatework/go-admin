@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gatework/motor/common/request"
 
@@ -302,12 +301,11 @@ func prepareCircuit(e *Circuit, c *gin.Context) (*service.Circuit, bool) {
 func (e Circuit) respond(err error) { request.Fail(&e.API, err) }
 
 func (e Circuit) id(c *gin.Context) (int, bool) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id, ok := pathID(c, "id")
+	if !ok {
 		e.respond(inventory.InvalidErr)
-		return 0, false
 	}
-	return id, true
+	return id, ok
 }
 
 func (e Circuit) pageRequest(c *gin.Context) (*dto.CircuitPageReq, bool) {
