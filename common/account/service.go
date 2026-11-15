@@ -110,10 +110,13 @@ func (s Service) TakeLimit(scope string, limit int, window time.Duration) error 
 	if e := s.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; e != nil {
 		return e
 	}
-	if e := s.DB.Model(&Limit{}).Where("key = ? AND expires_at <= ?", key, now).Updates(map[string]any{"count": 0, "expires_at": row.ExpiresAt}).Error; e != nil {
+	// "key" is reserved in MySQL, so every reference goes through clause.Column,
+	// which the dialect quotes; a bare "key = ?" is a syntax error there.
+	keyColumn, countColumn := clause.Column{Name: "key"}, clause.Column{Name: "count"}
+	if e := s.DB.Model(&Limit{}).Where(clause.Eq{Column: keyColumn, Value: key}).Where(clause.Lte{Column: clause.Column{Name: "expires_at"}, Value: now}).Updates(map[string]any{"count": 0, "expires_at": row.ExpiresAt}).Error; e != nil {
 		return e
 	}
-	result := s.DB.Model(&Limit{}).Where("key = ? AND count < ?", key, limit).UpdateColumn("count", gorm.Expr("count + 1"))
+	result := s.DB.Model(&Limit{}).Where(clause.Eq{Column: keyColumn, Value: key}).Where(clause.Lt{Column: countColumn, Value: limit}).UpdateColumn("count", gorm.Expr("? + 1", countColumn))
 	if result.Error != nil {
 		return result.Error
 	}
