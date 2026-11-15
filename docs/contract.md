@@ -21,3 +21,11 @@ The host owns resources it constructs, including configuration watchers, logger 
 ## Frontend integration
 
 The frontend remains a separate, unchanged repository. Its checks accept explicit backend and core paths supplied by the workspace. Packaged application sources stay outside its generated `src/apps/` directory. Menu component paths, permission identifiers and component names remain business contracts; an internal Go rename is not a reason to change them.
+
+## HTTP contract changes awaiting frontend follow-up
+
+Backend-only changes that alter what a client sees. Each entry names what the frontend must do.
+
+| Change | Endpoint | Frontend follow-up |
+| --- | --- | --- |
+| Configuration keys not marked frontend (`is_frontend <> '1'`) are returned only to roles allowed `GET /api/v1/config`; otherwise the answer is `404`, the same as a missing key. A missing key used to answer `500`. | `GET /api/v1/configKey/:configKey` | The user page reads `sys_user_initPassword` through this route. Non-admin user managers need the configuration read grant, or the page should stop pre-filling the initial password. |

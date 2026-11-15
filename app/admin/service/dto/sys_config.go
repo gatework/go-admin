@@ -99,6 +99,8 @@ func (m *SysConfigByKeyReq) GetNeedSearch() any {
 type GetSysConfigByKEYForServiceResp struct {
 	ConfigKey   string `json:"configKey" comment:""`
 	ConfigValue string `json:"configValue" comment:""`
+	// IsFrontend decides who may read the value; it is not part of the response.
+	IsFrontend string `json:"-"`
 }
 
 // SysConfigGetReq carries validated administration request parameters.

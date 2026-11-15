@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/gatework/motor-core/jwtauth/user"
 	"github.com/gatework/motor-core/sdk/api"
+	"github.com/gatework/motor/common/middleware"
 	"github.com/gatework/motor/common/request"
 
 	"github.com/gatework/motor/app/admin/models"
@@ -316,9 +321,23 @@ func (e Config) GetByKey(c *gin.Context) {
 	}
 
 	err = s.GetWithKey(req, resp)
-	if err != nil {
-		e.Error(500, err, err.Error())
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		e.Error(404, nil, "配置不存在")
 		return
+	}
+	if err != nil {
+		e.Error(500, nil, "查询失败")
+		return
+	}
+	// Any signed-in user may read a frontend key. Every other key (the initial
+	// password among them) needs the permission to read configuration; an
+	// unknown key and a forbidden one answer alike so keys cannot be probed.
+	if resp.IsFrontend != "1" {
+		allowed, err := middleware.EnforceRoleFor(c, "/api/v1/config", http.MethodGet)
+		if err != nil || !allowed {
+			e.Error(404, nil, "配置不存在")
+			return
+		}
 	}
 	e.OK(resp, "查询成功")
 }

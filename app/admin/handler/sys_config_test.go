@@ -131,3 +131,65 @@ func TestConfigDictAPIUpdateFailuresAreStructured(t *testing.T) {
 		})
 	}
 }
+
+// /configKey is open to every signed-in user, so it used to hand any of them
+// any configuration value - the initial password for new accounts included.
+// Only frontend keys are public now; the rest need the configuration read
+// permission, and are otherwise indistinguishable from a missing key.
+func TestConfigByKeyOnlyRevealsFrontendKeysWithoutPermission(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(1)
+	t.Cleanup(func() { pool.Close() })
+	if err := db.AutoMigrate(&models.SysConfig{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []models.SysConfig{
+		{ConfigName: "name", ConfigKey: "sys_app_name", ConfigValue: "motor", IsFrontend: "1"},
+		{ConfigName: "password", ConfigKey: "sys_user_initPassword", ConfigValue: "secret-initial", IsFrontend: "0"},
+	} {
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := func(role string) *gin.Engine {
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("db", db)
+			c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default()))
+			c.Set(jwt.JwtPayloadKey, jwt.MapClaims{"identity": float64(42), "rolekey": role})
+			c.Next()
+		})
+		r.GET("/configKey/:configKey", Config{}.GetByKey)
+		return r
+	}
+	read := func(r *gin.Engine, key string) (int, string) {
+		response := httptest.NewRecorder()
+		r.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/configKey/"+key, nil))
+		var body struct{ Code int }
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode %q: %v", response.Body.String(), err)
+		}
+		return body.Code, response.Body.String()
+	}
+
+	operator := engine("operator")
+	if code, body := read(operator, "sys_app_name"); code != http.StatusOK || !strings.Contains(body, "motor") {
+		t.Fatalf("frontend key hidden from a signed-in user: %s", body)
+	}
+	if code, body := read(operator, "sys_user_initPassword"); code != http.StatusNotFound || strings.Contains(body, "secret-initial") {
+		t.Fatalf("private key revealed without permission: %s", body)
+	}
+	if code, _ := read(operator, "no_such_key"); code != http.StatusNotFound {
+		t.Fatalf("missing key answered %d", code)
+	}
+	if code, body := read(engine("admin"), "sys_user_initPassword"); code != http.StatusOK || !strings.Contains(body, "secret-initial") {
+		t.Fatalf("administrator denied a private key: %s", body)
+	}
+}
