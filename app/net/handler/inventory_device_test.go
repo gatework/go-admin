@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/inventory"
+	inventorysvc "github.com/gatework/motor/app/net/service/inventory"
 )
 
 func apiTestEngine(t *testing.T) (*gin.Engine, *gorm.DB) {
@@ -92,7 +94,7 @@ func TestAPIStatusPaginationCSVAndSafeProviderErrors(t *testing.T) {
 	t.Setenv("NETDISCO_API_KEY", "")
 	t.Setenv("NETDISCO_USERNAME", "")
 	t.Setenv("NETDISCO_PASSWORD", "")
-	engine, _ := apiTestEngine(t)
+	engine, db := apiTestEngine(t)
 	_, body := serve(t, engine, "GET", "/devices/sync-status", "")
 	data := body["data"].(map[string]any)
 	if data["configured"] != false || data["status"] != "idle" {
@@ -118,13 +120,16 @@ func TestAPIStatusPaginationCSVAndSafeProviderErrors(t *testing.T) {
 	defer upstream.Close()
 	t.Setenv("NETDISCO_URL", upstream.URL)
 	t.Setenv("NETDISCO_API_KEY", "fixture-secret")
-	response, body = serve(t, engine, "POST", "/devices/sync", "")
-	if body["code"] != float64(502) || strings.Contains(response.Body.String(), "fixture-secret") || strings.Contains(response.Body.String(), upstream.URL) {
-		t.Fatalf("unsafe error response: %s", response.Body.String())
+	_, body = serve(t, engine, "POST", "/devices/sync", "")
+	if body["code"] != float64(200) || body["data"].(map[string]any)["status"] != "queued" {
+		t.Fatalf("sync was not queued: %+v", body)
 	}
-	_, body = serve(t, engine, "GET", "/devices/sync-status", "")
+	if _, ran, err := (&inventorysvc.Device{DB: db}).RunQueuedSync(context.Background()); !ran || err == nil {
+		t.Fatalf("worker run: ran %v, err %v; want the upstream failure", ran, err)
+	}
+	response, body = serve(t, engine, "GET", "/devices/sync-status", "")
 	data = body["data"].(map[string]any)
-	if data["status"] != "failed" {
-		t.Fatalf("sync failure not persisted: %+v", body)
+	if data["status"] != "failed" || data["message"] != "inventory.netdisco_unavailable" || strings.Contains(response.Body.String(), "fixture-secret") || strings.Contains(response.Body.String(), upstream.URL) {
+		t.Fatalf("sync failure not persisted safely: %s", response.Body.String())
 	}
 }

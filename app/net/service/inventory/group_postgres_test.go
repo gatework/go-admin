@@ -57,7 +57,7 @@ func TestPostgresGroupDeletionAndAssignmentCannotLeaveDanglingMembership(t *test
 	gs := &DeviceGroup{Service: s.Service}
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SW1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	for iteration := 0; iteration < 10; iteration++ {
@@ -107,7 +107,7 @@ func TestPostgresBatchAssignmentCASHasOneCompleteWinner(t *testing.T) {
 	a := groupFixture(t, s, "a", nil)
 	b := groupFixture(t, s, "b", nil)
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SW1"), fact("192.0.2.2", "SW2"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, _ := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -149,7 +149,7 @@ func TestPostgresSyncRechecksModesAfterConcurrentManualSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SZX9-CSW1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, err := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -164,7 +164,7 @@ func TestPostgresSyncRechecksModesAfterConcurrentManualSave(t *testing.T) {
 		return []inventory.SourceFacts{fact("192.0.2.1", "SHA-FW1")}, nil
 	}}
 	finished := make(chan error, 1)
-	go func() { _, err := s.Sync(ctx, 8, fullScope(), false); finished <- err }()
+	go func() { _, err := syncNow(ctx, s, 8, fullScope(), false); finished <- err }()
 	<-fetching
 	request := dto.DeviceUpdateReq{Version: before.Version, Status: "active", GroupSource: "manual", ClassificationSource: "manual", DeviceType: "router", DeviceRole: "other", Owner: "Alice"}
 	saved, saveErr := s.Update(ctx, before.ID, &request, 7, fullScope())

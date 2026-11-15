@@ -13,6 +13,7 @@ import (
 	"github.com/gatework/motor/app/net/service/delivery"
 	"github.com/gatework/motor/app/net/service/fabric"
 	"github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/inventory"
 	"github.com/gatework/motor/app/net/service/wireless"
 )
 
@@ -25,7 +26,7 @@ type Worker struct {
 // Workers builds one worker set per physical tenant database without starting it.
 // Sorted tenant names preserve deterministic ownership of shared firewall stores.
 func Workers(databases map[string]*gorm.DB) []Worker {
-	workers := make([]Worker, 0, len(databases)*5)
+	workers := make([]Worker, 0, len(databases)*6)
 	seen := make(map[*gorm.DB]struct{}, len(databases))
 	for _, tenant := range slices.Sorted(maps.Keys(databases)) {
 		db := databases[tenant]
@@ -41,6 +42,7 @@ func Workers(databases map[string]*gorm.DB) []Worker {
 			Worker{Name: "wireless", Run: wireless.NewWorker(&wireless.Wireless{DB: db, Logger: log}, nil).Run},
 			Worker{Name: "delivery", Run: delivery.NewWorker(&delivery.Workflow{DB: db, Logger: log, Config: delivery.FromEnvironment()}, nil).Run},
 			Worker{Name: "firewall offline", Run: firewall.NewWorker(policy).Run},
+			Worker{Name: "inventory sync", Run: inventory.NewSyncWorker(&inventory.Device{DB: db, Logger: log}).Run},
 			Worker{Name: "firewall collection", Run: firewall.NewCollectionWorker(&firewall.Firewall{DB: db, Logger: log, Root: root}, nil).Run},
 		)
 	}

@@ -4,8 +4,12 @@
 
 - `GET /` 列表，`GET /:id` 详情，`PUT /:id` 人工资料编辑。
 - `GET /options` 有权查看的厂商、型号与分组；`GET /export` 导出当前筛选下全部有权查看的记录。
-- `GET /sync-status` 配置与最近同步状态；`POST /sync` 同步全部来源台账，无请求体。
-- 宿主 HTTP 状态约定为 200；失败业务码在 `code` 中，包括版本冲突 409。前端必须读取该业务码。
+- `GET /sync-status` 配置与最近同步状态；`POST /sync` 将一次全量同步排队，无请求体，立即返回 `status: "queued"` 的同步状态。
+- 失败以真实 HTTP 状态与稳定错误码（`inventory.*`）返回。
+
+## 同步
+
+同步由后台 `SyncWorker` 执行（每个租户库一个，随宿主启动）：`POST /sync` 校验权限与配置后把状态行置为 `queued` 并记录请求人；工作进程以令牌和租期认领（`queued → running`），抓取 Netdisco 后在一个事务内写入全部设备，并记录 `imported`、`updated`、`deviceCount`。同一时刻只允许一次排队或运行中的同步，否则返回 409 `inventory.sync_running`。单次同步上限 5 分钟；租期过期仍为 `running` 的同步在下次查询状态时标记为失败（`inventory.sync_interrupted`）。前端轮询 `GET /sync-status` 获取结果，失败原因写在 `message`（错误码）。
 
 ## 配置
 

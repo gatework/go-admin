@@ -185,8 +185,10 @@ func (e Device) SyncStatus(c *gin.Context) {
 	e.OK(status, "查询成功")
 }
 
-// Sync refreshes facts without modifying manual metadata or deleting absent rows.
-// @Summary 从 Netdisco 同步设备台账
+// Sync queues a Netdisco sync and answers with the queued state; poll
+// sync-status for its outcome. A sync refreshes facts without modifying manual
+// metadata or deleting absent rows.
+// @Summary 排队从 Netdisco 同步设备台账
 // @Tags 设备台账
 // @Produce json
 // @Success 200 {object} response.Response
@@ -204,12 +206,12 @@ func (e Device) Sync(c *gin.Context) {
 		return
 	}
 	admin := account.IsAdmin(user.RoleName(c))
-	result, err := s.Sync(c.Request.Context(), user.ID(c), actions.GetPermissionFromContext(c), admin)
+	status, err := s.RequestSync(c.Request.Context(), user.ID(c), actions.GetPermissionFromContext(c), admin)
 	if err != nil {
 		e.respond(err)
 		return
 	}
-	e.OK(result, "同步完成")
+	e.OK(status, "同步已排队")
 }
 
 // Export downloads every matching row the caller can view, without pagination.

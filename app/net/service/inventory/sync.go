@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gatework/motor/common/worker"
@@ -18,8 +19,12 @@ import (
 	"github.com/gatework/motor/common/errkind"
 )
 
-const syncTimeout = 25 * time.Second
-const syncLease = 45 * time.Second
+// syncTimeout bounds one sync, fetch and write together. It runs in the
+// background, so it is sized for a large Netdisco, not for an HTTP client.
+const syncTimeout = 5 * time.Minute
+
+// syncLease outlives syncTimeout, so a live run never loses its claim.
+const syncLease = syncTimeout + time.Minute
 
 // SyncStatus describes sync status for network operations.
 type SyncStatus struct {
@@ -52,27 +57,54 @@ func (s *Device) SyncStatus(ctx context.Context) (SyncStatus, error) {
 	return result, err
 }
 
-// Sync provides the sync operation within the caller's authorized network scope.
-func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission, admin bool) (SyncResult, error) {
-	result := SyncResult{}
+// RequestSync queues a sync for the inventory sync worker and returns the
+// state with it queued. Only one sync is queued or running at a time.
+func (s *Device) RequestSync(ctx context.Context, actor int, p *actions.DataPermission, admin bool) (SyncStatus, error) {
 	if actor <= 0 {
-		return result, inventory.InvalidErr
+		return SyncStatus{}, inventory.InvalidErr
 	}
 	if config.Current().Settings.Application.EnableDP && !admin && (p == nil || p.DataScope != actions.DataScopeAll) {
-		return result, inventory.SyncScopeErr
+		return SyncStatus{}, inventory.SyncScopeErr
 	}
-	source := s.source()
-	if !source.Configured() {
-		return result, inventory.NotConfiguredErr
+	if !s.source().Configured() {
+		return SyncStatus{}, inventory.NotConfiguredErr
 	}
+	if err := s.ensureState(ctx); err != nil {
+		return SyncStatus{}, err
+	}
+	now := time.Now().UTC()
+	queued := s.DB.WithContext(ctx).Model(&inventory.SyncState{}).
+		Where("id = 1 AND (status NOT IN ? OR (status = ? AND (lease_expires_at <= ? OR lease_expires_at IS NULL)))", []string{"queued", "running"}, "running", now).
+		Updates(map[string]any{"status": "queued", "requested_by": actor, "token": "", "lease_expires_at": nil, "message": ""})
+	if queued.Error != nil {
+		return SyncStatus{}, queued.Error
+	}
+	if queued.RowsAffected != 1 {
+		return SyncStatus{}, inventory.RunningErr
+	}
+	return s.SyncStatus(ctx)
+}
+
+// RunQueuedSync claims a queued sync and runs it: fetch from Netdisco, then
+// write every device in one transaction. ran is false when nothing was queued.
+func (s *Device) RunQueuedSync(ctx context.Context) (result SyncResult, ran bool, err error) {
+	token, actor, err := s.claim(ctx)
+	if err != nil || token == "" {
+		return result, false, err
+	}
+	result, err = s.run(ctx, token, actor)
+	return result, true, err
+}
+
+func (s *Device) run(ctx context.Context, token string, actor int) (SyncResult, error) {
+	result := SyncResult{}
 	ctx, cancel := context.WithTimeout(ctx, syncTimeout)
 	defer cancel()
-	token, err := s.acquire(ctx)
+	facts, err := s.source().Fetch(ctx)
 	if err != nil {
-		return result, err
-	}
-	facts, err := source.Fetch(ctx)
-	if err != nil {
+		if ctx.Err() != nil {
+			err = inventory.TimeoutErr
+		}
 		s.fail(ctx, token, err)
 		return result, err
 	}
@@ -81,7 +113,7 @@ func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission,
 		if err := grouping.Lock(tx); err != nil {
 			return err
 		}
-		// Fence before writing; this update locks the lease row until all facts
+		// Fence before writing; this update locks the state row until all facts
 		// and the successful state commit together.
 		guard := tx.Model(&inventory.SyncState{}).Where("id = 1 AND token = ? AND status = ? AND lease_expires_at > ?", token, "running", syncedAt).Updates(map[string]any{"status": "succeeded", "last_success_at": syncedAt, "finished_at": syncedAt, "device_count": len(facts), "token": "", "lease_expires_at": nil, "message": ""})
 		if guard.Error != nil {
@@ -94,7 +126,10 @@ func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission,
 		if err != nil {
 			return err
 		}
-		return syncDeviceBatches(tx, facts, groups, syncedAt, actor, &result)
+		if err := syncDeviceBatches(tx, facts, groups, syncedAt, actor, &result); err != nil {
+			return err
+		}
+		return tx.Model(&inventory.SyncState{}).Where("id = 1").Updates(map[string]any{"imported": result.Imported, "updated": result.Updated}).Error
 	})
 	if err != nil {
 		if ctx.Err() != nil {
@@ -102,7 +137,7 @@ func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission,
 		}
 		s.fail(ctx, token, err)
 		if kind, _ := errkind.Of(err); kind == errkind.Unknown {
-			err = inventory.PersistenceErr
+			err = fmt.Errorf("%w: %w", inventory.PersistenceErr, err)
 		}
 		return SyncResult{}, err
 	}
@@ -110,24 +145,30 @@ func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission,
 	result.SyncedAt = syncedAt
 	return result, nil
 }
-func (s *Device) acquire(ctx context.Context) (string, error) {
+
+func (s *Device) ensureState(ctx context.Context) error {
 	state := inventory.SyncState{ID: 1, Status: "idle"}
-	if err := s.DB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&state).Error; err != nil {
-		return "", err
-	}
+	return s.DB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&state).Error
+}
+
+// claim moves a queued sync to running under a fresh token and returns the
+// token and the user who asked for it; an empty token means nothing was queued.
+func (s *Device) claim(ctx context.Context) (string, int, error) {
 	now := time.Now().UTC()
 	token := uuid.NewString()
-	acquired := s.DB.WithContext(ctx).Model(&inventory.SyncState{}).Where("id = 1 AND (status <> ? OR lease_expires_at <= ? OR lease_expires_at IS NULL)", "running", now).Updates(map[string]any{"status": "running", "token": token, "lease_expires_at": now.Add(syncLease), "started_at": now, "finished_at": nil, "message": ""})
-	if acquired.Error != nil {
-		return "", acquired.Error
+	claimed := s.DB.WithContext(ctx).Model(&inventory.SyncState{}).Where("id = 1 AND status = ?", "queued").Updates(map[string]any{"status": "running", "token": token, "lease_expires_at": now.Add(syncLease), "started_at": now, "finished_at": nil, "message": "", "imported": 0, "updated": 0})
+	if claimed.Error != nil || claimed.RowsAffected != 1 {
+		return "", 0, claimed.Error
 	}
-	if acquired.RowsAffected != 1 {
-		return "", inventory.RunningErr
+	var state inventory.SyncState
+	if err := s.DB.WithContext(ctx).Select("requested_by").First(&state, 1).Error; err != nil {
+		return "", 0, err
 	}
-	return token, nil
+	return token, state.RequestedBy, nil
 }
+
 func (s *Device) fail(ctx context.Context, token string, cause error) {
-	// A disconnected request must not leave a live run forever. The conditional
+	// A cancelled run must not leave a live claim forever. The conditional
 	// token prevents an expired writer from clearing its successor's lease.
 	cleanup, cancel := worker.Cleanup(ctx, 3*time.Second)
 	defer cancel()
@@ -135,6 +176,7 @@ func (s *Device) fail(ctx context.Context, token string, cause error) {
 	if _, code := errkind.Of(cause); code != "" {
 		message = code
 	}
+
 	err := s.DB.WithContext(cleanup).Model(&inventory.SyncState{}).Where("id = 1 AND token = ? AND status = ?", token, "running").Updates(map[string]any{"status": "failed", "finished_at": time.Now().UTC(), "token": "", "lease_expires_at": nil, "message": message}).Error
 	if err != nil && s.Logger != nil {
 		s.Logger.Error("could not persist network inventory sync failure; lease recovery remains available")

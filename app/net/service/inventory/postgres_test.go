@@ -71,9 +71,9 @@ func TestPostgresLeaseVersionAndTransactionalSnapshot(t *testing.T) {
 		return []inventory.SourceFacts{fact("192.0.2.1", "original")}, nil
 	}}
 	first := make(chan error, 1)
-	go func() { _, err := s.Sync(ctx, 7, fullScope(), false); first <- err }()
+	go func() { _, err := syncNow(ctx, s, 7, fullScope(), false); first <- err }()
 	<-entered
-	if _, err := s.Sync(ctx, 8, fullScope(), false); !errors.Is(err, inventory.RunningErr) {
+	if _, err := syncNow(ctx, s, 8, fullScope(), false); !errors.Is(err, inventory.RunningErr) {
 		t.Errorf("parallel PostgreSQL sync did not conflict: %v", err)
 	}
 	close(release)
@@ -117,7 +117,7 @@ func TestPostgresLeaseVersionAndTransactionalSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "refreshed"), fact("192.0.2.2", "without serial"))
-	result, err := s.Sync(ctx, 9, fullScope(), false)
+	result, err := syncNow(ctx, s, 9, fullScope(), false)
 	if err != nil || result.Imported != 1 || result.Updated != 1 {
 		t.Fatalf("PostgreSQL upsert: %+v %v", result, err)
 	}
@@ -134,7 +134,7 @@ func TestPostgresLeaseVersionAndTransactionalSnapshot(t *testing.T) {
 	}
 	facts[len(facts)-1].Name = "reject"
 	s.Source = sourceWithFacts(facts...)
-	if _, err := s.Sync(ctx, 10, fullScope(), false); !errors.Is(err, inventory.PersistenceErr) {
+	if _, err := syncNow(ctx, s, 10, fullScope(), false); !errors.Is(err, inventory.PersistenceErr) {
 		t.Fatalf("bad batch did not fail: %v", err)
 	}
 	_, count, err := s.Page(ctx, &dto.DevicePageReq{}, fullScope())

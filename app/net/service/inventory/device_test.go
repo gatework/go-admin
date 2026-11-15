@@ -58,7 +58,7 @@ func TestSyncPreservesManualFieldsOwnershipAndAbsentRows(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "before"), fact("192.0.2.2", "absent later"))
-	result, err := s.Sync(ctx, 7, fullScope(), false)
+	result, err := syncNow(ctx, s, 7, fullScope(), false)
 	if err != nil || result.Imported != 2 || result.Updated != 0 {
 		t.Fatalf("first sync: %+v %v", result, err)
 	}
@@ -70,7 +70,7 @@ func TestSyncPreservesManualFieldsOwnershipAndAbsentRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "after"), fact("192.0.2.3", "new without serial"))
-	result, err = s.Sync(ctx, 9, fullScope(), false)
+	result, err = syncNow(ctx, s, 9, fullScope(), false)
 	if err != nil || result.Imported != 1 || result.Updated != 1 || result.Total != 2 {
 		t.Fatalf("second sync: %+v %v", result, err)
 	}
@@ -95,7 +95,7 @@ func TestFailedSyncRollsBackEarlierBatchAndKeepsLastSuccess(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "original"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DB.Exec(`CREATE TRIGGER reject_bad_device BEFORE INSERT ON sys_network_device WHEN NEW.name = 'reject' BEGIN SELECT RAISE(ABORT, 'fixture failure'); END;`).Error; err != nil {
@@ -107,7 +107,7 @@ func TestFailedSyncRollsBackEarlierBatchAndKeepsLastSuccess(t *testing.T) {
 	}
 	facts[len(facts)-1].Name = "reject"
 	s.Source = sourceWithFacts(facts...)
-	if _, err := s.Sync(ctx, 9, fullScope(), false); err == nil {
+	if _, err := syncNow(ctx, s, 9, fullScope(), false); err == nil {
 		t.Fatal("expected persistence failure")
 	}
 	rows, count, err := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -130,9 +130,9 @@ func TestConcurrentSyncConflictsAndExpiredLeaseRecovers(t *testing.T) {
 		return []inventory.SourceFacts{fact("192.0.2.1", "one")}, nil
 	}}
 	result := make(chan error, 1)
-	go func() { _, err := s.Sync(ctx, 7, fullScope(), false); result <- err }()
+	go func() { _, err := syncNow(ctx, s, 7, fullScope(), false); result <- err }()
 	<-entered
-	if _, err := s.Sync(ctx, 7, fullScope(), false); !errors.Is(err, inventory.RunningErr) {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); !errors.Is(err, inventory.RunningErr) {
 		t.Errorf("second sync did not conflict: %v", err)
 	}
 	close(release)
@@ -146,7 +146,7 @@ func TestConcurrentSyncConflictsAndExpiredLeaseRecovers(t *testing.T) {
 		t.Fatalf("stale state not recovered: %+v %v", state, err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.2", "two"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatalf("abandoned lease blocked sync: %v", err)
 	}
 }
@@ -158,7 +158,7 @@ func TestExpiredWriterCannotPublishAfterLeaseIsReplaced(t *testing.T) {
 		s.DB.Model(&inventory.SyncState{}).Where("id = 1").Updates(map[string]any{"token": "new-owner", "status": "running"})
 		return []inventory.SourceFacts{fact("192.0.2.1", "stale")}, nil
 	}}
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err == nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err == nil {
 		t.Fatal("stale writer committed")
 	}
 	var count int64
@@ -183,14 +183,14 @@ func TestDataPermissionFiltersReadsOptionsUpdatesAndExport(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "allowed"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	var first inventory.Device
 	s.DB.First(&first)
 	s.DB.Model(&first).Updates(map[string]any{"vendor": "Visible", "model": "V1", "group_name": "My group"})
 	s.Source = sourceWithFacts(fact("192.0.2.2", "secret"))
-	if _, err := s.Sync(ctx, 8, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 8, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	p := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7}
@@ -214,10 +214,10 @@ func TestDataPermissionFiltersReadsOptionsUpdatesAndExport(t *testing.T) {
 	if err != nil || strings.Contains(string(data), "secret") || !strings.Contains(string(data), "allowed") {
 		t.Fatalf("export escaped scope: %v", err)
 	}
-	if _, err := s.Sync(ctx, 7, p, false); !errors.Is(err, inventory.SyncScopeErr) {
+	if _, err := syncNow(ctx, s, 7, p, false); !errors.Is(err, inventory.SyncScopeErr) {
 		t.Fatalf("restricted caller synced globally: %v", err)
 	}
-	if _, err := s.Sync(ctx, 7, p, true); err != nil {
+	if _, err := syncNow(ctx, s, 7, p, true); err != nil {
 		t.Fatalf("admin bypass rejected: %v", err)
 	}
 	_, count, err = s.Page(ctx, &dto.DevicePageReq{}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 999})
@@ -230,7 +230,7 @@ func TestVersionConflictAndValidationLeaveValuesUnchanged(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "device"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	var row inventory.Device
@@ -268,7 +268,7 @@ func TestExportIncludesAllFilteredRowsAndNeutralizesFormulas(t *testing.T) {
 		facts[i].Vendor = "Vendor"
 	}
 	s.Source = sourceWithFacts(facts...)
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	req := &dto.DevicePageReq{Vendor: "Vendor"}
@@ -308,12 +308,12 @@ func TestUnconfiguredAndCancelledSyncExposeSafeState(t *testing.T) {
 	if err != nil || state.Configured || state.Status != "idle" {
 		t.Fatalf("wrong unconfigured state: %+v %v", state, err)
 	}
-	if _, err := s.Sync(ctx, 7, fullScope(), false); !errors.Is(err, inventory.NotConfiguredErr) {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); !errors.Is(err, inventory.NotConfiguredErr) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	s.Source = inventorySource{configured: true, fetch: func(context.Context) ([]inventory.SourceFacts, error) { cancel(); return nil, inventory.TimeoutErr }}
-	if _, err := s.Sync(ctx, 7, fullScope(), false); !errors.Is(err, inventory.TimeoutErr) {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); !errors.Is(err, inventory.TimeoutErr) {
 		t.Fatal(err)
 	}
 	state, err = s.SyncStatus(context.Background())
@@ -326,7 +326,7 @@ func TestFilterUsesLiteralKeywordsAndExactTags(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	s.Source = sourceWithFacts(fact("192.0.2.1", "branch!%_\\1"), fact("192.0.2.2", "branchXX1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	var row inventory.Device
@@ -361,5 +361,53 @@ func TestMySQLFilterDoesNotEmitInvalidEscapeLiteral(t *testing.T) {
 	}
 	if strings.Contains(query.Statement.SQL.String(), "ESCAPE '\\'") {
 		t.Fatalf("query contains a MySQL-invalid string literal: %s", query.Statement.SQL.String())
+	}
+}
+
+// syncNow queues a sync and runs it as the worker would.
+func syncNow(ctx context.Context, s *Device, actor int, p *actions.DataPermission, admin bool) (SyncResult, error) {
+	if _, err := s.RequestSync(ctx, actor, p, admin); err != nil {
+		return SyncResult{}, err
+	}
+	result, _, err := s.RunQueuedSync(ctx)
+	return result, err
+}
+
+// A sync request only queues: nothing is fetched until the worker ticks, a
+// second request while one is queued is refused, and the rows the worker
+// writes belong to the user who asked.
+func TestRequestedSyncRunsOnTheWorkerAsTheRequester(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	fetched := 0
+	s.Source = inventorySource{configured: true, fetch: func(context.Context) ([]inventory.SourceFacts, error) {
+		fetched++
+		return []inventory.SourceFacts{fact("192.0.2.1", "core")}, nil
+	}}
+	w := NewSyncWorker(s)
+
+	if err := w.Tick(ctx); err != nil || fetched != 0 {
+		t.Fatalf("idle tick fetched %d times, err %v", fetched, err)
+	}
+	state, err := s.RequestSync(ctx, 42, fullScope(), false)
+	if err != nil || state.Status != "queued" || state.RequestedBy != 42 || fetched != 0 {
+		t.Fatalf("request answered %+v %v after %d fetches", state.SyncState, err, fetched)
+	}
+	if _, err := s.RequestSync(ctx, 43, fullScope(), false); !errors.Is(err, inventory.RunningErr) {
+		t.Fatalf("second request while queued: %v", err)
+	}
+	if err := w.Tick(ctx); err != nil || fetched != 1 {
+		t.Fatalf("tick fetched %d times, err %v", fetched, err)
+	}
+	state, err = s.SyncStatus(ctx)
+	if err != nil || state.Status != "succeeded" || state.Imported != 1 || state.Updated != 0 || state.DeviceCount != 1 {
+		t.Fatalf("state after the run: %+v %v", state.SyncState, err)
+	}
+	var row inventory.Device
+	if err := s.DB.First(&row, "ip = ?", "192.0.2.1").Error; err != nil || row.CreateBy != 42 || row.UpdateBy != 42 {
+		t.Fatalf("row %+v %v; want created and updated by the requester", row, err)
+	}
+	if err := w.Tick(ctx); err != nil || fetched != 1 {
+		t.Fatalf("a finished sync ran again: %d fetches, err %v", fetched, err)
 	}
 }

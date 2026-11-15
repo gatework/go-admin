@@ -102,7 +102,7 @@ func TestGroupsRejectCyclesStaleDeletionAndDisabledAssignments(t *testing.T) {
 		t.Fatalf("deleted parent: %v", err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "normal"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, _ := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -121,7 +121,7 @@ func TestGroupsRejectCyclesStaleDeletionAndDisabledAssignments(t *testing.T) {
 		t.Fatalf("unchanged disabled membership rejected: %v", err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.2", "normal"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, _ = s.Page(ctx, &dto.DevicePageReq{Keyword: "192.0.2.2"}, fullScope())
@@ -144,7 +144,7 @@ func TestBatchAssignmentIsAtomicScopedAndVersioned(t *testing.T) {
 	ctx := context.Background()
 	g := groupFixture(t, s, "target", nil)
 	s.Source = sourceWithFacts(fact("192.0.2.1", "a"), fact("192.0.2.2", "b"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, _ := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -184,7 +184,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SZX9-CSW1"), fact("192.0.2.2", "SHA-ASW1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	a, _, _ := s.Page(ctx, &dto.DevicePageReq{Keyword: "192.0.2.1"}, fullScope())
@@ -197,7 +197,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SHA-FW1"), fact("192.0.2.2", "CKG-AP1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := s.Get(ctx, a[0].ID, fullScope())
@@ -222,7 +222,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SHA-SW1"), fact("192.0.2.3", "SHA-SW2"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	kept, _ := s.Get(ctx, after.ID, fullScope())
@@ -238,7 +238,7 @@ func TestSyncPreservesManualModesAndRecalculatesOnlyAutomaticFields(t *testing.T
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.4", "ordinary"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	var recreated int64
@@ -270,7 +270,7 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 		t.Fatal(err)
 	}
 	s.Source = sourceWithFacts(fact("192.0.2.1", "SHA-SW1"))
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	rows, _, err := s.Page(ctx, &dto.DevicePageReq{}, fullScope())
@@ -312,7 +312,7 @@ func TestAutomaticMembershipUsesStableCodeAfterStandardGroupDeletion(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Sync(ctx, 7, fullScope(), false); err != nil {
+	if _, err := syncNow(ctx, s, 7, fullScope(), false); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := s.Get(ctx, rows[0].ID, fullScope())

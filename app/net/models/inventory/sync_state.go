@@ -13,6 +13,9 @@ type SyncState struct {
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 	FinishedAt     *time.Time `json:"finishedAt,omitempty"`
 	DeviceCount    int        `json:"deviceCount" gorm:"not null;default:0"`
+	Imported       int        `json:"imported" gorm:"not null;default:0"`
+	Updated        int        `json:"updated" gorm:"not null;default:0"`
+	RequestedBy    int        `json:"requestedBy" gorm:"not null;default:0"`
 	Message        string     `json:"message,omitempty" gorm:"size:255"`
 }
 
