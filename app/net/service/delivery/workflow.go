@@ -21,6 +21,7 @@ import (
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/delivery"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/database"
 )
 
 // Workflow coordinates authorized delivery changes and their durable state.
@@ -234,7 +235,8 @@ func (s *Workflow) Page(ctx context.Context, r dto.Page, p *actions.DataPermissi
 	}
 	q := s.scoped(ctx, p)
 	if r.Keyword != "" {
-		q = q.Where("title LIKE ? OR request_no LIKE ?", "%"+r.Keyword+"%", "%"+r.Keyword+"%")
+		like, pattern := " LIKE ? "+database.LikeEscape, database.LikeContains(r.Keyword)
+		q = q.Where("title"+like+" OR request_no"+like, pattern, pattern)
 	}
 	if r.Status != "" {
 		q = q.Where("status = ?", r.Status)

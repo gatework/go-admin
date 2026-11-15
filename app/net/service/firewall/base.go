@@ -24,6 +24,7 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/database"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
@@ -202,12 +203,9 @@ func (p *Page) Validate() error {
 func pageQuery(db *gorm.DB, p Page) *gorm.DB {
 	return db.Offset((p.PageIndex - 1) * p.PageSize).Limit(p.PageSize)
 }
-func escapeLike(s string) string {
-	return strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(strings.TrimSpace(s)))
-}
 func keyword(db *gorm.DB, column, value string) *gorm.DB {
 	if value != "" {
-		return db.Where("LOWER("+column+") LIKE ? ESCAPE '!'", "%"+escapeLike(value)+"%")
+		return db.Where("LOWER("+column+") LIKE ? "+database.LikeEscape, database.LikeContains(strings.ToLower(strings.TrimSpace(value))))
 	}
 	return db
 }

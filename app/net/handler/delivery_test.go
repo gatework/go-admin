@@ -233,3 +233,18 @@ func TestAPIAnswersFailuresByKind(t *testing.T) {
 		t.Fatalf("disabled delivery answered %+v", out)
 	}
 }
+
+// A search keyword is matched literally: '%' and '_' are not wildcards.
+func TestAPIOrderSearchMatchesWildcardsLiterally(t *testing.T) {
+	r := deliveryTestEngine(t)
+	body := `{"requestKey":"request-00003","title":"fixture","targets":[{"deviceId":1,"script":"display version"}]}`
+	if out := callDelivery(t, r, "POST", "/orders", body); out["code"] != float64(200) {
+		t.Fatal(out)
+	}
+	for keyword, want := range map[string]float64{"%25": 0, "_": 0, "fix": 1} {
+		out := callDelivery(t, r, "GET", "/orders?keyword="+keyword, "")
+		if got := out["data"].(map[string]any)["count"]; got != want {
+			t.Errorf("keyword %q matched %v orders, want %v", keyword, got, want)
+		}
+	}
+}

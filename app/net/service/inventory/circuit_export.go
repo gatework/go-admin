@@ -10,6 +10,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
+	"github.com/gatework/motor/common/csvsafe"
 )
 
 // Export provides the export operation within the caller's authorized network scope.
@@ -52,7 +53,7 @@ func (s *Circuit) Export(ctx context.Context, r *dto.CircuitPageReq, p *actions.
 		}
 		cells = append(cells, r.CreatedAt.UTC().Format(time.RFC3339), r.UpdatedAt.UTC().Format(time.RFC3339))
 		for i := range cells {
-			cells[i] = csvCell(cells[i])
+			cells[i] = csvsafe.Cell(cells[i])
 		}
 		if err := writer.Write(cells); err != nil {
 			return nil, err

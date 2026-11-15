@@ -14,6 +14,7 @@ import (
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	"github.com/gatework/motor/app/net/service/inventory/provider"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/database"
 )
 
 // CircuitSource is the read-only upstream boundary. No write operation exists
@@ -79,11 +80,11 @@ func (s *Circuit) Get(ctx context.Context, id int, p *actions.DataPermission) (i
 func circuitFilters(r *dto.CircuitPageReq) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if keyword := strings.ToLower(r.Keyword); keyword != "" {
-			pattern := "%" + escapeLike(keyword) + "%"
+			pattern := database.LikeContains(keyword)
 			clauses := []string{}
 			values := []any{}
 			for _, column := range []string{"circuit_no", "name", "contract_no", "provider", "region", "organization"} {
-				clauses = append(clauses, "LOWER("+column+") LIKE ? ESCAPE '!'")
+				clauses = append(clauses, "LOWER("+column+") LIKE ? "+database.LikeEscape)
 				values = append(values, pattern)
 			}
 			db = db.Where("("+strings.Join(clauses, " OR ")+")", values...)

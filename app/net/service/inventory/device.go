@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"gorm.io/gorm"
 
@@ -19,6 +18,8 @@ import (
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	"github.com/gatework/motor/app/net/service/inventory/provider"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/csvsafe"
+	"github.com/gatework/motor/common/database"
 )
 
 // Source describes inventory source for network operations.
@@ -71,20 +72,17 @@ func (s *Device) Get(ctx context.Context, id int, p *actions.DataPermission) (in
 	}
 	return row, err
 }
-func escapeLike(value string) string {
-	return strings.NewReplacer(`!`, `!!`, `%`, `!%`, `_`, `!_`).Replace(value)
-}
 func filters(r *dto.DevicePageReq) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if r.FirewallOnly {
 			db = db.Where("(device_type = ? OR device_role = ?)", "firewall", "firewall")
 		}
 		if keyword := strings.ToLower(strings.TrimSpace(r.Keyword)); keyword != "" {
-			pattern := "%" + escapeLike(keyword) + "%"
+			pattern := database.LikeContains(keyword)
 			clauses := make([]string, 0, 7)
 			values := make([]any, 0, 7)
 			for _, column := range []string{"name", "hostname", "ip", "serial", "vendor", "model", "location"} {
-				clauses = append(clauses, "LOWER("+column+") LIKE ? ESCAPE '!'")
+				clauses = append(clauses, "LOWER("+column+") LIKE ? "+database.LikeEscape)
 				values = append(values, pattern)
 			}
 			db = db.Where("("+strings.Join(clauses, " OR ")+")", values...)
@@ -101,7 +99,7 @@ func filters(r *dto.DevicePageReq) func(*gorm.DB) *gorm.DB {
 		}
 		if tag := strings.TrimSpace(r.Tag); tag != "" {
 			encoded, _ := json.Marshal(tag)
-			db = db.Where("tags LIKE ? ESCAPE '!'", "%"+escapeLike(string(encoded))+"%")
+			db = db.Where("tags LIKE ? "+database.LikeEscape, database.LikeContains(string(encoded)))
 		}
 		return db
 	}
@@ -202,7 +200,7 @@ func (s *Device) Export(ctx context.Context, r *dto.DevicePageReq, p *actions.Da
 	for _, row := range rows {
 		cells := []string{strconv.Itoa(row.ID), row.IP, row.Name, row.Hostname, row.Serial, row.Vendor, row.HardwareModel, row.OS, row.OSVersion, row.Location, row.Contact, row.Description, row.MACAddress, strings.Join(row.SourceTags, "; "), row.Group, row.Status, row.DeviceType, row.DeviceRole, row.Owner, row.ContactEmail, row.ContactPhone, strings.Join(row.Tags, "; "), row.Notes, row.SourceCreatedAt, row.LastDiscoveredAt, row.LastSyncedAt.UTC().Format(time.RFC3339)}
 		for i := range cells {
-			cells[i] = csvCell(cells[i])
+			cells[i] = csvsafe.Cell(cells[i])
 		}
 		if err := writer.Write(cells); err != nil {
 			return nil, err
@@ -216,16 +214,6 @@ func (s *Device) source() Source {
 		return s.Source
 	}
 	return provider.FromEnvironment()
-}
-func csvCell(value string) string {
-	trimmed := strings.TrimLeftFunc(value, unicode.IsSpace)
-	if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
-		return "'" + value
-	}
-	if strings.ContainsAny(value, "\t\r\n") {
-		return "'" + value
-	}
-	return value
 }
 func (s *Device) scoped(ctx context.Context, p *actions.DataPermission) *gorm.DB {
 	if p == nil {

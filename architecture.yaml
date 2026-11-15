@@ -64,6 +64,7 @@ declared:
   - ./common/filestore
   - ./common/auditlog
   - ./common/buildinfo
+  - ./common/csvsafe
   - ./common/health
   - ./common/logincaptcha
   - ./common/middleware

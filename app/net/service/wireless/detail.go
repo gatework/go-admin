@@ -17,6 +17,7 @@ import (
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/app/net/service/inventory"
+	"github.com/gatework/motor/common/database"
 )
 
 // Groups provides the groups operation within the caller's authorized wireless scope.
@@ -32,7 +33,8 @@ func (s *Wireless) Switches(ctx context.Context, r *dto.PageReq, p *actions.Data
 	}
 	q := s.devices(ctx, p).Where("device_type = ? AND status = ?", "switch", "active")
 	if r.Keyword != "" {
-		q = q.Where("LOWER(name) LIKE ? OR ip LIKE ?", "%"+strings.ToLower(r.Keyword)+"%", "%"+r.Keyword+"%")
+		like := " LIKE ? " + database.LikeEscape
+		q = q.Where("LOWER(name)"+like+" OR ip"+like, database.LikeContains(strings.ToLower(r.Keyword)), database.LikeContains(r.Keyword))
 	}
 	var n int64
 	if e := q.Count(&n).Error; e != nil {

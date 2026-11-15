@@ -6,21 +6,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/wireless"
+	"github.com/gatework/motor/common/csvsafe"
 )
-
-func csvSafe(value string) string {
-	trimmed := strings.TrimLeftFunc(value, unicode.IsSpace)
-	if len(trimmed) > 0 && strings.ContainsRune("=+-@", rune(trimmed[0])) {
-		return "'" + value
-	}
-	return value
-}
 
 // ExportManagement provides the export management operation within the caller's authorized wireless scope.
 func (s *Wireless) ExportManagement(ctx context.Context, controller int, p *actions.DataPermission) (string, error) {
@@ -37,7 +29,7 @@ func (s *Wireless) ExportManagement(ctx context.Context, controller int, p *acti
 		return "", err
 	}
 	for _, r := range rows {
-		if err := out.Write([]string{strconv.Itoa(r.ID), strconv.FormatInt(r.Version, 10), csvSafe(r.LocalAlias), csvSafe(r.InstallationLocation), csvSafe(r.Owner), csvSafe(r.Notes)}); err != nil {
+		if err := out.Write([]string{strconv.Itoa(r.ID), strconv.FormatInt(r.Version, 10), csvsafe.Cell(r.LocalAlias), csvsafe.Cell(r.InstallationLocation), csvsafe.Cell(r.Owner), csvsafe.Cell(r.Notes)}); err != nil {
 			return "", err
 		}
 	}
@@ -73,7 +65,7 @@ func (s *Wireless) Export(ctx context.Context, id int, kind string, r *dto.PageR
 			f := row.Fields
 			values := []string{strconv.Itoa(row.ID), strconv.Itoa(row.ControllerID), f.APName, f.RadioID, f.SSID, f.VLAN, f.Band, f.IP, f.MAC, f.Status, row.ObservedAt.Format(time.RFC3339), row.Coverage.State, strconv.FormatBool(row.Missing)}
 			for i := range values {
-				values[i] = csvSafe(values[i])
+				values[i] = csvsafe.Cell(values[i])
 			}
 			if e = w.Write(values); e != nil {
 				return "", e

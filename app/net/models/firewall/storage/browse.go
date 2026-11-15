@@ -11,6 +11,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	models "github.com/gatework/motor/app/net/models/firewall"
+	"github.com/gatework/motor/common/database"
 )
 
 // Filter carries filter state for this module.
@@ -104,8 +105,9 @@ func (s *Store) Objects(ctx context.Context, snapshotID int, kind string, f Filt
 	}
 	db := s.db.WithContext(ctx).Table(tbl).Where("snapshot_id = ?", snapshotID)
 	if f.Keyword != "" {
-		pattern := "%" + strings.ToLower(f.Keyword) + "%"
-		db = db.Where("(LOWER(name) LIKE ? OR LOWER(native_id) LIKE ? OR LOWER(scope) LIKE ?)", pattern, pattern, pattern)
+		pattern := database.LikeContains(strings.ToLower(f.Keyword))
+		like := " LIKE ? " + database.LikeEscape
+		db = db.Where("(LOWER(name)"+like+" OR LOWER(native_id)"+like+" OR LOWER(scope)"+like+")", pattern, pattern, pattern)
 	}
 	if f.State != "" {
 		db = db.Where("state = ?", f.State)
