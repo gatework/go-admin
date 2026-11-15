@@ -71,9 +71,9 @@ func (e User) List(c *gin.Context) {
 // @Summary 获取用户
 // @Description 获取JSON
 // @Tags 用户
-// @Param userId path int true "用户编码"
+// @Param id path int true "用户编码"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/sys-user/{userId} [get]
+// @Router /api/v1/sys-user/{id} [get]
 // @Security Bearer
 func (e User) Get(c *gin.Context) {
 	s := service.User{}
@@ -144,7 +144,7 @@ func (e User) Create(c *gin.Context) {
 // @Product application/json
 // @Param data body dto.UserUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/sys-user/{userId} [put]
+// @Router /api/v1/sys-user [put]
 // @Security Bearer
 func (e User) Update(c *gin.Context) {
 	s := service.User{}
@@ -201,9 +201,9 @@ func (e User) Update(c *gin.Context) {
 // @Summary 删除用户数据
 // @Description 删除数据
 // @Tags 用户
-// @Param userId path int true "userId"
+// @Param data body dto.UserByID true "ids"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/sys-user/{userId} [delete]
+// @Router /api/v1/sys-user [delete]
 // @Security Bearer
 func (e User) Delete(c *gin.Context) {
 	s := service.User{}

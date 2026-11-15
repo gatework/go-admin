@@ -131,7 +131,7 @@ func (e Config) UpdateSettings(c *gin.Context) {
 // @Tags 配置管理
 // @Param configKey path string false "configKey"
 // @Success 200 {object} response.Response{data=dto.SysConfigByKeyReq} "{"code": 200, "data": [...]}"
-// @Router /api/v1/sys-config/{id} [get]
+// @Router /api/v1/configKey/{configKey} [get]
 // @Security Bearer
 func (e Config) GetByKey(c *gin.Context) {
 	var s = new(service.Config)

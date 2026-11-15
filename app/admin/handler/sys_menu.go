@@ -216,7 +216,7 @@ func (e Menu) RoleTree(c *gin.Context) {
 // @Product application/json
 // @Param roleId path int true "roleId"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/menuTreeselect/{roleId} [get]
+// @Router /api/v1/roleMenuTreeselect/{roleId} [get]
 // @Security Bearer
 func (e Menu) Tree(c *gin.Context) {
 	m := service.Menu{}

@@ -215,7 +215,7 @@ func (e Role) Delete(c *gin.Context) {
 // @Product application/json
 // @Param data body dto.RoleStatusUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/role-status/{id} [put]
+// @Router /api/v1/role-status [put]
 // @Security Bearer
 func (e Role) UpdateStatus(c *gin.Context) {
 	s := service.Role{}
@@ -248,7 +248,7 @@ func (e Role) UpdateStatus(c *gin.Context) {
 // @Product application/json
 // @Param data body dto.RoleDataScopeUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
-// @Router /api/v1/role-status/{id} [put]
+// @Router /api/v1/roledatascope [put]
 // @Security Bearer
 func (e Role) UpdateDataScope(c *gin.Context) {
 	s := service.Role{}
