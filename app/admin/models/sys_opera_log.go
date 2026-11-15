@@ -1,14 +1,7 @@
 package models
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"time"
-
-	log "github.com/gatework/motor-core/logger"
-	"github.com/gatework/motor-core/sdk"
-	"github.com/gatework/motor-core/storage"
 
 	"github.com/gatework/motor/common/models"
 )
@@ -53,40 +46,4 @@ func (e *SysOperaLog) Generate() models.ActiveRecord {
 // GetID returns the selected resource identity.
 func (e *SysOperaLog) GetID() any {
 	return e.ID
-}
-
-// SaveOperaLog 从队列中获取操作日志
-func SaveOperaLog(ctx context.Context, message storage.Message) (err error) {
-	//准备db
-	tenant, ok := message.Values[storage.PrefixKey].(string)
-	if !ok {
-		return errors.New("log message has no tenant")
-	}
-	db := sdk.Runtime.DB(tenant)
-	if db == nil {
-		err = errors.New("db not exist")
-		log.NewHelper(log.Default()).Errorf("host[%s]'s %s", tenant, err.Error())
-		return err
-	}
-	payload, ok := message.Values["payload"].(string)
-	if !ok {
-		return errors.New("log message has no payload")
-	}
-	var l SysOperaLog
-	err = json.Unmarshal([]byte(payload), &l)
-	if err != nil {
-		log.NewHelper(log.Default()).Errorf("json Unmarshal error, %s", err.Error())
-		return err
-	}
-	// 超出100个字符返回值截断
-	if r := []rune(l.JSONResult); len(r) > 100 {
-		l.JSONResult = string(r[:100])
-	}
-
-	err = db.WithContext(ctx).Create(&l).Error
-	if err != nil {
-		log.NewHelper(log.Default()).Errorf("db create error, %s", err.Error())
-		return err
-	}
-	return nil
 }

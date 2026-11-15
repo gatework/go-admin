@@ -1,4 +1,4 @@
-package models
+package service
 
 import (
 	"encoding/json"
@@ -11,18 +11,20 @@ import (
 
 	"github.com/gatework/motor-core/sdk"
 	"github.com/gatework/motor-core/storage"
+
+	"github.com/gatework/motor/app/admin/models"
 )
 
-// SaveOperaLog shortens JsonResult before writing it. Cutting at a byte offset
+// StoreOperationLog shortens JSONResult before writing it. Cutting at a byte offset
 // splits a multi-byte character, and PostgreSQL and strict-mode MySQL reject the
 // resulting string, so the row is dropped and the only trace is a log line.
-func TestSaveOperaLogTruncatesOnCharacterBoundary(t *testing.T) {
+func TestStoreOperationLogTruncatesOnCharacterBoundary(t *testing.T) {
 	const tenant = "opera-log-truncate-test"
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := db.AutoMigrate(&SysOperaLog{}); err != nil {
+	if err := db.AutoMigrate(&models.SysOperaLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	previous := sdk.Runtime.DB(tenant)
@@ -38,11 +40,11 @@ func TestSaveOperaLogTruncatesOnCharacterBoundary(t *testing.T) {
 	}
 	msg := storage.Message{Values: map[string]any{"payload": string(payload), storage.PrefixKey: tenant}}
 
-	if err := SaveOperaLog(t.Context(), msg); err != nil {
-		t.Fatalf("SaveOperaLogger: %v", err)
+	if err := StoreOperationLog(t.Context(), msg); err != nil {
+		t.Fatalf("StoreOperationLog: %v", err)
 	}
 
-	var rows []SysOperaLog
+	var rows []models.SysOperaLog
 	if err := db.Find(&rows).Error; err != nil {
 		t.Fatalf("read back: %v", err)
 	}

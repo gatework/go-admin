@@ -18,7 +18,6 @@ import (
 	corestorage "github.com/gatework/motor-core/storage"
 	"github.com/gatework/motor/common/settings"
 
-	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/router"
 	adminservice "github.com/gatework/motor/app/admin/service"
 	"github.com/gatework/motor/app/jobs"
@@ -122,7 +121,7 @@ func subscribeQueue(ctx context.Context, q corestorage.Queue) error {
 		name    string
 		handler corestorage.Handler
 	}{
-		{auditlog.LoginTopic, models.SaveLoginLog}, {auditlog.OperationTopic, models.SaveOperaLog}, {adminservice.APIRegistryTopic, adminservice.SyncAPIs},
+		{auditlog.LoginTopic, adminservice.StoreLoginLog}, {auditlog.OperationTopic, adminservice.StoreOperationLog}, {adminservice.APIRegistryTopic, adminservice.SyncAPIs},
 	} {
 		if err := q.Subscribe(ctx, topic.name, topic.handler); err != nil {
 			return err
