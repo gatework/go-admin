@@ -24,8 +24,6 @@ var (
 	// CircuitBindingErr is a monitoring binding to a host or item that is not
 	// an enabled rate item.
 	CircuitBindingErr = errkind.New(errkind.Invalid, "inventory.circuit_binding_invalid")
-	// CircuitExportLimitErr is an export over 10000 rows.
-	CircuitExportLimitErr = errkind.New(errkind.Invalid, "inventory.circuit_export_limit")
 	// ZabbixNotConfiguredErr is a traffic query while Zabbix is not configured.
 	ZabbixNotConfiguredErr = errkind.New(errkind.Unavailable, "inventory.zabbix_not_configured")
 	// ZabbixUpstreamErr is Zabbix failing to answer a query.

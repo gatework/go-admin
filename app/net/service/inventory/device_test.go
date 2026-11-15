@@ -411,3 +411,24 @@ func TestRequestedSyncRunsOnTheWorkerAsTheRequester(t *testing.T) {
 		t.Fatalf("a finished sync ran again: %d fetches, err %v", fetched, err)
 	}
 }
+
+// An export matching more than MaxExportRows devices is refused, never
+// truncated into a file that looks complete.
+func TestDeviceExportRefusesMoreThanTheCap(t *testing.T) {
+	s := testService(t)
+	defer func(limit int) { maxExportRows = limit }(maxExportRows)
+	maxExportRows = 3
+	rows := make([]inventory.Device, maxExportRows+1)
+	for i := range rows {
+		rows[i] = inventory.Device{IP: fmt.Sprintf("10.0.0.%d", i), SourceTags: []string{}, Status: "active", Tags: []string{}, Version: 1}
+	}
+	if err := s.DB.CreateInBatches(rows, 500).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Export(context.Background(), &dto.DevicePageReq{}, fullScope()); !errors.Is(err, inventory.ExportLimitErr) {
+		t.Fatalf("export of %d devices: %v, want ExportLimitErr", len(rows), err)
+	}
+	if _, err := s.Export(context.Background(), &dto.DevicePageReq{Keyword: "10.0.0.1"}, fullScope()); err != nil {
+		t.Fatalf("a filtered export under the cap failed: %v", err)
+	}
+}

@@ -186,8 +186,11 @@ func (s *Device) Export(ctx context.Context, r *dto.DevicePageReq, p *actions.Da
 	if err != nil {
 		return nil, err
 	}
-	if err := s.scoped(ctx, p).Scopes(filters(r), groupFilter).Order("updated_at DESC, id DESC").Find(&rows).Error; err != nil {
+	if err := s.scoped(ctx, p).Scopes(filters(r), groupFilter).Order("updated_at DESC, id DESC").Limit(maxExportRows + 1).Find(&rows).Error; err != nil {
 		return nil, err
+	}
+	if len(rows) > maxExportRows {
+		return nil, inventory.ExportLimitErr
 	}
 	if err := populateGroupNames(s.DB.WithContext(ctx), rows); err != nil {
 		return nil, err

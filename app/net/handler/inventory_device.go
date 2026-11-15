@@ -214,7 +214,8 @@ func (e Device) Sync(c *gin.Context) {
 	e.OK(status, "同步已排队")
 }
 
-// Export downloads every matching row the caller can view, without pagination.
+// Export downloads every matching row the caller can view, without
+// pagination, up to inventory.MaxExportRows; a larger match is refused.
 // @Summary 导出设备台账 CSV
 // @Tags 设备台账
 // @Produce text/csv

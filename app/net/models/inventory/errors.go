@@ -3,6 +3,10 @@ package inventory
 
 import "github.com/gatework/motor/common/errkind"
 
+// MaxExportRows bounds one CSV export; a filter matching more is refused
+// rather than truncated, so a download is never silently incomplete.
+const MaxExportRows = 10000
+
 // Inventory failures. Each code is safe to persist in the sync state and to
 // show: none wraps an upstream response, URL, credential or database error.
 //
@@ -35,6 +39,8 @@ var (
 	PersistenceErr = errkind.New(errkind.Unknown, "inventory.persistence_failed")
 	// InvalidErr is a request the service refuses as malformed.
 	InvalidErr = errkind.New(errkind.Invalid, "inventory.invalid_input")
+	// ExportLimitErr is a device or circuit export over MaxExportRows rows.
+	ExportLimitErr = errkind.New(errkind.Invalid, "inventory.export_limit")
 	// GroupNotFoundErr is a device group that does not exist.
 	GroupNotFoundErr = errkind.New(errkind.NotFound, "inventory.group_not_found")
 	// GroupNotEmptyErr is a delete of a group that still has children or devices.

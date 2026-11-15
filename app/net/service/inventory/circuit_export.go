@@ -13,17 +13,20 @@ import (
 	"github.com/gatework/motor/common/csvsafe"
 )
 
+// maxExportRows is inventory.MaxExportRows; tests lower it.
+var maxExportRows = inventory.MaxExportRows
+
 // Export provides the export operation within the caller's authorized network scope.
 func (s *Circuit) Export(ctx context.Context, r *dto.CircuitPageReq, p *actions.DataPermission) ([]byte, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 	var rows []inventory.Circuit
-	if err := s.scoped(ctx, p).Scopes(circuitFilters(r)).Order("updated_at DESC, id DESC").Limit(10001).Find(&rows).Error; err != nil {
+	if err := s.scoped(ctx, p).Scopes(circuitFilters(r)).Order("updated_at DESC, id DESC").Limit(maxExportRows + 1).Find(&rows).Error; err != nil {
 		return nil, inventory.PersistenceErr
 	}
-	if len(rows) > 10000 {
-		return nil, inventory.CircuitExportLimitErr
+	if len(rows) > maxExportRows {
+		return nil, inventory.ExportLimitErr
 	}
 	buffer := bytes.NewBufferString("\ufeff")
 	writer := csv.NewWriter(buffer)

@@ -300,7 +300,7 @@ func TestCircuitExportEscapesFormulaAndRejectsMoreThan10000(t *testing.T) {
 	if err = s.DB.Exec(`WITH RECURSIVE nums(n) AS (SELECT 2 UNION ALL SELECT n+1 FROM nums WHERE n <= 10000) INSERT INTO sys_network_circuit(circuit_no,name,provider,category,purpose,status,payer,currency,version,deleted_at) SELECT 'C-'||n,'n','p','other','other','planned','us','CNY',1,0 FROM nums`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Export(ctx, &dto.CircuitPageReq{}, fullScope()); !errors.Is(err, inventory.CircuitExportLimitErr) {
+	if _, err = s.Export(ctx, &dto.CircuitPageReq{}, fullScope()); !errors.Is(err, inventory.ExportLimitErr) {
 		t.Fatalf("oversize export silently truncated: %v", err)
 	}
 }
