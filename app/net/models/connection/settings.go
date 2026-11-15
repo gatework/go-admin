@@ -14,29 +14,19 @@ import (
 
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/errkind"
 )
 
-// InvalidErr identifies invalid failures.
-//
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var InvalidErr = errors.New("connection.invalid_input")
-
-//revive:enable:error-naming
-
-// ConflictErr identifies conflict failures.
-//
-//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var ConflictErr = errors.New("connection.version_conflict")
-
-//revive:enable:error-naming
-
-// NotFoundErr identifies not found failures.
-//
-//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
-var NotFoundErr = errors.New("connection.not_found")
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
+var (
+	// InvalidErr is connection settings that fail validation.
+	InvalidErr = errkind.New(errkind.Invalid, "connection.invalid_input")
+	// ConflictErr is a save against a settings version that has since changed.
+	ConflictErr = errkind.New(errkind.Conflict, "connection.version_conflict")
+	// NotFoundErr is a device that does not exist or is out of the caller's scope.
+	NotFoundErr = errkind.New(errkind.NotFound, "connection.not_found")
+)
 
 //revive:enable:error-naming
 

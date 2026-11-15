@@ -30,26 +30,26 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/gatework/motor/common/errkind"
 )
 
 // Margin is added to every run timeout, so a lease outlives the work it guards.
 const Margin = 5 * time.Minute
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
-//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// BusyErr another piece of work holds the lease. Try again later.
-	// BusyErr identifies busy failures.
-	BusyErr = errors.New("lease.busy")
-	// QuarantinedErr the device may hold an unconfirmed change and takes no new work.
-	// QuarantinedErr identifies quarantined failures.
-	QuarantinedErr = errors.New("lease.quarantined")
-	// LostErr the caller no longer holds this lease: it expired, was quarantined, or was never taken.
-	// LostErr identifies lost failures.
-	LostErr = errors.New("lease.lost")
-	// InvalidErr a device or fabric id that cannot be leased.
-	// InvalidErr identifies invalid failures.
-	InvalidErr = errors.New("lease.invalid")
+	// BusyErr is a device or fabric another piece of work holds. Try again later.
+	BusyErr = errkind.New(errkind.Busy, "lease.busy")
+	// QuarantinedErr is a device that may hold an unconfirmed change and takes
+	// no new work until an operator releases it.
+	QuarantinedErr = errkind.New(errkind.Conflict, "lease.quarantined")
+	// LostErr is a lease the caller no longer holds: it expired, was
+	// quarantined, or was never taken.
+	LostErr = errkind.New(errkind.Conflict, "lease.lost")
+	// InvalidErr is a device or fabric ID that cannot be leased.
+	InvalidErr = errkind.New(errkind.Invalid, "lease.invalid")
 )
 
 //revive:enable:error-naming
