@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -172,5 +173,33 @@ func TestDeletesRefuseToOrphanChildren(t *testing.T) {
 	}
 	if err := menus.Delete(t.Context(), &dto.MenuDelete{IDs: []int{1, 2}}); err != nil {
 		t.Fatalf("whole subtree not deleted: %v", err)
+	}
+}
+
+// A batch of menus is all or nothing: a failure after the first menu was
+// created leaves no menu behind, where separate creates left a partial tree.
+func TestMenuCreateBatchRollsBackOnFailure(t *testing.T) {
+	db := integrityDB(t)
+	menus := &Menu{}
+	menus.DB, menus.Logger = db, logger.NewHelper(logger.Default())
+	err := menus.CreateBatch(t.Context(), func(create func(*dto.MenuCreate) error) error {
+		parent := dto.MenuCreate{Title: "Generated", MenuType: "M"}
+		if err := create(&parent); err != nil {
+			return err
+		}
+		if parent.MenuID == 0 {
+			t.Error("created menu has no ID for its children to use")
+		}
+		return errors.New("template failed")
+	})
+	if err == nil {
+		t.Fatal("failure not reported")
+	}
+	var count int64
+	if err := db.Model(&models.SysMenu{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("%d menus left after a failed batch", count)
 	}
 }

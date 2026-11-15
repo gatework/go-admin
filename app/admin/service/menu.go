@@ -70,25 +70,19 @@ func lockMenuTree(tx *gorm.DB) error {
 
 // Create 创建SysMenu对象
 func (e *Menu) Create(ctx context.Context, c *dto.MenuCreate) error {
-	var data models.SysMenu
-	err := e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return e.CreateBatch(ctx, func(create func(*dto.MenuCreate) error) error { return create(c) })
+}
+
+// CreateBatch creates several menus in one transaction. build calls create for
+// each menu in order; a menu's MenuID is set once create returns, so later
+// menus can name it as their parent. Any failure leaves no menu behind.
+func (e *Menu) CreateBatch(ctx context.Context, build func(create func(*dto.MenuCreate) error) error) error {
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockMenuTree(tx); err != nil {
 			return err
 		}
-		c.Generate(&data)
-		if err := tx.Where("id IN ?", c.APIs).Find(&data.SysAPI).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&data).Error; err != nil {
-			return err
-		}
-		return e.initPaths(tx, &data)
+		return build(func(c *dto.MenuCreate) error { return e.createIn(tx, c) })
 	})
-	if err != nil {
-		return err
-	}
-	c.MenuID = data.MenuID
-	return nil
 }
 
 // Update 修改SysMenu对象
@@ -323,4 +317,20 @@ func isNotButton(m models.SysMenu) bool { return m.MenuType != commonmodels.Butt
 func withMenuChildren(m models.SysMenu, children []models.SysMenu) models.SysMenu {
 	m.Children = children
 	return m
+}
+
+func (e *Menu) createIn(tx *gorm.DB, c *dto.MenuCreate) error {
+	var data models.SysMenu
+	c.Generate(&data)
+	if err := tx.Where("id IN ?", c.APIs).Find(&data.SysAPI).Error; err != nil {
+		return err
+	}
+	if err := tx.Create(&data).Error; err != nil {
+		return err
+	}
+	if err := e.initPaths(tx, &data); err != nil {
+		return err
+	}
+	c.MenuID = data.MenuID
+	return nil
 }

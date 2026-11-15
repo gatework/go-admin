@@ -10,6 +10,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/gatework/motor-core/jwtauth/user"
+
 	"github.com/gatework/motor/app/admin/service"
 	"github.com/gatework/motor/app/admin/service/dto"
 	"github.com/gatework/motor/common/request"
@@ -215,24 +217,28 @@ func (e Generator) CreateMenu(c *gin.Context) {
 	}
 	tab.MLTBName = strings.ReplaceAll(tab.TBName, "_", "-")
 
-	Mmenu := generatedParentMenu(tab)
-	if err := s.Create(c.Request.Context(), &Mmenu); err != nil {
-		e.Error(500, err, "menu creation failed")
-		return
-	}
-
-	Cmenu := generatedChildMenu(tab, Mmenu.MenuID)
-	if err := s.Create(c.Request.Context(), &Cmenu); err != nil {
-		e.Error(500, err, "menu creation failed")
-		return
-	}
-
-	for _, action := range []struct{ title, permission string }{{"分页获取", "query"}, {"创建", "add"}, {"修改", "edit"}, {"删除", "remove"}} {
-		menu := generatedActionMenu(tab, Cmenu.MenuID, action.title, action.permission)
-		if err := s.Create(c.Request.Context(), &menu); err != nil {
-			e.Error(500, err, "menu creation failed")
-			return
+	creator := user.ID(c)
+	err = s.CreateBatch(c.Request.Context(), func(create func(*dto.MenuCreate) error) error {
+		parent := generatedParentMenu(tab, creator)
+		if err := create(&parent); err != nil {
+			return err
 		}
+		page := generatedChildMenu(tab, parent.MenuID, creator)
+		if err := create(&page); err != nil {
+			return err
+		}
+		for _, action := range []struct{ title, permission string }{{"分页获取", "query"}, {"创建", "add"}, {"修改", "edit"}, {"删除", "remove"}} {
+			button := generatedActionMenu(tab, page.MenuID, creator, action.title, action.permission)
+			if err := create(&button); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		e.Logger.Errorf("creating generated menus for table %d: %v", id, err)
+		e.Error(500, nil, "菜单生成失败")
+		return
 	}
 
 	e.OK("", "数据生成成功！")
@@ -354,7 +360,7 @@ func generationTemplateSpecs(routerFile string) []generatorTemplate {
 		{"template/v4/lang-en.go.template", "en语言包模版解析失败", true},
 	}
 }
-func generatedParentMenu(tab tools.SysTables) dto.MenuCreate {
+func generatedParentMenu(tab tools.SysTables, creator int) dto.MenuCreate {
 	return dto.MenuCreate{
 		Title:     tab.TableComment,
 		Icon:      "pass",
@@ -367,9 +373,9 @@ func generatedParentMenu(tab tools.SysTables) dto.MenuCreate {
 		Sort:      0,
 		Visible:   "0",
 		IsFrame:   "0",
-		CreateBy:  1}
+		CreateBy:  creator}
 }
-func generatedChildMenu(tab tools.SysTables, parentID int) dto.MenuCreate {
+func generatedChildMenu(tab tools.SysTables, parentID, creator int) dto.MenuCreate {
 	return dto.MenuCreate{
 		MenuName:   tab.ClassName + "Manage",
 		Title:      tab.TableComment,
@@ -384,11 +390,11 @@ func generatedChildMenu(tab tools.SysTables, parentID int) dto.MenuCreate {
 		Sort:       0,
 		Visible:    "0",
 		IsFrame:    "0",
-		CreateBy:   1,
-		UpdateBy:   1}
+		CreateBy:   creator,
+		UpdateBy:   creator}
 }
-func generatedActionMenu(tab tools.SysTables, parentID int, title, permission string) dto.MenuCreate {
-	return dto.MenuCreate{MenuName: "", Title: title + tab.TableComment, Icon: "", Path: tab.TBName, MenuType: "F", Action: "无", Permission: tab.PackageName + ":" + tab.BusinessName + ":" + permission, ParentID: parentID, NoCache: false, Sort: 0, Visible: "0", IsFrame: "0", CreateBy: 1, UpdateBy: 1}
+func generatedActionMenu(tab tools.SysTables, parentID, creator int, title, permission string) dto.MenuCreate {
+	return dto.MenuCreate{MenuName: "", Title: title + tab.TableComment, Icon: "", Path: tab.TBName, MenuType: "F", Action: "无", Permission: tab.PackageName + ":" + tab.BusinessName + ":" + permission, ParentID: parentID, NoCache: false, Sort: 0, Visible: "0", IsFrame: "0", CreateBy: creator, UpdateBy: creator}
 }
 
 // writeFiles renders every template for tab and writes the files, and
