@@ -52,7 +52,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 func (w *Worker) Run(ctx context.Context) error {
 	return w.loop.Run(ctx, 1, func(ctx context.Context) {
 		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
-			w.s.Logger.Error("wireless worker database operation failed")
+			w.s.Logger.Errorf("wireless worker failed: %v", err)
 		}
 	})
 }

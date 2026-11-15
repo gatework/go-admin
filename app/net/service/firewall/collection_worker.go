@@ -42,7 +42,7 @@ func NewCollectionWorker(s *Firewall, dial CollectionDialer) *CollectionWorker {
 func (w *CollectionWorker) Run(ctx context.Context) error {
 	return w.loop.Run(ctx, CollectionConcurrency, func(ctx context.Context) {
 		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
-			w.s.Logger.Error("firewall collection worker failed")
+			w.s.Logger.Errorf("firewall collection worker failed: %v", err)
 		}
 	})
 }
