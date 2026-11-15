@@ -74,30 +74,7 @@ func (s *SysJobControl) Bind(ctx *gin.Context) error {
 			return err
 		}
 	}
-	if ctx.Request.Method != http.MethodPost && s.JobID <= 0 {
-		return errors.New("jobId must be positive")
-	}
-	if _, ok := s.present["jobname"]; ok || ctx.Request.Method == http.MethodPost {
-		if s.JobName == "" {
-			return errors.New("jobName is required")
-		}
-	}
-	if _, ok := s.present["cronexpression"]; ok || ctx.Request.Method == http.MethodPost {
-		if _, err := jobs.ParseSchedule(s.CronExpression); err != nil {
-			return err
-		}
-	}
-	if _, ok := s.present["jobtype"]; ok || ctx.Request.Method == http.MethodPost {
-		if s.JobType != models.TypeHTTP && s.JobType != models.TypeTask {
-			return errors.New("jobType must be 1 or 2")
-		}
-	}
-	if _, ok := s.present["status"]; ok || ctx.Request.Method == http.MethodPost {
-		if s.Status != models.StatusStopped && s.Status != models.StatusEnabled {
-			return errors.New("status must be 1 or 2")
-		}
-	}
-	return nil
+	return s.validate(ctx.Request.Method == http.MethodPost)
 }
 
 // UnmarshalJSON records supplied fields independently from their zero values.
@@ -143,6 +120,41 @@ func (s *SysJobControl) ToModel() (*models.SysJob, error) {
 		Concurrent:     s.Concurrent,
 		Status:         s.Status,
 	}, nil
+}
+
+// sets reports whether this request sets field: every field on create, only
+// the supplied ones on a partial update.
+func (s *SysJobControl) sets(field string, creating bool) bool {
+	_, ok := s.present[field]
+	return ok || creating
+}
+
+func (s *SysJobControl) validate(creating bool) error {
+	if !creating && s.JobID <= 0 {
+		return errors.New("jobId must be positive")
+	}
+	if s.sets("jobname", creating) && s.JobName == "" {
+		return errors.New("jobName is required")
+	}
+	if s.sets("cronexpression", creating) {
+		if _, err := jobs.ParseSchedule(s.CronExpression); err != nil {
+			return err
+		}
+	}
+	if s.sets("jobtype", creating) && s.JobType != models.TypeHTTP && s.JobType != models.TypeTask {
+		return errors.New("jobType must be 1 or 2")
+	}
+	// The target is checked whenever this request says the job is an HTTP job
+	// and names a target; the scheduler checks every address it dials anyway.
+	if s.sets("invoketarget", creating) && s.JobType == models.TypeHTTP {
+		if err := jobs.CheckHTTPTarget(s.InvokeTarget); err != nil {
+			return err
+		}
+	}
+	if s.sets("status", creating) && s.Status != models.StatusStopped && s.Status != models.StatusEnabled {
+		return errors.New("status must be 1 or 2")
+	}
+	return nil
 }
 
 // SysJobByID carries sys job by id state for this module.

@@ -12,7 +12,6 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/gatework/motor-core/sdk/pkg"
 	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 )
 
@@ -74,7 +73,7 @@ func (h *HTTPJob) Run() {
 	err := runHTTPJob(
 		ctx,
 		h.InvokeTarget,
-		pkg.Get,
+		fetchHTTPJob,
 		func(attempt int) time.Duration { return time.Duration(attempt) * 5 * time.Second },
 	)
 	if err != nil {
