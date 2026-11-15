@@ -137,7 +137,7 @@ func (w *Watcher) commit() {
 	next, extra := w.staged, w.extra
 	w.staged = nil
 	w.mu.Unlock()
-	hostconfig.ExtConfig = extra
+	hostconfig.SetExt(extra)
 	owners.Lock()
 	previous := owners.logger
 	owners.logger = next

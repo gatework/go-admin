@@ -17,7 +17,7 @@ import (
 // The threshold comes from extend.ratelimit.inboundqps; see config.RateLimit
 // for the values it accepts.
 func Sentinel() gin.HandlerFunc {
-	qps := config.ExtConfig.RateLimit.Threshold()
+	qps := config.Ext().RateLimit.Threshold()
 	if qps <= 0 {
 		log.NewHelper(log.Default()).Info("rate limit disabled by extend.ratelimit.inboundqps")
 		return func(c *gin.Context) { c.Next() }

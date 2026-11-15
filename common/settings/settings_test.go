@@ -25,7 +25,7 @@ func (l *trackedLogger) Close() error { l.closed.Add(1); return nil }
 
 func preserveGlobals(t *testing.T) {
 	t.Helper()
-	previous, extra, snapshot := logger.Default(), hostconfig.ExtConfig, config.Current()
+	previous, extra, snapshot := logger.Default(), hostconfig.Ext(), config.Current()
 	owners.Lock()
 	owned := owners.logger
 	owners.logger = nil
@@ -38,7 +38,7 @@ func preserveGlobals(t *testing.T) {
 		owners.logger = owned
 		owners.Unlock()
 		logger.SetDefault(previous)
-		hostconfig.ExtConfig = extra
+		hostconfig.SetExt(extra)
 		data, err := json.Marshal(snapshot)
 		if err != nil {
 			t.Fatal(err)
@@ -63,7 +63,7 @@ func TestRejectedPreparationKeepsPublishedStateAndClosesCandidate(t *testing.T) 
 			owners.Lock()
 			owners.logger = current
 			owners.Unlock()
-			hostconfig.ExtConfig.AMap.Key = "current"
+			hostconfig.SetExt(hostconfig.Extend{AMap: hostconfig.AMap{Key: "current"}})
 			before := config.Current().Settings.Application.Name
 			app := runtime.New()
 			app.SetLogger(current)
@@ -84,7 +84,7 @@ func TestRejectedPreparationKeepsPublishedStateAndClosesCandidate(t *testing.T) 
 			if !errors.Is(err, expected) {
 				t.Fatalf("failure lost: %v", err)
 			}
-			if logger.Default() != current || app.Logger() != current || hostconfig.ExtConfig.AMap.Key != "current" {
+			if logger.Default() != current || app.Logger() != current || hostconfig.Ext().AMap.Key != "current" {
 				t.Fatal("rejected settings published host resources")
 			}
 			if config.Current().Settings.Application.Name != before {
@@ -128,7 +128,7 @@ func TestWatcherCloseDiscardsCancelledReloadAndKeepsCommittedRoot(t *testing.T) 
 	}
 	defer w.Close()
 	committed := <-opened
-	if logger.Default() != committed || app.Logger() != committed || hostconfig.ExtConfig.AMap.Key != "committed" {
+	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().AMap.Key != "committed" {
 		t.Fatal("accepted settings did not commit host resources")
 	}
 	if err := src.Write(&source.ChangeSet{Format: "json", Data: []byte(`{"settings":{"application":{"name":"cancelled reload"},"extend":{"amap":{"key":"cancelled"}}}}`)}); err != nil {
@@ -149,7 +149,7 @@ func TestWatcherCloseDiscardsCancelledReloadAndKeepsCommittedRoot(t *testing.T) 
 	if staged.closed.Load() != 1 || committed.closed.Load() != 0 {
 		t.Fatalf("wrong root ownership after close: staged=%d committed=%d", staged.closed.Load(), committed.closed.Load())
 	}
-	if logger.Default() != committed || app.Logger() != committed || hostconfig.ExtConfig.AMap.Key != "committed" || config.Current().Settings.Application.Name != "committed" {
+	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().AMap.Key != "committed" || config.Current().Settings.Application.Name != "committed" {
 		t.Fatal("cancelled reload replaced committed state")
 	}
 	if err := CloseLogger(); err != nil {

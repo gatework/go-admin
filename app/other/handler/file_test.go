@@ -29,9 +29,11 @@ import (
 func uploadRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	previous := config.ExtConfig.FileStore
-	config.ExtConfig.FileStore = config.FileStore{}
-	t.Cleanup(func() { config.ExtConfig.FileStore = previous })
+	previous := config.Ext()
+	cleared := previous
+	cleared.FileStore = config.FileStore{}
+	config.SetExt(cleared)
+	t.Cleanup(func() { config.SetExt(previous) })
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(gin.Recovery(), func(c *gin.Context) { c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default())) })
@@ -287,9 +289,11 @@ func TestCanceledCloudUploadRemovesLocalFiles(t *testing.T) {
 	}))
 	defer provider.Close()
 	defer close(release)
-	config.ExtConfig.FileStore.AliYun = config.ObjectStore{
+	configured := config.Ext()
+	configured.FileStore.AliYun = config.ObjectStore{
 		Endpoint: provider.URL, AccessKeyID: "test-id", AccessKeySecret: "test-secret", BucketName: "test-bucket",
 	}
+	config.SetExt(configured)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	req := formUpload(url.Values{"type": {"3"}, "file": {pngDataURL()}, "source": {"2"}}).WithContext(ctx)

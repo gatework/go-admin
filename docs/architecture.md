@@ -47,7 +47,7 @@ type JobExec interface {
 ## 配置扩展
 
 业务自定义配置写在 `config/extend.go` 中的结构体，对应 `settings.yml` 的 `extend:`
-节点，代码中通过 `config.ExtConfig.Xxx` 访问。
+节点，代码中通过 `config.Ext().Xxx` 访问（返回一份快照，热重载时原子替换）。
 
 配置值支持环境变量占位：在 yml 中写 `${ENV_NAME}`，由 `motor-core` 的
 `config/reader/preprocessor.go` 在加载时替换。敏感信息可借此避免写入文件。

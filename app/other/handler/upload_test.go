@@ -8,9 +8,11 @@ import (
 )
 
 func TestThirdUploadReportsAnUnconfiguredStore(t *testing.T) {
-	previous := config.ExtConfig.FileStore
-	config.ExtConfig.FileStore = config.FileStore{}
-	t.Cleanup(func() { config.ExtConfig.FileStore = previous })
+	previous := config.Ext()
+	cleared := previous
+	cleared.FileStore = config.FileStore{}
+	config.SetExt(cleared)
+	t.Cleanup(func() { config.SetExt(previous) })
 
 	for source, want := range map[string]string{"2": "AliYunOSS", "3": "QiNiuKodo"} {
 		err := thirdUpload(t.Context(), source, "x.png", "/tmp/x.png")

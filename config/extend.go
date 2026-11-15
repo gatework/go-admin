@@ -3,10 +3,27 @@ package config
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
-// ExtConfig holds the configured extconfig value.
-var ExtConfig Extend
+// current is the committed host extension configuration. The settings watcher
+// replaces it on reload while requests read it, so it is published as a whole
+// value through an atomic pointer instead of a bare package variable.
+var current atomic.Pointer[Extend]
+
+// Ext returns the committed extension configuration. Before the first load it
+// is the zero value. Callers get a copy: read a consistent snapshot once per
+// operation instead of calling Ext for each field.
+func Ext() Extend {
+	if committed := current.Load(); committed != nil {
+		return *committed
+	}
+	return Extend{}
+}
+
+// SetExt publishes a new extension configuration. Only the settings watcher
+// commits one in production.
+func SetExt(next Extend) { current.Store(&next) }
 
 // Extend 扩展配置
 //
@@ -14,7 +31,7 @@ var ExtConfig Extend
 //	  demo:
 //	    name: demo-name
 //
-// 使用方法： config.ExtConfig......即可！！
+// 使用方法： config.Ext().......即可！！
 type Extend struct {
 	AMap      AMap // 这里配置对应配置文件的结构即可
 	FileStore FileStore

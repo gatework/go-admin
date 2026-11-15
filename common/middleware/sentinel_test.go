@@ -36,9 +36,9 @@ func get(t *testing.T, r *gin.Engine) *httptest.ResponseRecorder {
 // tests - counted it as served.
 func TestSentinelRejectsWithTooManyRequests(t *testing.T) {
 	one := 1.0
-	config.ExtConfig.RateLimit = config.RateLimit{InboundQPS: &one}
+	config.SetExt(config.Extend{RateLimit: config.RateLimit{InboundQPS: &one}})
 	t.Cleanup(func() {
-		config.ExtConfig.RateLimit = config.RateLimit{}
+		config.SetExt(config.Extend{})
 		_ = system.ClearRules()
 	})
 
@@ -88,9 +88,9 @@ func TestSentinelDisabledByZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	zero := 0.0
-	config.ExtConfig.RateLimit = config.RateLimit{InboundQPS: &zero}
+	config.SetExt(config.Extend{RateLimit: config.RateLimit{InboundQPS: &zero}})
 	t.Cleanup(func() {
-		config.ExtConfig.RateLimit = config.RateLimit{}
+		config.SetExt(config.Extend{})
 		_ = system.ClearRules()
 	})
 

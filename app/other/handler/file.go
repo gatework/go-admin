@@ -136,11 +136,11 @@ func (File) UploadFile(c *gin.Context) {
 func validateUploadSource(source string) error {
 	switch source {
 	case "2":
-		if !config.ExtConfig.FileStore.AliYun.Configured() {
+		if !config.Ext().FileStore.AliYun.Configured() {
 			return errors.New("AliYunOSS file store is not configured")
 		}
 	case "3":
-		if !config.ExtConfig.FileStore.QiNiu.Configured() {
+		if !config.Ext().FileStore.QiNiu.Configured() {
 			return errors.New("QiNiuKodo file store is not configured")
 		}
 	}
@@ -194,9 +194,9 @@ func uploadContentType(filename string) (string, error) {
 func thirdUpload(ctx context.Context, source, name, path string) error {
 	switch source {
 	case "2":
-		return upload(ctx, filestore.Aliyun, config.ExtConfig.FileStore.AliYun, "img/"+name, path)
+		return upload(ctx, filestore.Aliyun, config.Ext().FileStore.AliYun, "img/"+name, path)
 	case "3":
-		return upload(ctx, filestore.Qiniu, config.ExtConfig.FileStore.QiNiu, "img/"+name, path)
+		return upload(ctx, filestore.Qiniu, config.Ext().FileStore.QiNiu, "img/"+name, path)
 	}
 	return nil
 }

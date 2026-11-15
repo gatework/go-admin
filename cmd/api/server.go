@@ -161,7 +161,7 @@ func run() error {
 	// Refused rather than corrected, and refused before anything is built: a
 	// budget that cannot be spent as written is a configuration error, and the
 	// moment to say so is while nothing depends on this process yet.
-	seconds, err := ext.ExtConfig.Shutdown.Budget()
+	seconds, err := ext.Ext().Shutdown.Budget()
 	if err != nil {
 		return err
 	}
