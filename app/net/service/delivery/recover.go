@@ -11,14 +11,21 @@ import (
 	"github.com/gatework/motor/app/net/models/lease"
 )
 
+// recoverBatch bounds the expired targets one recovery pass settles.
+const recoverBatch = 100
+
 // Recover reconciles expired work without assuming unconfirmed device outcomes succeeded.
 func (w *Worker) Recover(ctx context.Context) error {
 	// The sweep quarantines this module's expired leases along with every other module's.
 	if e := lease.Sweep(w.s.db(ctx)); e != nil {
 		return e
 	}
+	// Only what recovery needs, never the script or output, and a bounded
+	// batch: recovery runs every tick, so a backlog drains over several.
 	var targets []models.Target
-	if e := w.s.db(ctx).Where("status = ? AND claim_until < ? AND order_id IN (SELECT id FROM sys_delivery_order WHERE kind <> ?)", "running", time.Now().UTC(), "fabric").Find(&targets).Error; e != nil {
+	if e := w.s.db(ctx).Select("id", "order_id", "device_id", "claim_token").
+		Where("status = ? AND claim_until < ? AND order_id IN (SELECT id FROM sys_delivery_order WHERE kind <> ?)", "running", time.Now().UTC(), "fabric").
+		Order("id").Limit(recoverBatch).Find(&targets).Error; e != nil {
 		return e
 	}
 	for _, t := range targets {

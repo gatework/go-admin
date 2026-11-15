@@ -446,3 +446,40 @@ func TestCancellingAnOrderBeforeItRunsRecordsItsResult(t *testing.T) {
 		t.Fatalf("finish audits %+v; want one with result cancelled", finish)
 	}
 }
+
+// Recovery settles a bounded batch per pass, and a larger backlog drains over
+// the following passes.
+func TestRecoveryDrainsABacklogInBatches(t *testing.T) {
+	s := fixture(t)
+	ctx := context.Background()
+	o := queued(t, s)
+	var first models.Target
+	if e := s.DB.Where("order_id = ?", o.ID).First(&first).Error; e != nil {
+		t.Fatal(e)
+	}
+	past := time.Now().UTC().Add(-time.Hour)
+	rows := make([]models.Target, recoverBatch+1)
+	for i := range rows {
+		rows[i] = first
+		rows[i].ID = 0
+		rows[i].Status, rows[i].ClaimToken, rows[i].ClaimUntil = "running", "lost", &past
+	}
+	if e := s.DB.Where("id = ?", first.ID).Delete(&models.Target{}).Error; e != nil {
+		t.Fatal(e)
+	}
+	if e := s.DB.CreateInBatches(rows, 50).Error; e != nil {
+		t.Fatal(e)
+	}
+	w := NewWorker(s, func(models.Target) (Session, error) { return &fakeSession{}, nil })
+	running := func() int64 {
+		var n int64
+		s.DB.Model(&models.Target{}).Where("status = ?", "running").Count(&n)
+		return n
+	}
+	if e := w.Recover(ctx); e != nil || running() != 1 {
+		t.Fatalf("after one pass: %d still running, err %v", running(), e)
+	}
+	if e := w.Recover(ctx); e != nil || running() != 0 {
+		t.Fatalf("after two passes: %d still running, err %v", running(), e)
+	}
+}
