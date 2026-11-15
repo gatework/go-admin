@@ -205,13 +205,21 @@ func (e *SysTables) Delete(db *gorm.DB) (success bool, err error) {
 	return
 }
 
-// BatchDelete stores batch delete data in the database.
-func (e *SysTables) BatchDelete(tx *gorm.DB, id []int) (Result bool, err error) {
-	if err = tx.Unscoped().Table(e.TableName()).Where(" table_id in (?)", id).Delete(&SysColumns{}).Error; err != nil {
-		return
+// BatchDelete hard-deletes generator tables together with their column
+// definitions in one transaction. Hard, because a soft-deleted row would keep
+// its business name looking taken; together, because columns have no meaning
+// without their table and were previously left behind.
+func (e *SysTables) BatchDelete(db *gorm.DB, ids []int) (bool, error) {
+	if len(ids) == 0 {
+		return true, nil
 	}
-	Result = true
-	return
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Where("table_id IN ?", ids).Delete(&SysColumns{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Where("table_id IN ?", ids).Delete(&SysTables{}).Error
+	})
+	return err == nil, err
 }
 
 func (e *SysTables) updateWithColumns(tx *gorm.DB) (err error) {
