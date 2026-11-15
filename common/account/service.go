@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"net"
 	"net/mail"
 	"os"
 	"regexp"
@@ -127,15 +126,6 @@ func (s Service) TakeLimit(scope string, limit int, window time.Duration) error 
 }
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}$`)
-
-// PeerIP ignores forwarded headers unless a deployment configures a separate trusted edge limiter.
-func PeerIP(remote string) string {
-	host, _, e := net.SplitHostPort(remote)
-	if e != nil {
-		return remote
-	}
-	return host
-}
 
 func (s Service) now() time.Time {
 	if s.Now != nil {

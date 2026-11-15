@@ -70,6 +70,11 @@ settings:
     # 会被负载均衡、监控和压测统计成成功）。
     rateLimit:
       inboundQPS: 200
+    # trustedProxies: 反向代理地址或网段。只有来自这些地址的 X-Forwarded-For
+    # 才被采信，用于登录日志、操作日志与登录限流的客户端地址；留空则一律取
+    # 连接对端地址。部署在 nginx 等代理之后时必须配置，否则所有用户共用一个
+    # 限流桶。
+    # trustedProxies: [10.0.0.0/8]
     # cors: 允许跨域调用接口的前端源。界面与接口同源部署时删掉这一节。
     cors:
       origins:

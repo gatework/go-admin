@@ -11,7 +11,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/gatework/motor/common"
 	"github.com/gatework/motor/common/account"
 
 	"github.com/gin-gonic/gin"
@@ -118,7 +117,7 @@ func Authenticator(c *gin.Context) (any, error) {
 		return nil, jwt.ErrMissingLoginValues
 	}
 	security := account.New(db.WithContext(c.Request.Context()))
-	if err = security.TakeLimit("login:"+account.PeerIP(c.Request.RemoteAddr), 20, 5*time.Minute); err != nil {
+	if err = security.TakeLimit("login:"+c.ClientIP(), 20, 5*time.Minute); err != nil {
 		status = "1"
 		msg = "登录频率超限"
 		return nil, jwt.ErrFailedAuthentication
@@ -159,8 +158,8 @@ func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
 	l := make(map[string]any)
 
 	ua := user_agent.New(c.Request.UserAgent())
-	l["ipaddr"] = common.GetClientIP(c)
-	l["loginLocation"] = "" // pkg.GetLocation(common.GetClientIP(c),gaConfig.ExtConfig.AMap.Key)
+	l["ipaddr"] = c.ClientIP()
+	l["loginLocation"] = ""
 	l["loginTime"] = pkg.GetCurrentTime()
 	l["status"] = status
 	l["remark"] = c.Request.UserAgent()

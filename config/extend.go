@@ -39,6 +39,13 @@ type Extend struct {
 	Shutdown  Shutdown
 	Metrics   Metrics
 	CORS      CORS
+	// TrustedProxies lists the addresses or CIDRs of reverse proxies whose
+	// X-Forwarded-For and X-Real-IP headers are believed. Empty trusts none:
+	// the client address is the connection's. Read at start-up.
+	//
+	//	extend:
+	//	  trustedProxies: [10.0.0.0/8]
+	TrustedProxies []string
 }
 
 // CORS 跨域白名单。界面与接口同源部署时留空即可。

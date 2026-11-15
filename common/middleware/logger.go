@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatework/motor/common"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/gatework/motor-core/jwtauth/user"
@@ -76,7 +74,7 @@ func AccessLog() gin.HandlerFunc {
 		// 状态码
 		statusCode := c.Writer.Status()
 		// 请求IP
-		clientIP := common.GetClientIP(c)
+		clientIP := c.ClientIP()
 		// 执行时间
 		latencyTime := endTime.Sub(startTime)
 		// 日志格式

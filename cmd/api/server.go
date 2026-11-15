@@ -610,6 +610,12 @@ func initRouter() error {
 	if !ok {
 		return fmt.Errorf("host engine is %T, not a gin engine", h)
 	}
+	// Client addresses feed audit logs and the login rate limit. gin trusts
+	// every proxy by default, which lets any client name its own address in
+	// X-Forwarded-For; only the configured proxies are believed.
+	if err := r.SetTrustedProxies(ext.Ext().TrustedProxies); err != nil {
+		return fmt.Errorf("extend.trustedProxies: %w", err)
+	}
 	// First, so that a panic anywhere below still produces a logged 500.
 	r.Use(common.Recover)
 	// Second, so that every error envelope written below - by Recover's

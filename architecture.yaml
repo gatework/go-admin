@@ -55,7 +55,6 @@ declared:
   - ./cmd/migrate/migration/version
   - ./cmd/migrate/migration/version-local
   - ./cmd/version
-  - ./common
   - ./common/account
   - ./common/actions
   - ./common/database

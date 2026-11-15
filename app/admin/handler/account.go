@@ -73,7 +73,7 @@ func accountAction(operation string, admin bool) gin.HandlerFunc {
 				return
 			}
 		}
-		result, err := s.Execute(c.Request.Context(), operation, user.ID(c), account.PeerIP(c.Request.RemoteAddr), req)
+		result, err := s.Execute(c.Request.Context(), operation, user.ID(c), c.ClientIP(), req)
 		if err != nil {
 			code := 400
 			switch {
