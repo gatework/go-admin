@@ -22,7 +22,7 @@ func mountResourceRoutes(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *g
 	return r
 }
 
-// 无需认证的路由示例
+// mountPublicRoutes mounts routes that need no authentication.
 func mountPublicRoutes(r *gin.Engine) {
 	// 可根据业务需求来设置接口版本
 	v1 := r.Group("/api/v1")
@@ -31,7 +31,7 @@ func mountPublicRoutes(r *gin.Engine) {
 	}
 }
 
-// 需要认证的路由示例
+// mountAuthenticatedRoutes mounts routes behind authentication and route permission.
 func mountAuthenticatedRoutes(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) {
 	// 可根据业务需求来设置接口版本
 	v1 := r.Group("/api/v1")

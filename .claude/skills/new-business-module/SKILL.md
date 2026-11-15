@@ -14,8 +14,11 @@ description: Scaffold a new single-table CRUD business module end to end — mig
 ## 何时不适用
 
 业务超出单表 CRUD（跨表事务、外部服务调用、复杂校验）时，不要用这个 skill 硬套——
-改成手写 Handler + Service，参照 `app/admin/handler/sys_post.go` 及其 Service，遵守
-`AGENTS.md` 的分层约束（Api 不碰 Orm，Service 不碰 `gin.Context`，一律用 `e.Orm`）。
+改成手写 Handler + Service，参照 `app/admin/handler/dictionary.go` 与
+`app/admin/service/dictionary.go`（唯一性校验、事务内级联改名、删除前检查依赖），遵守
+`AGENTS.md` 的分层约束（Handler 只绑定与响应，Service 不碰 `gin.Context`，以
+`ctx context.Context` 为首参并使用 `e.DB.WithContext(ctx)`）。
+不受数据权限约束的系统级数据，在路由上加 `actions.Unscoped`（见 `app/admin/router/post.go`）。
 
 ## 步骤
 
