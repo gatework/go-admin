@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gatework/motor-core/jwtauth/user"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -211,12 +213,22 @@ func (e Table) Create(c *gin.Context) {
 		}
 		tables = append(tables, data)
 	}
-	for i := range tables {
-		if _, err = tables[i].Create(db); err != nil {
-			log.Errorf("Create error, %s", err.Error())
-			e.Error(500, err, "")
-			return
+	// One transaction for the whole list: a failure on a later table used to
+	// leave the earlier ones imported.
+	creator := user.ID(c)
+	err = db.Transaction(func(tx *gorm.DB) error {
+		for i := range tables {
+			tables[i].CreateBy = creator
+			if _, err := tables[i].Create(tx); err != nil {
+				return fmt.Errorf("table %s: %w", tables[i].TBName, err)
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		log.Errorf("importing tables: %v", err)
+		e.Error(500, nil, "导入失败")
+		return
 	}
 	e.OK(nil, "添加成功")
 

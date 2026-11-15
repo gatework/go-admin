@@ -146,7 +146,6 @@ func (e *SysTables) GetTree(tx *gorm.DB) ([]SysTables, error) {
 // fewer columns than the table has.
 func (e *SysTables) Create(tx *gorm.DB) (SysTables, error) {
 	var doc SysTables
-	e.CreateBy = 0
 	err := tx.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Table("sys_tables").Create(&e).Error; err != nil {
 			return err
