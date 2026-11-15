@@ -2,6 +2,9 @@ package router
 
 import (
 	"github.com/gatework/motor/app/admin/handler"
+	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -17,13 +20,14 @@ func init() {
 // 需认证的路由代码
 func registerSysConfigRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	h := handler.Config{}
-	r := v1.Group("/config").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
+	// Configuration is system-wide, so its CRUD is not data-scoped.
+	r := v1.Group("/config").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole()).Use(actions.Unscoped)
 	{
-		r.GET("", h.List)
-		r.GET("/:id", h.Get)
-		r.POST("", h.Create)
-		r.PUT("/:id", h.Update)
-		r.DELETE("", h.Delete)
+		r.GET("", actions.Index[models.SysConfig, dto.ConfigSearch]())
+		r.GET("/:id", actions.View[models.SysConfig, dto.ConfigByID]())
+		r.POST("", actions.Create[models.SysConfig, dto.ConfigControl]())
+		r.PUT("/:id", actions.Update[models.SysConfig, dto.ConfigControl]())
+		r.DELETE("", actions.Delete[models.SysConfig, dto.ConfigByID]())
 	}
 
 	r1 := v1.Group("/configKey").Use(authMiddleware.MiddlewareFunc())

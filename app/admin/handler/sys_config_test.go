@@ -17,6 +17,8 @@ import (
 	"github.com/gatework/motor-core/sdk/pkg"
 
 	"github.com/gatework/motor/app/admin/models"
+	"github.com/gatework/motor/app/admin/service/dto"
+	"github.com/gatework/motor/common/actions"
 )
 
 func configDictAPI(t *testing.T, withDB bool) (*gorm.DB, *gin.Engine) {
@@ -43,9 +45,9 @@ func configDictAPI(t *testing.T, withDB bool) (*gorm.DB, *gin.Engine) {
 		c.Set(jwt.JwtPayloadKey, jwt.MapClaims{"identity": float64(42)})
 		c.Next()
 	})
-	r.GET("/config", Config{}.List)
-	r.GET("/config/:id", Config{}.Get)
-	r.PUT("/config/:id", Config{}.Update)
+	r.GET("/config", actions.Unscoped, actions.Index[models.SysConfig, dto.ConfigSearch]())
+	r.GET("/config/:id", actions.Unscoped, actions.View[models.SysConfig, dto.ConfigByID]())
+	r.PUT("/config/:id", actions.Unscoped, actions.Update[models.SysConfig, dto.ConfigControl]())
 	r.GET("/app-config", Config{}.AppConfig)
 	r.PUT("/dict/type/:id", Dictionary{}.Update)
 	r.PUT("/dict/data/:dictCode", DictionaryEntry{}.Update)
@@ -191,5 +193,24 @@ func TestConfigByKeyOnlyRevealsFrontendKeysWithoutPermission(t *testing.T) {
 	}
 	if code, body := read(engine("admin"), "sys_user_initPassword"); code != http.StatusOK || !strings.Contains(body, "secret-initial") {
 		t.Fatalf("administrator denied a private key: %s", body)
+	}
+}
+
+// An update replaces every writable column: a value or remark the form sends
+// empty is written empty, while the creator stays the row's creator.
+func TestConfigUpdateWritesEmptiedValuesAndKeepsTheCreator(t *testing.T) {
+	db, r := configDictAPI(t, true)
+	row := models.SysConfig{ConfigKey: "one", ConfigValue: "old", Remark: "old"}
+	row.ID, row.CreateBy = 1, 10
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	configDictAPICode(t, r, http.MethodPut, "/config/1", `{"configKey":"one","configValue":"","remark":"","createBy":999}`, 200)
+	var got models.SysConfig
+	if err := db.First(&got, 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.ConfigValue != "" || got.Remark != "" || got.CreateBy != 10 || got.UpdateBy != 42 {
+		t.Fatalf("update fields = %+v", got)
 	}
 }

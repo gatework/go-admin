@@ -98,44 +98,6 @@ func checkConfigDictUpdateBoundaries(t *testing.T, tc configDictUpdateCase) {
 	}
 }
 
-func TestConfigUpdateBoundaries(t *testing.T) {
-	row := &models.SysConfig{}
-	row.ID = 1
-	row.ConfigKey = "one"
-	checkConfigDictUpdateBoundaries(t, configDictUpdateCase{table: "sys_config", model: row, update: func(db *gorm.DB, id int) error {
-		s := &SysConfig{}
-		s.DB = db
-		s.Logger = logger.NewHelper(logger.Default())
-		return s.Update(&dto.SysConfigControl{ID: id, ConfigKey: "one", ConfigValue: "changed"})
-	}})
-}
-
-func TestConfigUpdatePreservesCreatorAndWritesZeroValues(t *testing.T) {
-	db := configDictDB(t)
-	row := models.SysConfig{ConfigKey: "one", ConfigValue: "old", Remark: "old",
-		ID:       1,
-		CreateBy: 10}
-	if err := db.Create(&row).Error; err != nil {
-		t.Fatal(err)
-	}
-	s := &SysConfig{}
-	s.DB = db
-	s.Logger = logger.NewHelper(logger.Default())
-	req := &dto.SysConfigControl{ID: 1, ConfigKey: "one"}
-	req.CreateBy = 999
-	req.UpdateBy = 20
-	if err := s.Update(req); err != nil {
-		t.Fatal(err)
-	}
-	var got models.SysConfig
-	if err := db.First(&got, 1).Error; err != nil {
-		t.Fatal(err)
-	}
-	if got.ConfigValue != "" || got.Remark != "" || got.CreateBy != 10 || got.UpdateBy != 20 {
-		t.Fatalf("update fields = %+v", got)
-	}
-}
-
 func TestConfigSetBatchRollsBackAndKeepsMissingKeySemantics(t *testing.T) {
 	for _, method := range []string{"SetSysConfig", "UpdateForSet"} {
 		for _, failure := range []string{"missing", "read", "write"} {
@@ -237,27 +199,12 @@ func TestConfigGetWithKeyExcludesDeletedRows(t *testing.T) {
 }
 
 func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
-	for _, name := range []string{"config", "dict data", "dict type"} {
+	for _, name := range []string{"dict data", "dict type"} {
 		t.Run(name, func(t *testing.T) {
 			db := configDictDB(t)
 			var id int
 			var creator int
 			switch name {
-			case "config":
-				s := &SysConfig{}
-				s.DB = db
-				s.Logger = logger.NewHelper(logger.Default())
-				req := &dto.SysConfigControl{ConfigKey: "new"}
-				req.CreateBy = 42
-				if err := s.Insert(req); err != nil {
-					t.Fatal(err)
-				}
-				id = req.ID
-				var row models.SysConfig
-				if err := db.First(&row).Error; err != nil {
-					t.Fatal(err)
-				}
-				creator = row.CreateBy
 			case "dict data":
 				if err := db.Create(&models.SysDictType{DictType: "new"}).Error; err != nil {
 					t.Fatal(err)
