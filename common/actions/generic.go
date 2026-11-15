@@ -176,7 +176,11 @@ func Create[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 			return
 		}
 		PT(object).SetCreateBy(user.ID(c))
-		if err = db.WithContext(c.Request.Context()).Create(object).Error; err != nil {
+		if err = db.WithContext(c.Request.Context()).Create(object).Error; errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.Error(c, http.StatusConflict, nil, duplicateMsg)
+			return
+		}
+		if err != nil {
 			log.Errorf("MsgID[%s] Create error: %s", pkg.RequestID(c), err)
 			response.Error(c, http.StatusInternalServerError, nil, "创建失败")
 			return
@@ -227,6 +231,10 @@ func Update[T, C any, PT record[T], PC controlReq[T, C]]() gin.HandlerFunc {
 		result := query.Scopes(
 			Permission(PT(object).TableName(), p),
 		).Where(keyIs(PT(object).GetID())).Updates(object)
+		if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
+			response.Error(c, http.StatusConflict, nil, duplicateMsg)
+			return
+		}
 		if err = result.Error; err != nil {
 			log.Errorf("MsgID[%s] Update error: %s", msgID, err)
 			response.Error(c, http.StatusInternalServerError, nil, "更新失败")
@@ -283,6 +291,9 @@ func Delete[T, I any, PT record[T], PI idReq[I]]() gin.HandlerFunc {
 // data permission alike, so that a client cannot tell the two apart and probe
 // for rows it may not see.
 const unreachableMsg = "对象不存在或无权操作"
+
+// duplicateMsg answers a write that would break a unique key.
+const duplicateMsg = "数据已存在"
 
 // genericOrm reads the request's database, answering 500 when there is none.
 func genericOrm(c *gin.Context) (*gorm.DB, bool) {

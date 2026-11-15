@@ -91,5 +91,8 @@ func openDatabase(c *coreconfig.Database, level string) (*gorm.DB, error) {
 		logLevel = logger.Error
 	}
 	resolved := dbconfig.NewConfigure(c.Source, c.MaxIdleConns, c.MaxOpenConns, c.ConnMaxIdleTime, c.ConnMaxLifeTime, registers)
-	return resolved.Init(&gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true}, Logger: gormlog.New(logger.Config{SlowThreshold: time.Second, Colorful: true, LogLevel: logLevel})}, open)
+	// TranslateError turns each driver's unique-violation error into
+	// gorm.ErrDuplicatedKey, so a duplicate can be answered as a conflict
+	// instead of matched by driver-specific text.
+	return resolved.Init(&gorm.Config{TranslateError: true, NamingStrategy: schema.NamingStrategy{SingularTable: true}, Logger: gormlog.New(logger.Config{SlowThreshold: time.Second, Colorful: true, LogLevel: logLevel})}, open)
 }

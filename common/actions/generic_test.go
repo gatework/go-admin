@@ -284,3 +284,29 @@ func TestGenericChangesToUnreachableRowsAnswerNotFound(t *testing.T) {
 		t.Fatalf("row outside the caller's scope changed: %+v %v", stored, err)
 	}
 }
+
+// A write that breaks a unique key is a conflict for the client to resolve,
+// not an internal error. The host opens databases with TranslateError, which
+// is what turns each driver's violation into gorm.ErrDuplicatedKey.
+func TestGenericWritesAnswerConflictOnDuplicateKeys(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&probeRow{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE UNIQUE INDEX ux_probe_name ON action_probe_row (name)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&probeRow{Name: "taken"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	r := probeEngine(db, func(r gin.IRoutes) { r.POST("/x", actions.Unscoped, actions.Create[probeRow, probeControl]()) })
+	_, body := serve(r, "POST", "/x", `{"name":"taken"}`)
+	var res struct{ Code int }
+	_ = json.Unmarshal([]byte(body), &res)
+	if res.Code != http.StatusConflict {
+		t.Fatalf("duplicate create answered %s", body)
+	}
+}

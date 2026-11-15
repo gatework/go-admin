@@ -16,8 +16,12 @@ import (
 // "internal_error", never the text of a driver, file system or device error.
 func Fail(a *api.API, err error) {
 	kind, code := errkind.Of(err)
-	if kind == errkind.Unknown && errors.Is(err, gorm.ErrRecordNotFound) {
+	switch {
+	case kind != errkind.Unknown:
+	case errors.Is(err, gorm.ErrRecordNotFound):
 		kind, code = errkind.NotFound, "not_found"
+	case errors.Is(err, gorm.ErrDuplicatedKey):
+		kind, code = errkind.Conflict, "duplicate"
 	}
 	if kind == errkind.Unknown {
 		code = "internal_error"

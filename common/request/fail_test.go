@@ -27,6 +27,7 @@ func TestFailAnswersWithTheKindAndNeverLeaksDetail(t *testing.T) {
 	}{
 		"classified":   {fmt.Errorf("draft 7: %w", conflict), http.StatusConflict, "firewall.version_conflict"},
 		"missing row":  {fmt.Errorf("loading: %w", gorm.ErrRecordNotFound), http.StatusNotFound, "not_found"},
+		"duplicate":    {fmt.Errorf("saving: %w", gorm.ErrDuplicatedKey), http.StatusConflict, "duplicate"},
 		"unclassified": {errors.New("pq: password authentication failed for user motor"), http.StatusInternalServerError, "internal_error"},
 	} {
 		t.Run(name, func(t *testing.T) {
