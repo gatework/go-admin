@@ -17,6 +17,7 @@ import (
 
 	"github.com/gatework/go-net-connector/connector"
 	base "github.com/gatework/motor-core/sdk/service"
+	"github.com/gatework/motor/app/net/models/connection"
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/service/deviceaccess"
@@ -273,19 +274,32 @@ func (s *Workflow) inventory(ctx context.Context, p *actions.DataPermission) *go
 	return s.db(ctx).Model(&inventory.Device{}).Scopes(actions.Permission(inventory.Device{}.TableName(), p))
 }
 func (s *Workflow) targets(ctx context.Context, inputs []dto.InputTarget, p *actions.DataPermission) ([]models.Target, error) {
+	ids := make([]int, 0, len(inputs))
+	for _, in := range inputs {
+		ids = append(ids, in.DeviceID)
+	}
+	var devices []inventory.Device
+	if e := s.inventory(ctx, p).Where("id IN ?", ids).Find(&devices).Error; e != nil {
+		return nil, e
+	}
+	byID := make(map[int]inventory.Device, len(devices))
+	for _, d := range devices {
+		byID[d.ID] = d
+	}
+	stored, e := connection.LoadMany(ctx, s.DB, ids)
+	if e != nil {
+		return nil, e
+	}
 	out := make([]models.Target, 0, len(inputs))
 	for _, in := range inputs {
-		var d inventory.Device
-		if e := s.inventory(ctx, p).Where("id = ?", in.DeviceID).First(&d).Error; e != nil {
+		d, ok := byID[in.DeviceID]
+		if !ok {
 			return nil, NotFoundErr
 		}
 		if !deviceaccess.Write.Allows(d.Status) || net.ParseIP(d.IP) == nil {
 			return nil, ConnectionErr
 		}
-		c, e := s.connection(ctx, d)
-		if e != nil {
-			return nil, e
-		}
+		c := s.Config.Access.Effective(d, stored[d.ID], deviceaccess.Write)
 		if in.ExpectedProfile != nil && *in.ExpectedProfile != c.Profile || in.ExpectedDeviceRole != nil && *in.ExpectedDeviceRole != d.DeviceRole || in.ExpectedDeviceType != nil && *in.ExpectedDeviceType != d.DeviceType {
 			return nil, ConflictErr
 		}

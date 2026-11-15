@@ -173,16 +173,12 @@ func (s *Firewall) Devices(ctx context.Context, in *ndto.DevicePageReq, p *actio
 	for _, d := range devices {
 		ids = append(ids, d.ID)
 	}
-	stored := map[int]connection.Settings{}
+	stored, err := connection.LoadMany(ctx, s.db(ctx), ids)
+	if err != nil {
+		return nil, 0, err
+	}
 	instances := map[int][]models.Instance{}
 	if len(ids) > 0 {
-		var settings []connection.Settings
-		if err = s.db(ctx).Where("device_id IN ?", ids).Find(&settings).Error; err != nil {
-			return nil, 0, err
-		}
-		for _, c := range settings {
-			stored[c.DeviceID] = c
-		}
 		var rows []models.Instance
 		if err = s.db(ctx).Where("device_id IN ?", ids).Order("id").Find(&rows).Error; err != nil {
 			return nil, 0, err
@@ -192,10 +188,7 @@ func (s *Firewall) Devices(ctx context.Context, in *ndto.DevicePageReq, p *actio
 		}
 	}
 	for _, d := range devices {
-		c, ok := stored[d.ID]
-		if !ok {
-			c = connection.Settings{DeviceID: d.ID, Protocol: "ssh", Port: 22}
-		}
+		c := stored[d.ID]
 		list := instances[d.ID]
 		if list == nil {
 			list = []models.Instance{}

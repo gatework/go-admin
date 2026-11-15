@@ -59,13 +59,37 @@ type Input struct {
 
 // Load loads persisted  state.
 func Load(ctx context.Context, db *gorm.DB, id int) (Settings, error) {
-	out := Settings{DeviceID: id, Protocol: "ssh", Port: 22}
+	out := defaults(id)
 	err := db.WithContext(ctx).First(&out, "device_id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = nil
 	}
 	return out, err
 }
+
+// LoadMany is Load for several devices in one query: each ID maps to its
+// stored settings, or to the defaults when it has none.
+func LoadMany(ctx context.Context, db *gorm.DB, ids []int) (map[int]Settings, error) {
+	out := make(map[int]Settings, len(ids))
+	for _, id := range ids {
+		out[id] = defaults(id)
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var stored []Settings
+	if err := db.WithContext(ctx).Where("device_id IN ?", ids).Find(&stored).Error; err != nil {
+		return nil, err
+	}
+	for _, s := range stored {
+		out[s.DeviceID] = s
+	}
+	return out, nil
+}
+
+// defaults are the settings of a device nobody has configured: SSH on 22,
+// with the profile left to inference.
+func defaults(id int) Settings { return Settings{DeviceID: id, Protocol: "ssh", Port: 22} }
 
 // Save persists validated  state.
 func Save(ctx context.Context, db *gorm.DB, id int, in Input, actor int, permission *actions.DataPermission) error {

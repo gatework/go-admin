@@ -72,27 +72,17 @@ func (s *Workflow) Devices(ctx context.Context, r *ndto.DevicePageReq, p *action
 	if e != nil {
 		return nil, 0, e
 	}
-	out := make([]Device, 0, len(rows))
-	connections := make(map[int]models.Connection, len(rows))
-	if len(rows) > 0 {
-		ids := make([]int, 0, len(rows))
-		for _, d := range rows {
-			ids = append(ids, d.ID)
-		}
-		var stored []models.Connection
-		if e := s.db(ctx).Where("device_id IN ?", ids).Find(&stored).Error; e != nil {
-			return nil, 0, e
-		}
-		for _, c := range stored {
-			connections[c.DeviceID] = c
-		}
-	}
+	ids := make([]int, 0, len(rows))
 	for _, d := range rows {
-		c, ok := connections[d.ID]
-		if !ok {
-			c = models.Connection{DeviceID: d.ID, Protocol: "ssh", Port: 22}
-		}
-		out = append(out, Device{Device: d, Connection: s.Config.Access.Effective(d, c, deviceaccess.Write)})
+		ids = append(ids, d.ID)
+	}
+	connections, e := connection.LoadMany(ctx, s.db(ctx), ids)
+	if e != nil {
+		return nil, 0, e
+	}
+	out := make([]Device, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, Device{Device: d, Connection: s.Config.Access.Effective(d, connections[d.ID], deviceaccess.Write)})
 	}
 	return out, count, nil
 }
