@@ -2,7 +2,7 @@ package dto
 
 import (
 	"github.com/gatework/motor/app/admin/models"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 
 	"github.com/gatework/motor/common/dto"
 )
@@ -21,7 +21,7 @@ func (m *MenuSearch) GetNeedSearch() any {
 
 // MenuCreate carries validated administration request parameters.
 type MenuCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	MenuID     int             `uri:"id" comment:"编码"`            // 编码
 	MenuName   string          `form:"menuName" comment:"菜单name"` //菜单name
 	Title      string          `form:"title" comment:"显示名称"`      //显示名称
@@ -78,7 +78,7 @@ func (s *MenuCreate) GetID() any {
 
 // MenuUpdate carries validated administration request parameters.
 type MenuUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	MenuID     int             `uri:"id" comment:"编码"`            // 编码
 	MenuName   string          `form:"menuName" comment:"菜单name"` //菜单name
 	Title      string          `form:"title" comment:"显示名称"`      //显示名称
@@ -145,7 +145,7 @@ func (s *MenuByID) GetID() any {
 
 // MenuDelete carries validated administration request parameters.
 type MenuDelete struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	IDs []int `json:"ids"`
 }
 

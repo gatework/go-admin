@@ -3,7 +3,7 @@ package dto
 import (
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/common/dto"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // RouteSearch carries validated administration request parameters.
@@ -31,7 +31,7 @@ func (m *RouteSearch) GetNeedSearch() any {
 
 // RouteUpdate carries validated administration request parameters.
 type RouteUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	ID     int    `uri:"id" comment:"编码"` // 编码
 	Handle string `json:"handle" comment:"handle"`
 	Title  string `json:"title" comment:"标题"`

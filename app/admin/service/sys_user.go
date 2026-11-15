@@ -29,7 +29,7 @@ import (
 	"github.com/gatework/motor-core/sdk/service"
 
 	"github.com/gatework/motor/common/actions"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // User coordinates administration queries and mutations.
@@ -44,8 +44,8 @@ func (e *User) List(ctx context.Context, c *dto.UserSearch, p *actions.DataPermi
 
 	err = e.DB.WithContext(ctx).Preload("Dept").
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
-			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
+			commondto.MakeCondition(c.GetNeedSearch()),
+			commondto.Paginate(c.GetPageSize(), c.GetPageIndex()),
 			actions.Permission(data.TableName(), p),
 		).
 		Find(list).Limit(-1).Offset(-1).

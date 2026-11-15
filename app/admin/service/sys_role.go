@@ -15,7 +15,7 @@ import (
 
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // Role coordinates administration queries and mutations.
@@ -30,8 +30,8 @@ func (e *Role) List(ctx context.Context, c *dto.RoleSearch, list *[]models.SysRo
 
 	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
-			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
+			commondto.MakeCondition(c.GetNeedSearch()),
+			commondto.Paginate(c.GetPageSize(), c.GetPageIndex()),
 		).
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error

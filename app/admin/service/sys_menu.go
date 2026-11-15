@@ -16,8 +16,8 @@ import (
 
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
-	cDto "github.com/gatework/motor/common/dto"
-	cModels "github.com/gatework/motor/common/models"
+	commondto "github.com/gatework/motor/common/dto"
+	commonmodels "github.com/gatework/motor/common/models"
 
 	"github.com/gatework/motor-core/sdk/service"
 )
@@ -173,7 +173,7 @@ func (e *Menu) ListFlat(ctx context.Context, c *dto.MenuSearch, list *[]models.S
 
 	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
+			commondto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {
@@ -202,7 +202,7 @@ func withAncestors(db *gorm.DB, granted []int) ([]models.SysMenu, error) {
 		return nil, nil
 	}
 	var all []models.SysMenu
-	if err := db.Where("menu_type IN ?", []string{cModels.Directory, cModels.Menu, cModels.Button}).Find(&all).Error; err != nil {
+	if err := db.Where("menu_type IN ?", []string{commonmodels.Directory, commonmodels.Menu, commonmodels.Button}).Find(&all).Error; err != nil {
 		return nil, err
 	}
 	byID := make(map[int]models.SysMenu, len(all))
@@ -218,7 +218,7 @@ func withAncestors(db *gorm.DB, granted []int) ([]models.SysMenu, error) {
 				break
 			}
 			seen[id] = true
-			if menu.MenuType != cModels.Button {
+			if menu.MenuType != commonmodels.Button {
 				out = append(out, menu)
 			}
 			id = menu.ParentID
@@ -243,8 +243,8 @@ func (e *Menu) getPage(ctx context.Context, c *dto.MenuSearch, list *[]models.Sy
 
 	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.OrderDest("sort", false),
-			cDto.MakeCondition(c.GetNeedSearch()),
+			commondto.OrderDest("sort", false),
+			commondto.MakeCondition(c.GetNeedSearch()),
 		).Preload("SysAPI").
 		Find(list).Error
 	if err != nil {
@@ -318,7 +318,7 @@ func menuID(m models.SysMenu) int     { return m.MenuID }
 func menuParent(m models.SysMenu) int { return m.ParentID }
 
 // isNotButton keeps buttons as leaves: they carry permissions, not children.
-func isNotButton(m models.SysMenu) bool { return m.MenuType != cModels.Button }
+func isNotButton(m models.SysMenu) bool { return m.MenuType != commonmodels.Button }
 
 func withMenuChildren(m models.SysMenu, children []models.SysMenu) models.SysMenu {
 	m.Children = children

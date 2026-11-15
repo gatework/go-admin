@@ -2,7 +2,7 @@ package dto
 
 import (
 	"github.com/gatework/motor/app/admin/models"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 
 	"github.com/gatework/motor/common/dto"
 )
@@ -39,7 +39,7 @@ func (m *RoleSearch) GetNeedSearch() any {
 
 // RoleCreate carries validated administration request parameters.
 type RoleCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	RoleID    int              `uri:"id" comment:"角色编码"`        // 角色编码
 	RoleName  string           `form:"roleName" comment:"角色名称"` // 角色名称
 	Status    string           `form:"status" comment:"状态"`     // 状态 1禁用 2正常
@@ -79,7 +79,7 @@ func (s *RoleCreate) GetID() any {
 
 // RoleUpdate carries validated administration request parameters.
 type RoleUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	RoleID    int              `uri:"id" comment:"角色编码"`        // 角色编码
 	RoleName  string           `form:"roleName" comment:"角色名称"` // 角色名称
 	Status    string           `form:"status" comment:"状态"`     // 状态
@@ -119,7 +119,7 @@ func (s *RoleUpdate) GetID() any {
 
 // RoleStatusUpdate carries validated administration request parameters.
 type RoleStatusUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	RoleID int    `form:"roleId" comment:"角色编码"` // 角色编码
 	Status string `form:"status" comment:"状态"`   // 状态
 }

@@ -3,7 +3,7 @@ package dto
 import (
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/common/dto"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // DictionaryEntrySearch carries validated administration request parameters.
@@ -29,7 +29,7 @@ type DictionaryOption struct {
 
 // DictionaryEntryCreate carries validated administration request parameters.
 type DictionaryEntryCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	ID        int    `json:"-" comment:""`
 	DictSort  int    `json:"dictSort" comment:""`
 	DictLabel string `json:"dictLabel" comment:""`
@@ -65,7 +65,7 @@ func (s *DictionaryEntryCreate) GetID() any {
 
 // DictionaryEntryUpdate carries validated administration request parameters.
 type DictionaryEntryUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	ID        int    `uri:"dictCode" comment:""`
 	DictSort  int    `json:"dictSort" comment:""`
 	DictLabel string `json:"dictLabel" comment:""`
@@ -111,8 +111,8 @@ func (s *DictionaryEntryByID) GetID() any {
 
 // DictionaryEntryDelete carries validated administration request parameters.
 type DictionaryEntryDelete struct {
-	common.ControlBy `json:"-"`
-	IDs              []int `json:"ids"`
+	commonmodels.ControlBy `json:"-"`
+	IDs                    []int `json:"ids"`
 }
 
 // GetID returns the selected resource identity.

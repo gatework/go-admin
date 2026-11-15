@@ -48,9 +48,6 @@ func sysStaticFileRouter(r *gin.RouterGroup) {
 		return
 	}
 	r.Static("/static", "./static")
-	if config.Current().Settings.Application.Mode != "prod" {
-		r.Static("/form-generator", "./static/form-generator")
-	}
 }
 
 func sysSwaggerRouter(r *gin.RouterGroup) {
@@ -87,7 +84,6 @@ func registerBaseRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlewar
 	v1auth := v1.Group("").Use(authMiddleware.MiddlewareFunc()).Use(middleware.AuthCheckRole())
 	{
 		v1auth.GET("/roleMenuTreeselect/:roleId", h.Tree)
-		//v1.GET("/menuTreeselect", api.GetMenuTreeSelect)
 		v1auth.GET("/roleDeptTreeselect/:roleId", departments.RoleTree)
 		v1auth.POST("/logout", auth.LogOut)
 	}

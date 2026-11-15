@@ -10,7 +10,7 @@ import (
 
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // DictionaryEntry coordinates administration queries and mutations.
@@ -25,8 +25,8 @@ func (e *DictionaryEntry) List(ctx context.Context, c *dto.DictionaryEntrySearch
 
 	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
-			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
+			commondto.MakeCondition(c.GetNeedSearch()),
+			commondto.Paginate(c.GetPageSize(), c.GetPageIndex()),
 		).
 		Find(list).Limit(-1).Offset(-1).
 		Count(count).Error
@@ -130,7 +130,7 @@ func (e *DictionaryEntry) All(ctx context.Context, c *dto.DictionaryEntrySearch,
 	}
 	err = query.
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
+			commondto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {

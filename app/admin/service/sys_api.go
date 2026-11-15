@@ -12,7 +12,7 @@ import (
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
 	"github.com/gatework/motor/common/actions"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // Route coordinates administration queries and mutations.
@@ -27,8 +27,8 @@ func (e *Route) List(ctx context.Context, c *dto.RouteSearch, p *actions.DataPer
 
 	orm := e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
-			cDto.Paginate(c.GetPageSize(), c.GetPageIndex()),
+			commondto.MakeCondition(c.GetNeedSearch()),
+			commondto.Paginate(c.GetPageSize(), c.GetPageIndex()),
 			actions.Permission(data.TableName(), p),
 		)
 	if c.Type != "" {

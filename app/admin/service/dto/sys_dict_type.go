@@ -4,7 +4,7 @@ import (
 	"github.com/gatework/motor/app/admin/models"
 
 	"github.com/gatework/motor/common/dto"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // DictionarySearch carries validated administration request parameters.
@@ -29,7 +29,7 @@ func (m *DictionarySearch) GetNeedSearch() any {
 
 // DictionaryCreate carries validated administration request parameters.
 type DictionaryCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	ID       int    `uri:"id"`
 	DictName string `json:"dictName"`
 	DictType string `json:"dictType"`
@@ -56,7 +56,7 @@ func (s *DictionaryCreate) GetID() any {
 
 // DictionaryUpdate carries validated administration request parameters.
 type DictionaryUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	ID       int    `uri:"id"`
 	DictName string `json:"dictName"`
 	DictType string `json:"dictType"`
@@ -93,7 +93,7 @@ func (s *DictionaryByID) GetID() any {
 
 // DictionaryDelete carries validated administration request parameters.
 type DictionaryDelete struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	IDs []int `json:"ids"`
 }
 

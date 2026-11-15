@@ -11,19 +11,19 @@ var (
 	routerCheckRole   = make([]func(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware), 0)
 )
 
-// InitExamplesRouter mounts the registered example routes.
-func InitExamplesRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *gin.Engine {
+// mountResourceRoutes mounts every resource module's routes under /api/v1.
+func mountResourceRoutes(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) *gin.Engine {
 
 	// 无需认证的路由
-	examplesNoCheckRoleRouter(r)
+	mountPublicRoutes(r)
 	// 需要认证的路由
-	examplesCheckRoleRouter(r, authMiddleware)
+	mountAuthenticatedRoutes(r, authMiddleware)
 
 	return r
 }
 
 // 无需认证的路由示例
-func examplesNoCheckRoleRouter(r *gin.Engine) {
+func mountPublicRoutes(r *gin.Engine) {
 	// 可根据业务需求来设置接口版本
 	v1 := r.Group("/api/v1")
 	for _, f := range routerNoCheckRole {
@@ -32,7 +32,7 @@ func examplesNoCheckRoleRouter(r *gin.Engine) {
 }
 
 // 需要认证的路由示例
-func examplesCheckRoleRouter(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) {
+func mountAuthenticatedRoutes(r *gin.Engine, authMiddleware *jwt.GinJWTMiddleware) {
 	// 可根据业务需求来设置接口版本
 	v1 := r.Group("/api/v1")
 	for _, f := range routerCheckRole {

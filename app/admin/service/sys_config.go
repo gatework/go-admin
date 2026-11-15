@@ -10,7 +10,7 @@ import (
 
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // Config coordinates administration queries and mutations.
@@ -59,7 +59,7 @@ func (e *Config) ByKey(ctx context.Context, c *dto.ConfigByKey, resp *dto.Config
 func (e *Config) Values(ctx context.Context, c *dto.ConfigVisibility, list *[]models.SysConfig) error {
 	err := e.DB.WithContext(ctx).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
+			commondto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {

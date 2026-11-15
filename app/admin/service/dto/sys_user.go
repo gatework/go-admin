@@ -4,7 +4,7 @@ import (
 	"github.com/gatework/motor/app/admin/models"
 
 	"github.com/gatework/motor/common/dto"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // UserSearch carries validated administration request parameters.
@@ -43,7 +43,7 @@ func (m *UserSearch) GetNeedSearch() any {
 
 // PasswordReset carries validated administration request parameters.
 type PasswordReset struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	UserID   int    `json:"userId" comment:"用户ID" vd:"$>0"` // 用户ID
 	Password string `json:"password" comment:"密码" vd:"len($)>0"`
 }
@@ -63,7 +63,7 @@ func (s *PasswordReset) Generate(model *models.SysUser) {
 
 // UserStatusUpdate carries validated administration request parameters.
 type UserStatusUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	UserID int    `json:"userId" comment:"用户ID" vd:"$>0"` // 用户ID
 	Status string `json:"status" comment:"状态" vd:"len($)>0"`
 }
@@ -83,7 +83,7 @@ func (s *UserStatusUpdate) Generate(model *models.SysUser) {
 
 // UserCreate carries validated administration request parameters.
 type UserCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	UserID   int    `json:"userId" comment:"用户ID"` // 用户ID
 	Username string `json:"username" comment:"用户名" vd:"len($)>0"`
 	Password string `json:"password" comment:"密码"`
@@ -126,7 +126,7 @@ func (s *UserCreate) GetID() any {
 
 // UserUpdate carries validated administration request parameters.
 type UserUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	UserID   int    `json:"userId" comment:"用户ID"` // 用户ID
 	Username string `json:"username" comment:"用户名" vd:"len($)>0"`
 	NickName string `json:"nickName" comment:"昵称" vd:"len($)>0"`
@@ -167,7 +167,7 @@ func (s *UserUpdate) GetID() any {
 // UserByID carries validated administration request parameters.
 type UserByID struct {
 	dto.ObjectByID
-	common.ControlBy
+	commonmodels.ControlBy
 }
 
 // GetID returns the selected resource identity.
@@ -180,7 +180,7 @@ func (s *UserByID) GetID() any {
 }
 
 // GenerateM copies request fields into the supplied model.
-func (s *UserByID) GenerateM() (common.ActiveRecord, error) {
+func (s *UserByID) GenerateM() (commonmodels.ActiveRecord, error) {
 	return &models.SysUser{}, nil
 }
 

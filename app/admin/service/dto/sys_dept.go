@@ -2,7 +2,7 @@ package dto
 
 import (
 	"github.com/gatework/motor/app/admin/models"
-	common "github.com/gatework/motor/common/models"
+	commonmodels "github.com/gatework/motor/common/models"
 )
 
 // DepartmentSearch 列表或者搜索使用结构体
@@ -25,7 +25,7 @@ func (m *DepartmentSearch) GetNeedSearch() any {
 
 // DepartmentCreate carries validated administration request parameters.
 type DepartmentCreate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	DeptID   int    `uri:"id" comment:"编码"`                                         // 编码
 	ParentID int    `json:"parentId" comment:"上级部门" vd:"?"`                         //上级部门
 	DeptPath string `json:"deptPath" comment:""`                                    //路径
@@ -59,7 +59,7 @@ func (s *DepartmentCreate) GetID() any {
 
 // DepartmentUpdate carries validated administration request parameters.
 type DepartmentUpdate struct {
-	common.ControlBy
+	commonmodels.ControlBy
 	DeptID   int    `uri:"id" comment:"编码"`                                         // 编码
 	ParentID int    `json:"parentId" comment:"上级部门" vd:"?"`                         //上级部门
 	DeptPath string `json:"deptPath" comment:""`                                    //路径

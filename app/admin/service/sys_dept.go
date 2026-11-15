@@ -13,7 +13,7 @@ import (
 
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/app/admin/service/dto"
-	cDto "github.com/gatework/motor/common/dto"
+	commondto "github.com/gatework/motor/common/dto"
 )
 
 // Department coordinates administration queries and mutations.
@@ -28,7 +28,7 @@ type Department struct {
 //
 //	err = e.Orm.Model(&data).
 //		Scopes(
-//			cDto.MakeCondition(c.GetNeedSearch()),
+//			commondto.MakeCondition(c.GetNeedSearch()),
 //		).
 //		Find(list).Error
 //	if err != nil {
@@ -234,7 +234,7 @@ func (e *Department) getList(ctx context.Context, c *dto.DepartmentSearch, list 
 
 	err = e.DB.WithContext(ctx).Model(&data).
 		Scopes(
-			cDto.MakeCondition(c.GetNeedSearch()),
+			commondto.MakeCondition(c.GetNeedSearch()),
 		).
 		Find(list).Error
 	if err != nil {
