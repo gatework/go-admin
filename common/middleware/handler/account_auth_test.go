@@ -36,12 +36,12 @@ func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&SysUser{}, &SysRole{}, &account.State{}, &account.Challenge{}, &account.Recovery{}, &account.Limit{}); err != nil {
+	if err = db.AutoMigrate(&account.User{}, &account.Role{}, &account.State{}, &account.Challenge{}, &account.Recovery{}, &account.Limit{}); err != nil {
 		t.Fatal(err)
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-password-123"), bcrypt.MinCost)
-	db.Create(&SysRole{RoleID: 1, RoleKey: "admin", Status: "2"})
-	db.Create(&SysUser{UserID: 1, Username: "admin", Password: string(hash), RoleID: 1, Status: "2"})
+	db.Create(&account.Role{RoleID: 1, RoleKey: "admin", Status: "2"})
+	db.Create(&account.User{UserID: 1, Username: "admin", Password: string(hash), RoleID: 1, Status: "2"})
 	payload, authorize := AuthCallbacks(config.Current().Settings.JWT.Secret)
 	auth, err := jwt.New(&jwt.GinJWTMiddleware{Realm: "test", Key: []byte(config.Current().Settings.JWT.Secret), Timeout: time.Hour, PayloadFunc: payload, IdentityHandler: IdentityHandler, Authenticator: Authenticator, Authorizator: authorize, Unauthorized: Unauthorized, TokenLookup: "header: Authorization", TokenHeadName: "Bearer"})
 	if err != nil {
@@ -82,6 +82,23 @@ func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 	if call("GET", "/private", token, nil)["code"] != float64(200) {
 		t.Fatal("fresh token rejected")
 	}
+
+	// A deleted account is a soft-deleted row. The account models carry
+	// deleted_at as a plain column with no automatic filter, so the token check
+	// must name it: a token stops working once its account is deleted.
+	db.Create(&account.User{UserID: 2, Username: "operator", Password: string(hash), RoleID: 1, Status: "2"})
+	operator := call("POST", "/login", "", map[string]string{"username": "operator", "password": "admin-password-123", "code": "0", "uuid": "0"})
+	operatorToken, ok := operator["token"].(string)
+	if !ok {
+		t.Fatal(operator)
+	}
+	if call("GET", "/private", operatorToken, nil)["code"] != float64(200) {
+		t.Fatal("token rejected before deletion")
+	}
+	db.Model(&account.User{}).Where("user_id = 2").Update("deleted_at", time.Now().UnixMilli())
+	if call("GET", "/private", operatorToken, nil)["code"] == float64(200) {
+		t.Fatal("token of a deleted account still accepted")
+	}
 	s := account.New(db)
 	setup, e := s.Setup(1, "admin-password-123")
 	if e != nil {
@@ -112,8 +129,9 @@ func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 		t.Fatal("challenge replay")
 	}
 	newHash, _ := bcrypt.GenerateFromPassword([]byte("new-password-123"), bcrypt.MinCost)
-	db.Model(&SysUser{}).Where("user_id = 1").Update("password", string(newHash))
+	db.Model(&account.User{}).Where("user_id = 1").Update("password", string(newHash))
 	if call("GET", "/private", newToken, nil)["code"] == float64(200) {
 		t.Fatal("token survived password change")
 	}
+
 }

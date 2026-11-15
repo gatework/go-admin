@@ -3,6 +3,8 @@ package handler
 import (
 	"gorm.io/gorm"
 
+	"github.com/gatework/motor/common/account"
+
 	log "github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk/pkg"
 )
@@ -19,7 +21,7 @@ type Login struct {
 }
 
 // GetUser returns the selected data.
-func (u *Login) GetUser(tx *gorm.DB) (user SysUser, role SysRole, err error) {
+func (u *Login) GetUser(tx *gorm.DB) (user account.User, role account.Role, err error) {
 	err = tx.Table("sys_user").Where("username = ? AND status = '2' AND deleted_at = 0", u.Username).First(&user).Error
 	if err != nil {
 		log.NewHelper(log.Default()).Errorf("get user error, %s", err.Error())

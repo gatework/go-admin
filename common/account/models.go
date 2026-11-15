@@ -63,18 +63,21 @@ func (Policy) TableName() string { return "sys_account_policy" }
 // User is the authentication projection; no API serializes this model.
 type User struct {
 	SessionVersion int64 `gorm:"-"`
-	UserID         int   `gorm:"primaryKey;autoIncrement"`
-	Username       string
-	Password       string
-	NickName       string
-	Email          string
-	RoleID         int
-	DeptID         int
-	PostID         int
-	Status         string
-	DeletedAt      int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// AuthVersion is advanced only by the session revocation path, as an
+	// atomic increment elsewhere; this projection reads it and never writes it.
+	AuthVersion int64 `gorm:"not null;default:0;<-:false"`
+	UserID      int   `gorm:"primaryKey;autoIncrement"`
+	Username    string
+	Password    string
+	NickName    string
+	Email       string
+	RoleID      int
+	DeptID      int
+	PostID      int
+	Status      string
+	DeletedAt   int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // TableName returns the explicit persistence table name.

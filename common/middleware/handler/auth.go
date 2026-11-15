@@ -38,8 +38,8 @@ func AuthCallbacks(secret string) (func(any) jwt.MapClaims, func(any, *gin.Conte
 
 func payloadFunc(data any, key []byte) jwt.MapClaims {
 	if v, ok := data.(map[string]any); ok {
-		u, _ := v["user"].(SysUser)
-		r, _ := v["role"].(SysRole)
+		u, _ := v["user"].(account.User)
+		r, _ := v["role"].(account.Role)
 		return jwt.MapClaims{
 			jwt.IdentityKey:  u.UserID,
 			jwt.RoleIDKey:    r.RoleID,
@@ -122,8 +122,8 @@ func Authenticator(c *gin.Context) (any, error) {
 		msg = "登录频率超限"
 		return nil, jwt.ErrFailedAuthentication
 	}
-	var sysUser SysUser
-	var role SysRole
+	var sysUser account.User
+	var role account.Role
 	var authVersion int64
 	if loginVals.ChallengeToken != "" {
 		verified, e := security.CompleteLogin(loginVals.ChallengeToken, loginVals.TOTPCode, loginVals.RecoveryCode)
@@ -231,7 +231,7 @@ func Tenant(host string) string {
 
 // credentialStamp revokes old tokens when credentials or authorization identity
 // changes without placing the password hash itself in the readable JWT payload.
-func credentialStamp(u SysUser, r SysRole, key []byte) string {
+func credentialStamp(u account.User, r account.Role, key []byte) string {
 	state, _ := json.Marshal([]any{u.UserID, u.CreatedAt.UnixNano(), u.AuthVersion, u.Username, u.Password, u.RoleID, u.DeptID, r.RoleID, r.CreatedAt.UnixNano(), r.RoleKey, r.DataScope, r.Status})
 	mac := hmac.New(sha256.New, key)
 	mac.Write(state)
@@ -259,12 +259,14 @@ func authorize(data any, c *gin.Context, key []byte) bool {
 	if id <= 0 {
 		return false
 	}
-	var u SysUser
-	if db.Where("user_id = ? AND status = ?", id, "2").First(&u).Error != nil {
+	// The account models carry deleted_at as a plain column, so the active-row
+	// condition is spelled out: a deleted account's token must stop working.
+	var u account.User
+	if db.Where("user_id = ? AND status = ? AND deleted_at = 0", id, "2").First(&u).Error != nil {
 		return false
 	}
-	var r SysRole
-	if db.Where("role_id = ? AND status = ?", u.RoleID, "2").First(&r).Error != nil {
+	var r account.Role
+	if db.Where("role_id = ? AND status = ? AND deleted_at = 0", u.RoleID, "2").First(&r).Error != nil {
 		return false
 	}
 	state, err := account.New(db.WithContext(c.Request.Context())).State(id)
@@ -291,9 +293,9 @@ func Unauthorized(c *gin.Context, code int, message string) {
 	})
 }
 
-func authenticatePassword(c *gin.Context, db *gorm.DB, security account.Service, loginVals Login, status, msg *string) (SysUser, SysRole, int64, error) {
-	var sysUser SysUser
-	var role SysRole
+func authenticatePassword(c *gin.Context, db *gorm.DB, security account.Service, loginVals Login, status, msg *string) (account.User, account.Role, int64, error) {
+	var sysUser account.User
+	var role account.Role
 	var authVersion int64
 	var err error
 	if loginVals.Username == "" || loginVals.Password == "" || loginVals.Code == "" || loginVals.UUID == "" {
@@ -324,8 +326,7 @@ func authenticatePassword(c *gin.Context, db *gorm.DB, security account.Service,
 	}
 	authVersion = state.Version
 	if state.Enabled {
-		u := account.User{UserID: sysUser.UserID, Username: sysUser.Username, Password: sysUser.Password}
-		token, e := security.LoginChallenge(u, state)
+		token, e := security.LoginChallenge(sysUser, state)
 		if e != nil {
 			return sysUser, role, authVersion, jwt.ErrFailedAuthentication
 		}
