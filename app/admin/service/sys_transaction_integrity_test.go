@@ -45,23 +45,23 @@ func TestAdminMutationsReturnCommitFailure(t *testing.T) {
 			var err error
 			switch name {
 			case "dept insert":
-				err = d.Create(&dto.SysDeptInsertReq{DeptID: 2, DeptName: "new"})
+				err = d.Create(&dto.DepartmentCreate{DeptID: 2, DeptName: "new"})
 			case "dept update":
-				err = d.Update(&dto.SysDeptUpdateReq{DeptID: 1, DeptName: "changed"})
+				err = d.Update(&dto.DepartmentUpdate{DeptID: 1, DeptName: "changed"})
 			case "menu insert":
-				err = m.Create(&dto.SysMenuInsertReq{MenuID: 2, MenuName: "new"})
+				err = m.Create(&dto.MenuCreate{MenuID: 2, MenuName: "new"})
 			case "menu update":
-				err = m.Update(&dto.SysMenuUpdateReq{MenuID: 1, MenuName: "changed"})
+				err = m.Update(&dto.MenuUpdate{MenuID: 1, MenuName: "changed"})
 			case "role insert":
-				err = r.Create(&dto.SysRoleInsertReq{RoleID: 2, RoleKey: "new"}, cb)
+				err = r.Create(&dto.RoleCreate{RoleID: 2, RoleKey: "new"}, cb)
 			case "role update":
-				err = r.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleKey: "changed"}, cb)
+				err = r.Update(&dto.RoleUpdate{RoleID: 1, RoleKey: "changed"}, cb)
 			case "role remove":
-				err = r.Delete(&dto.SysRoleDeleteReq{IDs: []int{1}}, cb)
+				err = r.Delete(&dto.RoleDelete{IDs: []int{1}}, cb)
 			case "role scope":
-				err = r.UpdateDataScope(&dto.RoleDataScopeReq{RoleID: 1, DataScope: "2", DeptIDs: []int{1}})
+				err = r.UpdateDataScope(&dto.RoleDataScopeUpdate{RoleID: 1, DataScope: "2", DeptIDs: []int{1}})
 			case "role status":
-				err = r.UpdateStatus(&dto.UpdateStatusReq{RoleID: 1, Status: "1"})
+				err = r.UpdateStatus(&dto.RoleStatusUpdate{RoleID: 1, Status: "1"})
 			}
 			if err == nil || !strings.Contains(err.Error(), "injected commit failure") {
 				t.Fatalf("commit error = %v", err)
@@ -117,11 +117,11 @@ func TestConcurrentHierarchyMovesCannotCreateCycle(t *testing.T) {
 					if kind == "dept" {
 						s := &Department{}
 						s.DB = db
-						results <- s.Update(&dto.SysDeptUpdateReq{DeptID: id, ParentID: 3 - id})
+						results <- s.Update(&dto.DepartmentUpdate{DeptID: id, ParentID: 3 - id})
 					} else {
 						s := &Menu{}
 						s.DB = db
-						results <- s.Update(&dto.SysMenuUpdateReq{MenuID: id, ParentID: 3 - id})
+						results <- s.Update(&dto.MenuUpdate{MenuID: id, ParentID: 3 - id})
 					}
 				}(id)
 			}

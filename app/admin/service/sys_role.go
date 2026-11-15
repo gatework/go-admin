@@ -23,7 +23,7 @@ type Role struct {
 }
 
 // List 获取SysRole列表
-func (e *Role) List(c *dto.SysRoleGetPageReq, list *[]models.SysRole, count *int64) error {
+func (e *Role) List(c *dto.RoleSearch, list *[]models.SysRole, count *int64) error {
 	var err error
 	var data models.SysRole
 
@@ -42,7 +42,7 @@ func (e *Role) List(c *dto.SysRoleGetPageReq, list *[]models.SysRole, count *int
 }
 
 // Get 获取SysRole对象
-func (e *Role) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
+func (e *Role) Get(d *dto.RoleByID, model *models.SysRole) error {
 	var err error
 	db := e.DB.First(model, d.GetID())
 	err = db.Error
@@ -64,7 +64,7 @@ func (e *Role) Get(d *dto.SysRoleGetReq, model *models.SysRole) error {
 }
 
 // Create 创建SysRole对象
-func (e *Role) Create(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Create(c *dto.RoleCreate, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
@@ -97,7 +97,7 @@ func (e *Role) Create(c *dto.SysRoleInsertReq, cb *casbin.SyncedEnforcer) error 
 }
 
 // Update 修改SysRole对象
-func (e *Role) Update(c *dto.SysRoleUpdateReq, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Update(c *dto.RoleUpdate, cb *casbin.SyncedEnforcer) error {
 	if strings.TrimSpace(c.RoleKey) == "" {
 		return errors.New("角色标识不能为空")
 	}
@@ -177,7 +177,7 @@ func reloadRolePolicies(cb *casbin.SyncedEnforcer) error {
 }
 
 // Delete 删除SysRole
-func (e *Role) Delete(c *dto.SysRoleDeleteReq, cb *casbin.SyncedEnforcer) error {
+func (e *Role) Delete(c *dto.RoleDelete, cb *casbin.SyncedEnforcer) error {
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		var roles []models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Where("role_id IN ?", c.IDs).Order("role_id").Find(&roles).Error; err != nil {
@@ -218,7 +218,7 @@ func (e *Role) MenuIDs(roleID int) ([]int, error) {
 }
 
 // UpdateDataScope performs the update data scope administration operation.
-func (e *Role) UpdateDataScope(c *dto.RoleDataScopeReq) error {
+func (e *Role) UpdateDataScope(c *dto.RoleDataScopeUpdate) error {
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		var model models.SysRole
 		if err := lockAdminRows(tx, (&models.SysRole{}).TableName()).Preload("SysDept").First(&model, c.RoleID).Error; err != nil {
@@ -255,7 +255,7 @@ func (e *Role) UpdateDataScope(c *dto.RoleDataScopeReq) error {
 }
 
 // UpdateStatus 修改SysRole对象status
-func (e *Role) UpdateStatus(c *dto.UpdateStatusReq) error {
+func (e *Role) UpdateStatus(c *dto.RoleStatusUpdate) error {
 	if c.RoleID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid role status")
 	}

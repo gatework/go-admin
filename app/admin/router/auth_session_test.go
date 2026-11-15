@@ -100,16 +100,16 @@ func TestDisableEnableDoesNotReviveTokens(t *testing.T) {
 				var err error
 				switch kind {
 				case "user status":
-					err = users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll})
+					err = users.UpdateStatus(&dto.UserStatusUpdate{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll})
 				case "user update":
-					err = users.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "lifecycle-admin", RoleID: 1, DeptID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99)
+					err = users.Update(&dto.UserUpdate{UserID: 1, Username: "lifecycle-admin", RoleID: 1, DeptID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99)
 				case "role status":
-					err = roles.UpdateStatus(&dto.UpdateStatusReq{RoleID: 1, Status: status})
+					err = roles.UpdateStatus(&dto.RoleStatusUpdate{RoleID: 1, Status: status})
 				case "role update":
 					if migrationErr := db.AutoMigrate(&models.SysAPI{}, &models.SysMenu{}, &gormadapter.CasbinRule{}); migrationErr != nil {
 						t.Fatal(migrationErr)
 					}
-					err = roles.Update(&dto.SysRoleUpdateReq{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: status}, nil)
+					err = roles.Update(&dto.RoleUpdate{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: status}, nil)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -142,7 +142,7 @@ func TestProfileDoesNotResetRevocationOrRevokeCurrentSession(t *testing.T) {
 	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
-	if err := users.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "profile-admin", NickName: "Updated"}, nil, 1); err != nil {
+	if err := users.Update(&dto.UserUpdate{UserID: 1, Username: "profile-admin", NickName: "Updated"}, nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	if w := request(userRouter(mw), "profile-session.test", token); !strings.Contains(w.Body.String(), "profile-admin") {
@@ -182,7 +182,7 @@ func TestResetPasswordDoesNotRecreateDeletedAccount(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := users.ResetPassword(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
+	err := users.ResetPassword(&dto.PasswordReset{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll})
 	if err == nil {
 		t.Fatal("reset reported success after account was deleted")
 	}
@@ -245,7 +245,7 @@ func TestPostgresSessionRevocation(t *testing.T) {
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
 	for _, status := range []string{"1", "2"} {
-		if err := users.UpdateStatus(&dto.UpdateSysUserStatusReq{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+		if err := users.UpdateStatus(&dto.UserStatusUpdate{UserID: 1, Status: status}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -281,7 +281,7 @@ func TestResetPasswordKeepsSessionVersionAndHashesPassword(t *testing.T) {
 	users := service.User{
 		DB:     db,
 		Logger: logger.NewHelper(logger.Default())}
-	if err := users.ResetPassword(&dto.ResetSysUserPwdReq{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
+	if err := users.ResetPassword(&dto.PasswordReset{UserID: 1, Password: "replacement-password"}, &actions.DataPermission{DataScope: actions.DataScopeAll}); err != nil {
 		t.Fatal(err)
 	}
 	var account models.SysUser
@@ -307,7 +307,7 @@ func TestRoleReassignmentDoesNotReviveOldToken(t *testing.T) {
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
 	for _, roleID := range []int{2, 1} {
-		if err := s.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "reassign-admin", RoleID: roleID, DeptID: 1, Status: "2"}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99); err != nil {
+		if err := s.Update(&dto.UserUpdate{UserID: 1, Username: "reassign-admin", RoleID: roleID, DeptID: 1, Status: "2"}, &actions.DataPermission{DataScope: actions.DataScopeAll}, 99); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -336,7 +336,7 @@ func TestUserUpdateRechecksPermissionAtWrite(t *testing.T) {
 	s := &service.User{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
-	err := s.Update(&dto.SysUserUpdateReq{UserID: 1, Username: "scope-user", NickName: "outside-scope", RoleID: 1, DeptID: 1, Status: "1"}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 10}, 99)
+	err := s.Update(&dto.UserUpdate{UserID: 1, Username: "scope-user", NickName: "outside-scope", RoleID: 1, DeptID: 1, Status: "1"}, &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 10}, 99)
 	var got models.SysUser
 	if readErr := db.First(&got, 1).Error; readErr != nil {
 		t.Fatal(readErr)
@@ -368,7 +368,7 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 				var err error
 				switch kind {
 				case "username", "department":
-					d := dto.SysUserUpdateReq{UserID: 1, Username: "identity-admin", RoleID: 1, DeptID: 1, Status: "2"}
+					d := dto.UserUpdate{UserID: 1, Username: "identity-admin", RoleID: 1, DeptID: 1, Status: "2"}
 					if alternate {
 						if kind == "username" {
 							d.Username = "temporary-name"
@@ -382,7 +382,7 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 					}
 					err = users.Update(&d, &actions.DataPermission{DataScope: actions.DataScopeAll}, caller)
 				case "role key", "role scope":
-					d := dto.SysRoleUpdateReq{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: "2"}
+					d := dto.RoleUpdate{RoleID: 1, RoleName: "admin", RoleKey: "admin", DataScope: "1", Status: "2"}
 					if alternate {
 						if kind == "role key" {
 							d.RoleKey = "temporary-admin"
@@ -392,7 +392,7 @@ func TestSecurityIdentityReversalDoesNotReviveTokens(t *testing.T) {
 					}
 					err = roles.Update(&d, nil)
 				default:
-					d := dto.RoleDataScopeReq{RoleID: 1, DataScope: "1"}
+					d := dto.RoleDataScopeUpdate{RoleID: 1, DataScope: "1"}
 					if kind == "custom departments" {
 						d.DataScope = "2"
 						d.DeptIDs = []int{1}

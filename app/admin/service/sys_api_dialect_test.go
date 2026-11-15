@@ -47,7 +47,7 @@ func TestSysAPITypeFilterUsesRequestDialect(t *testing.T) {
 			s.DB, s.Logger = db, logger.NewHelper(logger.Default())
 			var list []models.SysAPI
 			var count int64
-			if err := s.List(&dto.SysAPIGetPageReq{Type: filter}, nil, &list, &count); !errors.Is(err, stopped) {
+			if err := s.List(&dto.RouteSearch{Type: filter}, nil, &list, &count); !errors.Is(err, stopped) {
 				t.Fatalf("GetPage error: %v", err)
 			}
 			if strings.Contains(sql, "`") || !strings.Contains(sql, `"type" = @p`) {

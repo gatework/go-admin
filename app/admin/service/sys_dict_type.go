@@ -20,7 +20,7 @@ type Dictionary struct {
 }
 
 // List 获取列表
-func (e *Dictionary) List(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType, count *int64) error {
+func (e *Dictionary) List(c *dto.DictionarySearch, list *[]models.SysDictType, count *int64) error {
 	var err error
 	var data models.SysDictType
 
@@ -39,7 +39,7 @@ func (e *Dictionary) List(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictTy
 }
 
 // Get 获取对象
-func (e *Dictionary) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) error {
+func (e *Dictionary) Get(d *dto.DictionaryByID, model *models.SysDictType) error {
 	var err error
 
 	db := e.DB.First(model, d.GetID())
@@ -57,7 +57,7 @@ func (e *Dictionary) Get(d *dto.SysDictTypeGetReq, model *models.SysDictType) er
 }
 
 // Create 创建对象
-func (e *Dictionary) Create(c *dto.SysDictTypeInsertReq) error {
+func (e *Dictionary) Create(c *dto.DictionaryCreate) error {
 	if strings.TrimSpace(c.DictType) == "" {
 		return errors.New("字典类型不能为空")
 	}
@@ -85,7 +85,7 @@ func (e *Dictionary) Create(c *dto.SysDictTypeInsertReq) error {
 }
 
 // Update 修改对象
-func (e *Dictionary) Update(c *dto.SysDictTypeUpdateReq) error {
+func (e *Dictionary) Update(c *dto.DictionaryUpdate) error {
 	if c.ID <= 0 {
 		return gorm.ErrRecordNotFound
 	}
@@ -122,7 +122,7 @@ func (e *Dictionary) Update(c *dto.SysDictTypeUpdateReq) error {
 }
 
 // Delete 删除
-func (e *Dictionary) Delete(d *dto.SysDictTypeDeleteReq) error {
+func (e *Dictionary) Delete(d *dto.DictionaryDelete) error {
 	return e.DB.Transaction(func(tx *gorm.DB) error {
 		var types []models.SysDictType
 		if err := lockAdminRows(tx, (&models.SysDictType{}).TableName()).Where("dict_id IN ?", d.IDs).Order("dict_id").Find(&types).Error; err != nil {
@@ -145,7 +145,7 @@ func (e *Dictionary) Delete(d *dto.SysDictTypeDeleteReq) error {
 }
 
 // All 获取所有
-func (e *Dictionary) All(c *dto.SysDictTypeGetPageReq, list *[]models.SysDictType) error {
+func (e *Dictionary) All(c *dto.DictionarySearch, list *[]models.SysDictType) error {
 	var err error
 	var data models.SysDictType
 

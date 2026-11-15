@@ -23,7 +23,7 @@ type User struct {
 }
 
 // List 获取SysUser列表
-func (e *User) List(c *dto.SysUserGetPageReq, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
+func (e *User) List(c *dto.UserSearch, p *actions.DataPermission, list *[]models.SysUser, count *int64) error {
 	var err error
 	var data models.SysUser
 
@@ -52,7 +52,7 @@ func (e *User) List(c *dto.SysUserGetPageReq, p *actions.DataPermission, list *[
 // every user who did not create their own account.
 //
 // GetProfile has always read the same row this way, with no scope at all.
-func (e *User) Self(d *dto.SysUserByID, model *models.SysUser) error {
+func (e *User) Self(d *dto.UserByID, model *models.SysUser) error {
 	err := e.DB.First(model, d.GetID()).Error
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		err = errors.New("查看对象不存在或无权查看")
@@ -67,7 +67,7 @@ func (e *User) Self(d *dto.SysUserByID, model *models.SysUser) error {
 }
 
 // Get 获取SysUser对象
-func (e *User) Get(d *dto.SysUserByID, p *actions.DataPermission, model *models.SysUser) error {
+func (e *User) Get(d *dto.UserByID, p *actions.DataPermission, model *models.SysUser) error {
 	var data models.SysUser
 
 	err := e.DB.Model(&data).Debug().
@@ -88,7 +88,7 @@ func (e *User) Get(d *dto.SysUserByID, p *actions.DataPermission, model *models.
 }
 
 // Create 创建SysUser对象
-func (e *User) Create(c *dto.SysUserInsertReq) error {
+func (e *User) Create(c *dto.UserCreate) error {
 	var err error
 	var data models.SysUser
 	var i int64
@@ -121,7 +121,7 @@ func (e *User) Create(c *dto.SysUserInsertReq) error {
 // the check in the API handler ahead of this call), and letting a caller
 // grant themselves a different role or department through it would be a
 // privilege escalation the exclusion was never meant to open.
-func (e *User) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, callerID int) error {
+func (e *User) Update(c *dto.UserUpdate, p *actions.DataPermission, callerID int) error {
 	var err error
 	var model models.SysUser
 	if callerID <= 0 || c.UserID <= 0 {
@@ -155,7 +155,7 @@ func (e *User) Update(c *dto.SysUserUpdateReq, p *actions.DataPermission, caller
 // UpdateAvatar updates the authenticated caller's avatar. The API supplies the
 // token identity; account ownership does not depend on who created that user.
 // The permission argument is retained for source compatibility.
-func (e *User) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermission) error {
+func (e *User) UpdateAvatar(c *dto.AvatarUpdate, _ *actions.DataPermission) error {
 	if c.UserID <= 0 {
 		return errors.New("invalid user identity")
 	}
@@ -171,7 +171,7 @@ func (e *User) UpdateAvatar(c *dto.UpdateSysUserAvatarReq, _ *actions.DataPermis
 }
 
 // UpdateStatus 更新用户状态
-func (e *User) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermission) error {
+func (e *User) UpdateStatus(c *dto.UserStatusUpdate, p *actions.DataPermission) error {
 	if c.UserID <= 0 || (c.Status != "1" && c.Status != "2") {
 		return errors.New("invalid user status")
 	}
@@ -199,7 +199,7 @@ func (e *User) UpdateStatus(c *dto.UpdateSysUserStatusReq, p *actions.DataPermis
 }
 
 // ResetPassword 重置用户密码
-func (e *User) ResetPassword(c *dto.ResetSysUserPwdReq, p *actions.DataPermission) error {
+func (e *User) ResetPassword(c *dto.PasswordReset, p *actions.DataPermission) error {
 	var err error
 	var model models.SysUser
 	db := e.DB.Scopes(
@@ -227,7 +227,7 @@ func (e *User) ResetPassword(c *dto.ResetSysUserPwdReq, p *actions.DataPermissio
 }
 
 // Delete 删除SysUser
-func (e *User) Delete(c *dto.SysUserByID, p *actions.DataPermission) error {
+func (e *User) Delete(c *dto.UserByID, p *actions.DataPermission) error {
 	var err error
 	var data models.SysUser
 
@@ -294,7 +294,7 @@ func (e *User) ChangePassword(id int, oldPassword, newPassword string, _ *action
 }
 
 // Profile loads the authenticated user's profile.
-func (e *User) Profile(c *dto.SysUserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
+func (e *User) Profile(c *dto.UserByID, user *models.SysUser, roles *[]models.SysRole, posts *[]models.SysPost) error {
 	err := e.DB.Preload("Dept").First(user, c.GetID()).Error
 	if err != nil {
 		return err

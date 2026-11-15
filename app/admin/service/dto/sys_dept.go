@@ -5,8 +5,8 @@ import (
 	common "github.com/gatework/motor/common/models"
 )
 
-// SysDeptGetPageReq 列表或者搜索使用结构体
-type SysDeptGetPageReq struct {
+// DepartmentSearch 列表或者搜索使用结构体
+type DepartmentSearch struct {
 	DeptID   int    `form:"deptId" search:"type:exact;column:dept_id;table:sys_dept" comment:"id"`       //id
 	ParentID int    `form:"parentId" search:"type:exact;column:parent_id;table:sys_dept" comment:"上级部门"` //上级部门
 	DeptPath string `form:"deptPath" search:"type:exact;column:dept_path;table:sys_dept" comment:""`     //路径
@@ -19,12 +19,12 @@ type SysDeptGetPageReq struct {
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysDeptGetPageReq) GetNeedSearch() any {
+func (m *DepartmentSearch) GetNeedSearch() any {
 	return *m
 }
 
-// SysDeptInsertReq carries validated administration request parameters.
-type SysDeptInsertReq struct {
+// DepartmentCreate carries validated administration request parameters.
+type DepartmentCreate struct {
 	common.ControlBy
 	DeptID   int    `uri:"id" comment:"编码"`                                         // 编码
 	ParentID int    `json:"parentId" comment:"上级部门" vd:"?"`                         //上级部门
@@ -38,7 +38,7 @@ type SysDeptInsertReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysDeptInsertReq) Generate(model *models.SysDept) {
+func (s *DepartmentCreate) Generate(model *models.SysDept) {
 	if s.DeptID != 0 {
 		model.DeptID = s.DeptID
 	}
@@ -53,12 +53,12 @@ func (s *SysDeptInsertReq) Generate(model *models.SysDept) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDeptInsertReq) GetID() any {
+func (s *DepartmentCreate) GetID() any {
 	return s.DeptID
 }
 
-// SysDeptUpdateReq carries validated administration request parameters.
-type SysDeptUpdateReq struct {
+// DepartmentUpdate carries validated administration request parameters.
+type DepartmentUpdate struct {
 	common.ControlBy
 	DeptID   int    `uri:"id" comment:"编码"`                                         // 编码
 	ParentID int    `json:"parentId" comment:"上级部门" vd:"?"`                         //上级部门
@@ -72,7 +72,7 @@ type SysDeptUpdateReq struct {
 }
 
 // Generate 结构体数据转化 从 SysDeptControl 至 SysDept 对应的模型
-func (s *SysDeptUpdateReq) Generate(model *models.SysDept) {
+func (s *DepartmentUpdate) Generate(model *models.SysDept) {
 	if s.DeptID != 0 {
 		model.DeptID = s.DeptID
 	}
@@ -87,33 +87,33 @@ func (s *SysDeptUpdateReq) Generate(model *models.SysDept) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDeptUpdateReq) GetID() any {
+func (s *DepartmentUpdate) GetID() any {
 	return s.DeptID
 }
 
-// SysDeptGetReq carries validated administration request parameters.
-type SysDeptGetReq struct {
+// DepartmentByID carries validated administration request parameters.
+type DepartmentByID struct {
 	ID int `uri:"id"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDeptGetReq) GetID() any {
+func (s *DepartmentByID) GetID() any {
 	return s.ID
 }
 
-// SysDeptDeleteReq carries validated administration request parameters.
-type SysDeptDeleteReq struct {
+// DepartmentDelete carries validated administration request parameters.
+type DepartmentDelete struct {
 	IDs []int `json:"ids"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDeptDeleteReq) GetID() any {
+func (s *DepartmentDelete) GetID() any {
 	return s.IDs
 }
 
-// DeptLabel carries validated administration request parameters.
-type DeptLabel struct {
-	ID       int         `gorm:"-" json:"id"`
-	Label    string      `gorm:"-" json:"label"`
-	Children []DeptLabel `gorm:"-" json:"children"`
+// DepartmentLabel carries validated administration request parameters.
+type DepartmentLabel struct {
+	ID       int               `gorm:"-" json:"id"`
+	Label    string            `gorm:"-" json:"label"`
+	Children []DepartmentLabel `gorm:"-" json:"children"`
 }

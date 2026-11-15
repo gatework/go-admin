@@ -6,8 +6,8 @@ import (
 	common "github.com/gatework/motor/common/models"
 )
 
-// SysDictDataGetPageReq carries validated administration request parameters.
-type SysDictDataGetPageReq struct {
+// DictionaryEntrySearch carries validated administration request parameters.
+type DictionaryEntrySearch struct {
 	dto.Pagination `search:"-"`
 	ID             int    `form:"id" search:"type:exact;column:dict_code;table:sys_dict_data" comment:""`
 	DictLabel      string `form:"dictLabel" search:"type:contains;column:dict_label;table:sys_dict_data" comment:""`
@@ -17,18 +17,18 @@ type SysDictDataGetPageReq struct {
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysDictDataGetPageReq) GetNeedSearch() any {
+func (m *DictionaryEntrySearch) GetNeedSearch() any {
 	return *m
 }
 
-// SysDictDataGetAllResp carries validated administration request parameters.
-type SysDictDataGetAllResp struct {
+// DictionaryOption carries validated administration request parameters.
+type DictionaryOption struct {
 	DictLabel string `json:"label"`
 	DictValue string `json:"value"`
 }
 
-// SysDictDataInsertReq carries validated administration request parameters.
-type SysDictDataInsertReq struct {
+// DictionaryEntryCreate carries validated administration request parameters.
+type DictionaryEntryCreate struct {
 	common.ControlBy
 	ID        int    `json:"-" comment:""`
 	DictSort  int    `json:"dictSort" comment:""`
@@ -44,7 +44,7 @@ type SysDictDataInsertReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysDictDataInsertReq) Generate(model *models.SysDictData) {
+func (s *DictionaryEntryCreate) Generate(model *models.SysDictData) {
 	model.DictCode = s.ID
 	model.DictSort = s.DictSort
 	model.DictLabel = s.DictLabel
@@ -59,12 +59,12 @@ func (s *SysDictDataInsertReq) Generate(model *models.SysDictData) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDictDataInsertReq) GetID() any {
+func (s *DictionaryEntryCreate) GetID() any {
 	return s.ID
 }
 
-// SysDictDataUpdateReq carries validated administration request parameters.
-type SysDictDataUpdateReq struct {
+// DictionaryEntryUpdate carries validated administration request parameters.
+type DictionaryEntryUpdate struct {
 	common.ControlBy
 	ID        int    `uri:"dictCode" comment:""`
 	DictSort  int    `json:"dictSort" comment:""`
@@ -80,7 +80,7 @@ type SysDictDataUpdateReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysDictDataUpdateReq) Generate(model *models.SysDictData) {
+func (s *DictionaryEntryUpdate) Generate(model *models.SysDictData) {
 	model.DictCode = s.ID
 	model.DictSort = s.DictSort
 	model.DictLabel = s.DictLabel
@@ -95,27 +95,27 @@ func (s *SysDictDataUpdateReq) Generate(model *models.SysDictData) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDictDataUpdateReq) GetID() any {
+func (s *DictionaryEntryUpdate) GetID() any {
 	return s.ID
 }
 
-// SysDictDataGetReq carries validated administration request parameters.
-type SysDictDataGetReq struct {
+// DictionaryEntryByID carries validated administration request parameters.
+type DictionaryEntryByID struct {
 	ID int `uri:"dictCode"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDictDataGetReq) GetID() any {
+func (s *DictionaryEntryByID) GetID() any {
 	return s.ID
 }
 
-// SysDictDataDeleteReq carries validated administration request parameters.
-type SysDictDataDeleteReq struct {
+// DictionaryEntryDelete carries validated administration request parameters.
+type DictionaryEntryDelete struct {
 	common.ControlBy `json:"-"`
 	IDs              []int `json:"ids"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysDictDataDeleteReq) GetID() any {
+func (s *DictionaryEntryDelete) GetID() any {
 	return s.IDs
 }

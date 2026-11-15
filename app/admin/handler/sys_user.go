@@ -37,7 +37,7 @@ type User struct {
 // @Security Bearer
 func (e User) List(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserGetPageReq{}
+	req := dto.UserSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -75,7 +75,7 @@ func (e User) List(c *gin.Context) {
 // @Security Bearer
 func (e User) Get(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserByID{}
+	req := dto.UserByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -104,13 +104,13 @@ func (e User) Get(c *gin.Context) {
 // @Tags 用户
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysUserInsertReq true "用户数据"
+// @Param data body dto.UserCreate true "用户数据"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/sys-user [post]
 // @Security Bearer
 func (e User) Create(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserInsertReq{}
+	req := dto.UserCreate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -140,13 +140,13 @@ func (e User) Create(c *gin.Context) {
 // @Tags 用户
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysUserUpdateReq true "body"
+// @Param data body dto.UserUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/sys-user/{userId} [put]
 // @Security Bearer
 func (e User) Update(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserUpdateReq{}
+	req := dto.UserUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -205,7 +205,7 @@ func (e User) Update(c *gin.Context) {
 // @Security Bearer
 func (e User) Delete(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserByID{}
+	req := dto.UserByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -244,7 +244,7 @@ func (e User) Delete(c *gin.Context) {
 // @Security Bearer
 func (e User) UpdateAvatar(c *gin.Context) {
 	s := service.User{}
-	req := dto.UpdateSysUserAvatarReq{}
+	req := dto.AvatarUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -297,13 +297,13 @@ func (e User) UpdateAvatar(c *gin.Context) {
 // @Tags 用户
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.UpdateSysUserStatusReq true "body"
+// @Param data body dto.UserStatusUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/user/status [put]
 // @Security Bearer
 func (e User) UpdateStatus(c *gin.Context) {
 	s := service.User{}
-	req := dto.UpdateSysUserStatusReq{}
+	req := dto.UserStatusUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -336,13 +336,13 @@ func (e User) UpdateStatus(c *gin.Context) {
 // @Tags 用户
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.ResetSysUserPwdReq true "body"
+// @Param data body dto.PasswordReset true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/user/pwd/reset [put]
 // @Security Bearer
 func (e User) ResetPassword(c *gin.Context) {
 	s := service.User{}
-	req := dto.ResetSysUserPwdReq{}
+	req := dto.PasswordReset{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -375,13 +375,13 @@ func (e User) ResetPassword(c *gin.Context) {
 // @Tags 用户
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.PassWord true "body"
+// @Param data body dto.PasswordChange true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/user/pwd/set [put]
 // @Security Bearer
 func (e User) ChangePassword(c *gin.Context) {
 	s := service.User{}
-	req := dto.PassWord{}
+	req := dto.PasswordChange{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -413,7 +413,7 @@ func (e User) ChangePassword(c *gin.Context) {
 // @Security Bearer
 func (e User) Profile(c *gin.Context) {
 	s := service.User{}
-	req := dto.SysUserByID{}
+	req := dto.UserByID{}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()
@@ -449,7 +449,7 @@ func (e User) Profile(c *gin.Context) {
 // @Router /api/v1/getinfo [get]
 // @Security Bearer
 func (e User) Current(c *gin.Context) {
-	req := dto.SysUserByID{}
+	req := dto.UserByID{}
 	s := service.User{}
 	r := service.Role{}
 	var err error

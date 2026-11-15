@@ -28,7 +28,7 @@ func TestDeptRejectsMissingUpdateAndInvalidParent(t *testing.T) {
 			}
 			s := &Department{}
 			s.DB = db
-			if err := s.Update(&dto.SysDeptUpdateReq{DeptID: tc.id, ParentID: tc.parent}); err == nil {
+			if err := s.Update(&dto.DepartmentUpdate{DeptID: tc.id, ParentID: tc.parent}); err == nil {
 				t.Fatal("invalid update succeeded")
 			}
 			var got models.SysDept
@@ -46,7 +46,7 @@ func TestDeptInsertMissingParentDoesNotCreate(t *testing.T) {
 	db := integrityDB(t)
 	s := &Department{}
 	s.DB = db
-	if err := s.Create(&dto.SysDeptInsertReq{ParentID: 999, DeptName: "orphan"}); err == nil {
+	if err := s.Create(&dto.DepartmentCreate{ParentID: 999, DeptName: "orphan"}); err == nil {
 		t.Fatal("insert with missing parent succeeded")
 	}
 	var count int64
@@ -74,7 +74,7 @@ func TestDeptMoveRollsBackIfDescendantWriteFails(t *testing.T) {
 	}
 	s := &Department{}
 	s.DB = db
-	if err := s.Update(&dto.SysDeptUpdateReq{DeptID: 3, ParentID: 2}); !errors.Is(err, injected) {
+	if err := s.Update(&dto.DepartmentUpdate{DeptID: 3, ParentID: 2}); !errors.Is(err, injected) {
 		t.Fatalf("error = %v, want injected failure", err)
 	}
 	for _, want := range depts {
@@ -96,7 +96,7 @@ func TestDeptMoveDescendantPath(t *testing.T) {
 	}
 	s := &Department{}
 	s.DB = db
-	if err := s.Update(&dto.SysDeptUpdateReq{DeptID: 3, ParentID: 2, DeptName: "C", Status: 2}); err != nil {
+	if err := s.Update(&dto.DepartmentUpdate{DeptID: 3, ParentID: 2, DeptName: "C", Status: 2}); err != nil {
 		t.Fatal(err)
 	}
 	var child models.SysDept
@@ -144,7 +144,7 @@ func TestDeptCommitFailure(t *testing.T) {
 	}
 	s := &Department{}
 	s.DB = db
-	err := s.Create(&dto.SysDeptInsertReq{DeptName: "duplicate", Status: 2})
+	err := s.Create(&dto.DepartmentCreate{DeptName: "duplicate", Status: 2})
 	var count int64
 	db.Model(&models.SysDept{}).Where("dept_name = ?", "duplicate").Count(&count)
 	if err == nil {

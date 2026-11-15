@@ -31,7 +31,7 @@ type Department struct {
 // @Security Bearer
 func (e Department) List(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptGetPageReq{}
+	req := dto.DepartmentSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -61,7 +61,7 @@ func (e Department) List(c *gin.Context) {
 // @Security Bearer
 func (e Department) Get(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptGetReq{}
+	req := dto.DepartmentByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -90,14 +90,14 @@ func (e Department) Get(c *gin.Context) {
 // @Tags 部门
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysDeptInsertReq true "data"
+// @Param data body dto.DepartmentCreate true "data"
 // @Success 200 {string} string	"{"code": 200, "message": "添加成功"}"
 // @Success 200 {string} string	"{"code": -1, "message": "添加失败"}"
 // @Router /api/v1/dept [post]
 // @Security Bearer
 func (e Department) Create(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptInsertReq{}
+	req := dto.DepartmentCreate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -127,14 +127,14 @@ func (e Department) Create(c *gin.Context) {
 // @Accept  application/json
 // @Product application/json
 // @Param id path int true "id"
-// @Param data body dto.SysDeptUpdateReq true "body"
+// @Param data body dto.DepartmentUpdate true "body"
 // @Success 200 {string} string	"{"code": 200, "message": "添加成功"}"
 // @Success 200 {string} string	"{"code": -1, "message": "添加失败"}"
 // @Router /api/v1/dept/{deptId} [put]
 // @Security Bearer
 func (e Department) Update(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptUpdateReq{}
+	req := dto.DepartmentUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -159,14 +159,14 @@ func (e Department) Update(c *gin.Context) {
 // @Summary 删除部门
 // @Description 删除数据
 // @Tags 部门
-// @Param data body dto.SysDeptDeleteReq true "body"
+// @Param data body dto.DepartmentDelete true "body"
 // @Success 200 {string} string	"{"code": 200, "message": "删除成功"}"
 // @Success 200 {string} string	"{"code": -1, "message": "删除失败"}"
 // @Router /api/v1/dept [delete]
 // @Security Bearer
 func (e Department) Delete(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptDeleteReq{}
+	req := dto.DepartmentDelete{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -190,7 +190,7 @@ func (e Department) Delete(c *gin.Context) {
 // Tree 用户管理 左侧部门树
 func (e Department) Tree(c *gin.Context) {
 	s := service.Department{}
-	req := dto.SysDeptGetPageReq{}
+	req := dto.DepartmentSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {

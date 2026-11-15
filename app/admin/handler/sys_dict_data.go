@@ -32,7 +32,7 @@ type DictionaryEntry struct {
 // @Security Bearer
 func (e DictionaryEntry) List(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataGetPageReq{}
+	req := dto.DictionaryEntrySearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -66,7 +66,7 @@ func (e DictionaryEntry) List(c *gin.Context) {
 // @Security Bearer
 func (e DictionaryEntry) Get(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataGetReq{}
+	req := dto.DictionaryEntryByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -97,13 +97,13 @@ func (e DictionaryEntry) Get(c *gin.Context) {
 // @Tags 字典数据
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysDictDataInsertReq true "data"
+// @Param data body dto.DictionaryEntryCreate true "data"
 // @Success 200 {object} response.Response	"{"code": 200, "message": "添加成功"}"
 // @Router /api/v1/dict/data [post]
 // @Security Bearer
 func (e DictionaryEntry) Create(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataInsertReq{}
+	req := dto.DictionaryEntryCreate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -131,13 +131,13 @@ func (e DictionaryEntry) Create(c *gin.Context) {
 // @Tags 字典数据
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysDictDataUpdateReq true "body"
+// @Param data body dto.DictionaryEntryUpdate true "body"
 // @Success 200 {object} response.Response	"{"code": 200, "message": "修改成功"}"
 // @Router /api/v1/dict/data/{dictCode} [put]
 // @Security Bearer
 func (e DictionaryEntry) Update(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataUpdateReq{}
+	req := dto.DictionaryEntryUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -162,13 +162,13 @@ func (e DictionaryEntry) Update(c *gin.Context) {
 // @Summary 删除字典数据
 // @Description 删除数据
 // @Tags 字典数据
-// @Param dictCode body dto.SysDictDataDeleteReq true "body"
+// @Param dictCode body dto.DictionaryEntryDelete true "body"
 // @Success 200 {object} response.Response	"{"code": 200, "message": "删除成功"}"
 // @Router /api/v1/dict/data [delete]
 // @Security Bearer
 func (e DictionaryEntry) Delete(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataDeleteReq{}
+	req := dto.DictionaryEntryDelete{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -194,12 +194,12 @@ func (e DictionaryEntry) Delete(c *gin.Context) {
 // @Description 数据字典根据key获取
 // @Tags 字典数据
 // @Param dictType query int true "dictType"
-// @Success 200 {object} response.Response{data=[]dto.SysDictDataGetAllResp}  "{"code": 200, "data": [...]}"
+// @Success 200 {object} response.Response{data=[]dto.DictionaryOption}  "{"code": 200, "data": [...]}"
 // @Router /api/v1/dict-data/option-select [get]
 // @Security Bearer
 func (e DictionaryEntry) All(c *gin.Context) {
 	s := service.DictionaryEntry{}
-	req := dto.SysDictDataGetPageReq{}
+	req := dto.DictionaryEntrySearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -217,9 +217,9 @@ func (e DictionaryEntry) All(c *gin.Context) {
 		e.Error(500, err, "查询失败")
 		return
 	}
-	l := make([]dto.SysDictDataGetAllResp, 0)
+	l := make([]dto.DictionaryOption, 0)
 	for _, i := range list {
-		d := dto.SysDictDataGetAllResp{DictLabel: i.DictLabel, DictValue: i.DictValue}
+		d := dto.DictionaryOption{DictLabel: i.DictLabel, DictValue: i.DictValue}
 		l = append(l, d)
 	}
 

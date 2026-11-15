@@ -34,7 +34,7 @@ type Route struct {
 // @Security Bearer
 func (e Route) List(c *gin.Context) {
 	s := service.Route{}
-	req := dto.SysAPIGetPageReq{}
+	req := dto.RouteSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -67,7 +67,7 @@ func (e Route) List(c *gin.Context) {
 // @Router /api/v1/sys-api/{id} [get]
 // @Security Bearer
 func (e Route) Get(c *gin.Context) {
-	req := dto.SysAPIGetReq{}
+	req := dto.RouteByID{}
 	s := service.Route{}
 	var err error
 	e.API, err = request.New(c)
@@ -96,12 +96,12 @@ func (e Route) Get(c *gin.Context) {
 // @Tags 接口管理
 // @Accept application/json
 // @Product application/json
-// @Param data body dto.SysAPIUpdateReq true "body"
+// @Param data body dto.RouteUpdate true "body"
 // @Success 200 {object} response.Response	"{"code": 200, "message": "修改成功"}"
 // @Router /api/v1/sys-api/{id} [put]
 // @Security Bearer
 func (e Route) Update(c *gin.Context) {
-	req := dto.SysAPIUpdateReq{}
+	req := dto.RouteUpdate{}
 	s := service.Route{}
 	var err error
 	e.API, err = request.New(c)

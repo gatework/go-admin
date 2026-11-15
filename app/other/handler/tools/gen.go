@@ -354,8 +354,8 @@ func generationTemplateSpecs(routerFile string) []generatorTemplate {
 		{"template/v4/lang-en.go.template", "en语言包模版解析失败", true},
 	}
 }
-func generatedParentMenu(tab tools.SysTables) dto.SysMenuInsertReq {
-	return dto.SysMenuInsertReq{
+func generatedParentMenu(tab tools.SysTables) dto.MenuCreate {
+	return dto.MenuCreate{
 		Title:     tab.TableComment,
 		Icon:      "pass",
 		Path:      "/" + tab.MLTBName,
@@ -369,8 +369,8 @@ func generatedParentMenu(tab tools.SysTables) dto.SysMenuInsertReq {
 		IsFrame:   "0",
 		CreateBy:  1}
 }
-func generatedChildMenu(tab tools.SysTables, parentID int) dto.SysMenuInsertReq {
-	return dto.SysMenuInsertReq{
+func generatedChildMenu(tab tools.SysTables, parentID int) dto.MenuCreate {
+	return dto.MenuCreate{
 		MenuName:   tab.ClassName + "Manage",
 		Title:      tab.TableComment,
 		Icon:       "pass",
@@ -387,8 +387,8 @@ func generatedChildMenu(tab tools.SysTables, parentID int) dto.SysMenuInsertReq 
 		CreateBy:   1,
 		UpdateBy:   1}
 }
-func generatedActionMenu(tab tools.SysTables, parentID int, title, permission string) dto.SysMenuInsertReq {
-	return dto.SysMenuInsertReq{MenuName: "", Title: title + tab.TableComment, Icon: "", Path: tab.TBName, MenuType: "F", Action: "无", Permission: tab.PackageName + ":" + tab.BusinessName + ":" + permission, ParentID: parentID, NoCache: false, Sort: 0, Visible: "0", IsFrame: "0", CreateBy: 1, UpdateBy: 1}
+func generatedActionMenu(tab tools.SysTables, parentID int, title, permission string) dto.MenuCreate {
+	return dto.MenuCreate{MenuName: "", Title: title + tab.TableComment, Icon: "", Path: tab.TBName, MenuType: "F", Action: "无", Permission: tab.PackageName + ":" + tab.BusinessName + ":" + permission, ParentID: parentID, NoCache: false, Sort: 0, Visible: "0", IsFrame: "0", CreateBy: 1, UpdateBy: 1}
 }
 
 // writeFiles renders every template for tab and writes the files, and

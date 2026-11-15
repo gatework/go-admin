@@ -38,7 +38,7 @@ type Role struct {
 // @Security Bearer
 func (e Role) List(c *gin.Context) {
 	s := service.Role{}
-	req := dto.SysRoleGetPageReq{}
+	req := dto.RoleSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -73,7 +73,7 @@ func (e Role) List(c *gin.Context) {
 // @Security Bearer
 func (e Role) Get(c *gin.Context) {
 	s := service.Role{}
-	req := dto.SysRoleGetReq{}
+	req := dto.RoleByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -103,13 +103,13 @@ func (e Role) Get(c *gin.Context) {
 // @Tags 角色/Role
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysRoleInsertReq true "data"
+// @Param data body dto.RoleCreate true "data"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/role [post]
 // @Security Bearer
 func (e Role) Create(c *gin.Context) {
 	s := service.Role{}
-	req := dto.SysRoleInsertReq{}
+	req := dto.RoleCreate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -144,13 +144,13 @@ func (e Role) Create(c *gin.Context) {
 // @Tags 角色/Role
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysRoleUpdateReq true "body"
+// @Param data body dto.RoleUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/role/{id} [put]
 // @Security Bearer
 func (e Role) Update(c *gin.Context) {
 	s := service.Role{}
-	req := dto.SysRoleUpdateReq{}
+	req := dto.RoleUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -180,13 +180,13 @@ func (e Role) Update(c *gin.Context) {
 // @Summary 删除用户角色
 // @Description 删除数据
 // @Tags 角色/Role
-// @Param data body dto.SysRoleDeleteReq true "body"
+// @Param data body dto.RoleDelete true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/role [delete]
 // @Security Bearer
 func (e Role) Delete(c *gin.Context) {
 	s := new(service.Role)
-	req := dto.SysRoleDeleteReq{}
+	req := dto.RoleDelete{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -216,13 +216,13 @@ func (e Role) Delete(c *gin.Context) {
 // @Tags 角色/Role
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.UpdateStatusReq true "body"
+// @Param data body dto.RoleStatusUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/role-status/{id} [put]
 // @Security Bearer
 func (e Role) UpdateStatus(c *gin.Context) {
 	s := service.Role{}
-	req := dto.UpdateStatusReq{}
+	req := dto.RoleStatusUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -249,13 +249,13 @@ func (e Role) UpdateStatus(c *gin.Context) {
 // @Tags 角色/Role
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.RoleDataScopeReq true "body"
+// @Param data body dto.RoleDataScopeUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/role-status/{id} [put]
 // @Security Bearer
 func (e Role) UpdateDataScope(c *gin.Context) {
 	s := service.Role{}
-	req := dto.RoleDataScopeReq{}
+	req := dto.RoleDataScopeUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {

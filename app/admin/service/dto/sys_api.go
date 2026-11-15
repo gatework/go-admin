@@ -6,10 +6,10 @@ import (
 	common "github.com/gatework/motor/common/models"
 )
 
-// SysAPIGetPageReq carries validated administration request parameters.
-type SysAPIGetPageReq struct {
+// RouteSearch carries validated administration request parameters.
+type RouteSearch struct {
 	dto.Pagination `search:"-"`
-	SysAPIOrder
+	RouteOrder
 	Title    string `form:"title"  search:"type:contains;column:title;table:sys_api" comment:"标题"`
 	Path     string `form:"path"  search:"type:contains;column:path;table:sys_api" comment:"地址"`
 	Action   string `form:"action"  search:"type:exact;column:action;table:sys_api" comment:"请求方式"`
@@ -17,20 +17,20 @@ type SysAPIGetPageReq struct {
 	Type     string `form:"type" search:"-" comment:"类型"`
 }
 
-// SysAPIOrder carries validated administration request parameters.
-type SysAPIOrder struct {
+// RouteOrder carries validated administration request parameters.
+type RouteOrder struct {
 	TitleOrder     string `search:"type:order;column:title;table:sys_api" form:"titleOrder"`
 	PathOrder      string `search:"type:order;column:path;table:sys_api" form:"pathOrder"`
 	CreatedAtOrder string `search:"type:order;column:created_at;table:sys_api" form:"createdAtOrder"`
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysAPIGetPageReq) GetNeedSearch() any {
+func (m *RouteSearch) GetNeedSearch() any {
 	return *m
 }
 
-// SysAPIUpdateReq carries validated administration request parameters.
-type SysAPIUpdateReq struct {
+// RouteUpdate carries validated administration request parameters.
+type RouteUpdate struct {
 	common.ControlBy
 	ID     int    `uri:"id" comment:"编码"` // 编码
 	Handle string `json:"handle" comment:"handle"`
@@ -41,7 +41,7 @@ type SysAPIUpdateReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysAPIUpdateReq) Generate(model *models.SysAPI) {
+func (s *RouteUpdate) Generate(model *models.SysAPI) {
 	if s.ID != 0 {
 		model.ID = s.ID
 	}
@@ -53,16 +53,16 @@ func (s *SysAPIUpdateReq) Generate(model *models.SysAPI) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysAPIUpdateReq) GetID() any {
+func (s *RouteUpdate) GetID() any {
 	return s.ID
 }
 
-// SysAPIGetReq carries validated administration request parameters.
-type SysAPIGetReq struct {
+// RouteByID carries validated administration request parameters.
+type RouteByID struct {
 	ID int `uri:"id"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysAPIGetReq) GetID() any {
+func (s *RouteByID) GetID() any {
 	return s.ID
 }

@@ -212,7 +212,7 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				s := &DictionaryEntry{}
 				s.DB = db
 				s.Logger = logger.NewHelper(logger.Default())
-				req := &dto.SysDictDataInsertReq{DictType: "new"}
+				req := &dto.DictionaryEntryCreate{DictType: "new"}
 				req.CreateBy = 42
 				if err := s.Create(req); err != nil {
 					t.Fatal(err)
@@ -227,7 +227,7 @@ func TestConfigDictInsertStoresCreatorAndReturnsID(t *testing.T) {
 				s := &Dictionary{}
 				s.DB = db
 				s.Logger = logger.NewHelper(logger.Default())
-				req := &dto.SysDictTypeInsertReq{DictType: "new"}
+				req := &dto.DictionaryCreate{DictType: "new"}
 				req.CreateBy = 42
 				if err := s.Create(req); err != nil {
 					t.Fatal(err)

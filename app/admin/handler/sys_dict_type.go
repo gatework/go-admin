@@ -34,7 +34,7 @@ type Dictionary struct {
 // @Security Bearer
 func (e Dictionary) List(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeGetPageReq{}
+	req := dto.DictionarySearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -66,7 +66,7 @@ func (e Dictionary) List(c *gin.Context) {
 // @Security Bearer
 func (e Dictionary) Get(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeGetReq{}
+	req := dto.DictionaryByID{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -93,13 +93,13 @@ func (e Dictionary) Get(c *gin.Context) {
 // @Tags 字典类型
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysDictTypeInsertReq true "data"
+// @Param data body dto.DictionaryCreate true "data"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/dict/type [post]
 // @Security Bearer
 func (e Dictionary) Create(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeInsertReq{}
+	req := dto.DictionaryCreate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -127,13 +127,13 @@ func (e Dictionary) Create(c *gin.Context) {
 // @Tags 字典类型
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysDictTypeUpdateReq true "body"
+// @Param data body dto.DictionaryUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/dict/type/{dictId} [put]
 // @Security Bearer
 func (e Dictionary) Update(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeUpdateReq{}
+	req := dto.DictionaryUpdate{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -159,13 +159,13 @@ func (e Dictionary) Update(c *gin.Context) {
 // @Summary 删除字典类型
 // @Description 删除数据
 // @Tags 字典类型
-// @Param dictCode body dto.SysDictTypeDeleteReq true "body"
+// @Param dictCode body dto.DictionaryDelete true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/dict/type [delete]
 // @Security Bearer
 func (e Dictionary) Delete(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeDeleteReq{}
+	req := dto.DictionaryDelete{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -198,7 +198,7 @@ func (e Dictionary) Delete(c *gin.Context) {
 // @Security Bearer
 func (e Dictionary) All(c *gin.Context) {
 	s := service.Dictionary{}
-	req := dto.SysDictTypeGetPageReq{}
+	req := dto.DictionarySearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {

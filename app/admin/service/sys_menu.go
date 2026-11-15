@@ -28,7 +28,7 @@ type Menu struct {
 }
 
 // List 获取SysMenu列表
-func (e *Menu) List(c *dto.SysMenuGetPageReq, menus *[]models.SysMenu) error {
+func (e *Menu) List(c *dto.MenuSearch, menus *[]models.SysMenu) error {
 	var menu = make([]models.SysMenu, 0)
 	err := e.getPage(c, &menu)
 	if err != nil {
@@ -45,7 +45,7 @@ func (e *Menu) List(c *dto.SysMenuGetPageReq, menus *[]models.SysMenu) error {
 }
 
 // Get 获取SysMenu对象
-func (e *Menu) Get(d *dto.SysMenuGetReq, model *models.SysMenu) error {
+func (e *Menu) Get(d *dto.MenuByID, model *models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 
@@ -76,7 +76,7 @@ func lockMenuTree(tx *gorm.DB) error {
 }
 
 // Create 创建SysMenu对象
-func (e *Menu) Create(c *dto.SysMenuInsertReq) error {
+func (e *Menu) Create(c *dto.MenuCreate) error {
 	var data models.SysMenu
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockMenuTree(tx); err != nil {
@@ -99,7 +99,7 @@ func (e *Menu) Create(c *dto.SysMenuInsertReq) error {
 }
 
 // Update 修改SysMenu对象
-func (e *Menu) Update(c *dto.SysMenuUpdateReq) error {
+func (e *Menu) Update(c *dto.MenuUpdate) error {
 	err := e.DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockMenuTree(tx); err != nil {
 			return err
@@ -148,7 +148,7 @@ func (e *Menu) Update(c *dto.SysMenuUpdateReq) error {
 }
 
 // Delete 删除SysMenu
-func (e *Menu) Delete(d *dto.SysMenuDeleteReq) error {
+func (e *Menu) Delete(d *dto.MenuDelete) error {
 	var err error
 	var data models.SysMenu
 
@@ -165,7 +165,7 @@ func (e *Menu) Delete(d *dto.SysMenuDeleteReq) error {
 }
 
 // ListFlat 获取菜单数据
-func (e *Menu) ListFlat(c *dto.SysMenuGetPageReq, list *[]models.SysMenu) error {
+func (e *Menu) ListFlat(c *dto.MenuSearch, list *[]models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 
@@ -184,7 +184,7 @@ func (e *Menu) ListFlat(c *dto.SysMenuGetPageReq, list *[]models.SysMenu) error 
 // Labels 修改角色中 设置菜单基础数据
 func (e *Menu) Labels() (m []dto.MenuLabel, err error) {
 	var list []models.SysMenu
-	err = e.ListFlat(&dto.SysMenuGetPageReq{}, &list)
+	err = e.ListFlat(&dto.MenuSearch{}, &list)
 
 	m = make([]dto.MenuLabel, 0)
 	for i := range list {
@@ -319,7 +319,7 @@ func (e *Menu) ForRole(roleName string) (m []models.SysMenu, err error) {
 }
 
 // getPage 菜单分页列表
-func (e *Menu) getPage(c *dto.SysMenuGetPageReq, list *[]models.SysMenu) error {
+func (e *Menu) getPage(c *dto.MenuSearch, list *[]models.SysMenu) error {
 	var err error
 	var data models.SysMenu
 

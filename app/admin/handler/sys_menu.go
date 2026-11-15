@@ -27,7 +27,7 @@ type Menu struct {
 // @Security Bearer
 func (e Menu) List(c *gin.Context) {
 	s := service.Menu{}
-	req := dto.SysMenuGetPageReq{}
+	req := dto.MenuSearch{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -57,7 +57,7 @@ func (e Menu) List(c *gin.Context) {
 // @Router /api/v1/menu/{id} [get]
 // @Security Bearer
 func (e Menu) Get(c *gin.Context) {
-	req := dto.SysMenuGetReq{}
+	req := dto.MenuByID{}
 	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
@@ -86,12 +86,12 @@ func (e Menu) Get(c *gin.Context) {
 // @Tags 菜单
 // @Accept  application/json
 // @Product application/json
-// @Param data body dto.SysMenuInsertReq true "data"
+// @Param data body dto.MenuCreate true "data"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/menu [post]
 // @Security Bearer
 func (e Menu) Create(c *gin.Context) {
-	req := dto.SysMenuInsertReq{}
+	req := dto.MenuCreate{}
 	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
@@ -121,12 +121,12 @@ func (e Menu) Create(c *gin.Context) {
 // @Accept  application/json
 // @Product application/json
 // @Param id path int true "id"
-// @Param data body dto.SysMenuUpdateReq true "body"
+// @Param data body dto.MenuUpdate true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/menu/{id} [put]
 // @Security Bearer
 func (e Menu) Update(c *gin.Context) {
-	req := dto.SysMenuUpdateReq{}
+	req := dto.MenuUpdate{}
 	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
@@ -153,12 +153,12 @@ func (e Menu) Update(c *gin.Context) {
 // @Summary 删除菜单
 // @Description 删除数据
 // @Tags 菜单
-// @Param data body dto.SysMenuDeleteReq true "body"
+// @Param data body dto.MenuDelete true "body"
 // @Success 200 {object} response.Response "{"code": 200, "data": [...]}"
 // @Router /api/v1/menu [delete]
 // @Security Bearer
 func (e Menu) Delete(c *gin.Context) {
-	control := new(dto.SysMenuDeleteReq)
+	control := new(dto.MenuDelete)
 	s := new(service.Menu)
 	var err error
 	e.API, err = request.New(c)
@@ -221,7 +221,7 @@ func (e Menu) RoleTree(c *gin.Context) {
 func (e Menu) Tree(c *gin.Context) {
 	m := service.Menu{}
 	r := service.Role{}
-	req := dto.SelectRole{}
+	req := dto.RoleSelection{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {

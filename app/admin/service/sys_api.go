@@ -20,7 +20,7 @@ type Route struct {
 }
 
 // List 获取SysAPI列表
-func (e *Route) List(c *dto.SysAPIGetPageReq, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
+func (e *Route) List(c *dto.RouteSearch, p *actions.DataPermission, list *[]models.SysAPI, count *int64) error {
 	var err error
 	var data models.SysAPI
 
@@ -48,7 +48,7 @@ func (e *Route) List(c *dto.SysAPIGetPageReq, p *actions.DataPermission, list *[
 }
 
 // Get 获取SysAPI对象with id
-func (e *Route) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *models.SysAPI) error {
+func (e *Route) Get(d *dto.RouteByID, p *actions.DataPermission, model *models.SysAPI) error {
 	var data models.SysAPI
 	err := e.DB.Model(&data).
 		Scopes(
@@ -68,7 +68,7 @@ func (e *Route) Get(d *dto.SysAPIGetReq, p *actions.DataPermission, model *model
 }
 
 // Update 修改SysAPI对象
-func (e *Route) Update(c *dto.SysAPIUpdateReq, p *actions.DataPermission) error {
+func (e *Route) Update(c *dto.RouteUpdate, p *actions.DataPermission) error {
 	var model = models.SysAPI{}
 	db := e.DB.Scopes(
 		actions.Permission(model.TableName(), p),

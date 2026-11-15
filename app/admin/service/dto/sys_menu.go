@@ -7,20 +7,20 @@ import (
 	"github.com/gatework/motor/common/dto"
 )
 
-// SysMenuGetPageReq 列表或者搜索使用结构体
-type SysMenuGetPageReq struct {
+// MenuSearch 列表或者搜索使用结构体
+type MenuSearch struct {
 	dto.Pagination `search:"-"`
 	Title          string `form:"title" search:"type:contains;column:title;table:sys_menu" comment:"菜单名称"`  // 菜单名称
 	Visible        int    `form:"visible" search:"type:exact;column:visible;table:sys_menu" comment:"显示状态"` // 显示状态
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysMenuGetPageReq) GetNeedSearch() any {
+func (m *MenuSearch) GetNeedSearch() any {
 	return *m
 }
 
-// SysMenuInsertReq carries validated administration request parameters.
-type SysMenuInsertReq struct {
+// MenuCreate carries validated administration request parameters.
+type MenuCreate struct {
 	common.ControlBy
 	MenuID     int             `uri:"id" comment:"编码"`            // 编码
 	MenuName   string          `form:"menuName" comment:"菜单name"` //菜单name
@@ -43,7 +43,7 @@ type SysMenuInsertReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysMenuInsertReq) Generate(model *models.SysMenu) {
+func (s *MenuCreate) Generate(model *models.SysMenu) {
 	if s.MenuID != 0 {
 		model.MenuID = s.MenuID
 	}
@@ -72,12 +72,12 @@ func (s *SysMenuInsertReq) Generate(model *models.SysMenu) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysMenuInsertReq) GetID() any {
+func (s *MenuCreate) GetID() any {
 	return s.MenuID
 }
 
-// SysMenuUpdateReq carries validated administration request parameters.
-type SysMenuUpdateReq struct {
+// MenuUpdate carries validated administration request parameters.
+type MenuUpdate struct {
 	common.ControlBy
 	MenuID     int             `uri:"id" comment:"编码"`            // 编码
 	MenuName   string          `form:"menuName" comment:"菜单name"` //菜单name
@@ -100,7 +100,7 @@ type SysMenuUpdateReq struct {
 }
 
 // Generate copies request fields into a new request or supplied model.
-func (s *SysMenuUpdateReq) Generate(model *models.SysMenu) {
+func (s *MenuUpdate) Generate(model *models.SysMenu) {
 	if s.MenuID != 0 {
 		model.MenuID = s.MenuID
 	}
@@ -129,28 +129,28 @@ func (s *SysMenuUpdateReq) Generate(model *models.SysMenu) {
 }
 
 // GetID returns the selected resource identity.
-func (s *SysMenuUpdateReq) GetID() any {
+func (s *MenuUpdate) GetID() any {
 	return s.MenuID
 }
 
-// SysMenuGetReq carries validated administration request parameters.
-type SysMenuGetReq struct {
+// MenuByID carries validated administration request parameters.
+type MenuByID struct {
 	ID int `uri:"id"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysMenuGetReq) GetID() any {
+func (s *MenuByID) GetID() any {
 	return s.ID
 }
 
-// SysMenuDeleteReq carries validated administration request parameters.
-type SysMenuDeleteReq struct {
+// MenuDelete carries validated administration request parameters.
+type MenuDelete struct {
 	common.ControlBy
 	IDs []int `json:"ids"`
 }
 
 // GetID returns the selected resource identity.
-func (s *SysMenuDeleteReq) GetID() any {
+func (s *MenuDelete) GetID() any {
 	return s.IDs
 }
 
@@ -161,13 +161,7 @@ type MenuLabel struct {
 	Children []MenuLabel `json:"children,omitempty" gorm:"-"`
 }
 
-// MenuRole carries validated administration request parameters.
-type MenuRole struct {
-	models.SysMenu
-	IsSelect bool `json:"is_select" gorm:"-"`
-}
-
-// SelectRole carries validated administration request parameters.
-type SelectRole struct {
+// RoleSelection carries validated administration request parameters.
+type RoleSelection struct {
 	RoleID int `uri:"roleId"`
 }

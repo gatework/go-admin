@@ -17,7 +17,7 @@ func TestMenuMoveUpdatesOnlyDescendants(t *testing.T) {
 	s := &Menu{}
 	s.DB = db
 	s.Logger = logger.NewHelper(logger.Default())
-	if err := s.Update(&dto.SysMenuUpdateReq{MenuID: 3, ParentID: 2}); err != nil {
+	if err := s.Update(&dto.MenuUpdate{MenuID: 3, ParentID: 2}); err != nil {
 		t.Fatal(err)
 	}
 	for id, want := range map[int]string{3: "/0/2/3", 4: "/0/2/3/4", 30: "/0/1/30"} {
@@ -45,7 +45,7 @@ func TestMenuRejectsMissingUpdateAndInvalidParent(t *testing.T) {
 			s := &Menu{}
 			s.DB = db
 			s.Logger = logger.NewHelper(logger.Default())
-			if err := s.Update(&dto.SysMenuUpdateReq{MenuID: tc.id, ParentID: tc.parent}); err == nil {
+			if err := s.Update(&dto.MenuUpdate{MenuID: tc.id, ParentID: tc.parent}); err == nil {
 				t.Fatal("invalid update succeeded")
 			}
 			var got models.SysMenu
@@ -68,7 +68,7 @@ func TestMenuUpdatePreservesCreator(t *testing.T) {
 	}
 	s := &Menu{}
 	s.DB = db
-	req := &dto.SysMenuUpdateReq{MenuID: 1, MenuName: "changed"}
+	req := &dto.MenuUpdate{MenuID: 1, MenuName: "changed"}
 	req.CreateBy = 999
 	req.UpdateBy = 20
 	if err := s.Update(req); err != nil {
