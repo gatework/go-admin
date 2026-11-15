@@ -15,7 +15,7 @@ import (
 // after the first '('.
 var columnLengthPattern = regexp.MustCompile(`\((\d+)`)
 
-// InferColumnWidth backs R2's fallback path: when a column's colWidth is
+// inferColumnWidth backs R2's fallback path: when a column's colWidth is
 // left at its 0 sentinel (unconfigured), this reads sys_columns.column_type
 // - MySQL's information_schema.COLUMNS.COLUMN_TYPE, which carries length,
 // e.g. "varchar(255)", "int(11)", "decimal(10,2)", "tinyint(1)" - and
@@ -35,7 +35,7 @@ var columnLengthPattern = regexp.MustCompile(`\((\d+)`)
 // Exported and pure (string in, int out) so QA can pin an exact input/output
 // table against it directly (测试用例.md §2.5's own recommendation), rather
 // than only being able to assert "the rendered page happens not to overflow".
-func InferColumnWidth(columnType string) int {
+func inferColumnWidth(columnType string) int {
 	ct := strings.ToLower(strings.TrimSpace(columnType))
 
 	switch {
@@ -120,7 +120,7 @@ func columnLength(columnType string) int {
 func applyInferredColumnWidths(columns []tools.SysColumns) {
 	for i := range columns {
 		if columns[i].ColWidth == 0 {
-			columns[i].ColWidth = InferColumnWidth(columns[i].ColumnType)
+			columns[i].ColWidth = inferColumnWidth(columns[i].ColumnType)
 		}
 	}
 }

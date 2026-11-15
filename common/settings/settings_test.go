@@ -63,7 +63,7 @@ func TestRejectedPreparationKeepsPublishedStateAndClosesCandidate(t *testing.T) 
 			owners.Lock()
 			owners.logger = current
 			owners.Unlock()
-			hostconfig.SetExt(hostconfig.Extend{AMap: hostconfig.AMap{Key: "current"}})
+			hostconfig.SetExt(hostconfig.Extend{Metrics: hostconfig.Metrics{Token: "current"}})
 			before := config.Current().Settings.Application.Name
 			app := runtime.New()
 			app.SetLogger(current)
@@ -71,7 +71,7 @@ func TestRejectedPreparationKeepsPublishedStateAndClosesCandidate(t *testing.T) 
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			expected := errors.New("preparation failed")
-			err := w.start(ctx, memory.NewSource(memory.WithJSON([]byte(`{"settings":{"application":{"name":"candidate"},"extend":{"amap":{"key":"candidate"}}}}`))), []func(*config.Settings) error{func(*config.Settings) error {
+			err := w.start(ctx, memory.NewSource(memory.WithJSON([]byte(`{"settings":{"application":{"name":"candidate"},"extend":{"metrics":{"token":"candidate"}}}}`))), []func(*config.Settings) error{func(*config.Settings) error {
 				if reason == "cancelled" {
 					cancel()
 					return nil
@@ -84,7 +84,7 @@ func TestRejectedPreparationKeepsPublishedStateAndClosesCandidate(t *testing.T) 
 			if !errors.Is(err, expected) {
 				t.Fatalf("failure lost: %v", err)
 			}
-			if logger.Default() != current || app.Logger() != current || hostconfig.Ext().AMap.Key != "current" {
+			if logger.Default() != current || app.Logger() != current || hostconfig.Ext().Metrics.Token != "current" {
 				t.Fatal("rejected settings published host resources")
 			}
 			if config.Current().Settings.Application.Name != before {
@@ -116,7 +116,7 @@ func TestWatcherCloseDiscardsCancelledReloadAndKeepsCommittedRoot(t *testing.T) 
 		return root, nil
 	}}
 	prepared := make(chan struct{})
-	src := memory.NewSource(memory.WithJSON([]byte(`{"settings":{"application":{"name":"committed"},"extend":{"amap":{"key":"committed"}}}}`)))
+	src := memory.NewSource(memory.WithJSON([]byte(`{"settings":{"application":{"name":"committed"},"extend":{"metrics":{"token":"committed"}}}}`)))
 	if err := w.start(ctx, src, []func(*config.Settings) error{func(candidate *config.Settings) error {
 		if candidate.Settings.Application.Name == "cancelled reload" {
 			cancel()
@@ -128,10 +128,10 @@ func TestWatcherCloseDiscardsCancelledReloadAndKeepsCommittedRoot(t *testing.T) 
 	}
 	defer w.Close()
 	committed := <-opened
-	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().AMap.Key != "committed" {
+	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().Metrics.Token != "committed" {
 		t.Fatal("accepted settings did not commit host resources")
 	}
-	if err := src.Write(&source.ChangeSet{Format: "json", Data: []byte(`{"settings":{"application":{"name":"cancelled reload"},"extend":{"amap":{"key":"cancelled"}}}}`)}); err != nil {
+	if err := src.Write(&source.ChangeSet{Format: "json", Data: []byte(`{"settings":{"application":{"name":"cancelled reload"},"extend":{"metrics":{"token":"cancelled"}}}}`)}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -149,7 +149,7 @@ func TestWatcherCloseDiscardsCancelledReloadAndKeepsCommittedRoot(t *testing.T) 
 	if staged.closed.Load() != 1 || committed.closed.Load() != 0 {
 		t.Fatalf("wrong root ownership after close: staged=%d committed=%d", staged.closed.Load(), committed.closed.Load())
 	}
-	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().AMap.Key != "committed" || config.Current().Settings.Application.Name != "committed" {
+	if logger.Default() != committed || app.Logger() != committed || hostconfig.Ext().Metrics.Token != "committed" || config.Current().Settings.Application.Name != "committed" {
 		t.Fatal("cancelled reload replaced committed state")
 	}
 	if err := CloseLogger(); err != nil {

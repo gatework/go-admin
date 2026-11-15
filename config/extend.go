@@ -33,7 +33,6 @@ func SetExt(next Extend) { current.Store(&next) }
 //
 // 使用方法： config.Ext().......即可！！
 type Extend struct {
-	AMap      AMap // 这里配置对应配置文件的结构即可
 	FileStore FileStore
 	RateLimit RateLimit
 	Shutdown  Shutdown
@@ -103,11 +102,6 @@ func (r RateLimit) Threshold() float64 {
 		return DefaultInboundQPS
 	}
 	return *r.InboundQPS
-}
-
-// AMap defines the amap contract.
-type AMap struct {
-	Key string
 }
 
 // FileStore 对象存储。上传接口的 source 参数决定走哪一家：2 是阿里云，3 是七牛。

@@ -32,6 +32,4 @@ settings:
   queue:
     memory:
       poolSize: 100
-  extend:
-    amap:
-      key: de7a062c984bf828d5d1b3a631a517e4
+  extend: {}

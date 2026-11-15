@@ -182,28 +182,6 @@ func (e *SysTables) Update(tx *gorm.DB) (update SysTables, err error) {
 	return
 }
 
-// Delete stores delete data in the database.
-func (e *SysTables) Delete(db *gorm.DB) (success bool, err error) {
-	tx := db.Begin()
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-	if err = tx.Table("sys_tables").Delete(SysTables{}, "table_id = ?", e.TableID).Error; err != nil {
-		success = false
-		return
-	}
-	if err = tx.Table("sys_columns").Delete(SysColumns{}, "table_id = ?", e.TableID).Error; err != nil {
-		success = false
-		return
-	}
-	success = true
-	return
-}
-
 // BatchDelete hard-deletes generator tables together with their column
 // definitions in one transaction. Hard, because a soft-deleted row would keep
 // its business name looking taken; together, because columns have no meaning

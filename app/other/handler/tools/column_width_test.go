@@ -53,7 +53,7 @@ func TestInferColumnWidth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := InferColumnWidth(tc.columnType); got != tc.want {
+			if got := inferColumnWidth(tc.columnType); got != tc.want {
 				t.Errorf("InferColumnWidth(%q) = %d, want %d", tc.columnType, got, tc.want)
 			}
 		})
@@ -71,7 +71,7 @@ func TestApplyInferredColumnWidths(t *testing.T) {
 	if columns[0].ColWidth == 0 {
 		t.Error("unconfigured column: want an inferred non-zero width, still 0")
 	}
-	if want := InferColumnWidth("varchar(64)"); columns[0].ColWidth != want {
+	if want := inferColumnWidth("varchar(64)"); columns[0].ColWidth != want {
 		t.Errorf("unconfigured column: want %d (InferColumnWidth's own answer), got %d", want, columns[0].ColWidth)
 	}
 	if columns[1].ColWidth != 300 {

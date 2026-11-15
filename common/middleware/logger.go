@@ -164,7 +164,7 @@ func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqURI stri
 	l["_fullPath"] = c.FullPath()
 	l["operUrl"] = reqURI
 	l["operIp"] = clientIP
-	l["operLocation"] = "" // pkg.GetLocation(clientIP, gaConfig.ExtConfig.AMap.Key)
+	l["operLocation"] = ""
 	l["operName"] = user.Name(c)
 	l["requestMethod"] = reqMethod
 	l["operParam"] = body

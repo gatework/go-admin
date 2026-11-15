@@ -44,7 +44,6 @@ declared:
   - ./app/other/handler/tools
   - ./app/other/models/tools
   - ./app/other/router
-  - ./app/other/service/dto
   - ./cmd
   - ./cmd/api
   - ./cmd/app
