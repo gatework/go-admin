@@ -23,6 +23,9 @@ type apiRouteKey struct {
 	path   string
 }
 
+// APIRegistryTopic carries the host's route snapshot to SyncAPIs.
+const APIRegistryTopic = "api_check_queue"
+
 // SyncAPIs registers discovered business routes in each tenant database. The
 // queue payload stores the route snapshot as JSON in Values["routes"] so memory
 // and broker queues deliver the same representation.

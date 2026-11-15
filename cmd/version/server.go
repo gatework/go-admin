@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/buildinfo"
 )
 
 // StartCmd holds the configured startcmd value.
@@ -24,6 +24,6 @@ var (
 )
 
 func run() error {
-	fmt.Println(global.Version)
+	fmt.Println(buildinfo.Version)
 	return nil
 }

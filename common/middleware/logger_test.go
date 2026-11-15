@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/auditlog"
 )
 
 // The operation-log consumer reads these keys by name off the queue message.
@@ -58,8 +58,8 @@ func TestOperaLogStatusMapping(t *testing.T) {
 		status int
 		want   string
 	}{
-		{"ok", http.StatusOK, global.OperaStatusEnabled},
-		{"error", http.StatusInternalServerError, global.OperaStatusDisabled},
+		{"ok", http.StatusOK, auditlog.StatusSucceeded},
+		{"error", http.StatusInternalServerError, auditlog.StatusFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())

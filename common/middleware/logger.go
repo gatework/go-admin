@@ -20,7 +20,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/storage"
 
-	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/auditlog"
 )
 
 // AccessLog 日志记录到文件
@@ -176,9 +176,9 @@ func operaLogFields(c *gin.Context, clientIP string, statusCode int, reqURI stri
 	l["createBy"] = user.ID(c)
 	l["updateBy"] = user.ID(c)
 	if status == http.StatusOK {
-		l["status"] = global.OperaStatusEnabled
+		l["status"] = auditlog.StatusSucceeded
 	} else {
-		l["status"] = global.OperaStatusDisabled
+		l["status"] = auditlog.StatusFailed
 	}
 	return l
 }
@@ -195,7 +195,7 @@ func SetDBOperLog(c *gin.Context, clientIP string, statusCode int, reqURI string
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
 	defer cancel()
-	message := storage.Message{Topic: global.OperateLog, Values: map[string]any{"payload": string(payload)}}
+	message := storage.Message{Topic: auditlog.OperationTopic, Values: map[string]any{"payload": string(payload)}}
 	if err := sdk.Runtime.QueueForTenant(c.Request.Host).Publish(ctx, message); err != nil {
 		log.Errorf("publish log message: %v", err)
 	}

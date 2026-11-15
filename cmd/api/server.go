@@ -32,8 +32,9 @@ import (
 	adminservice "github.com/gatework/motor/app/admin/service"
 	"github.com/gatework/motor/app/jobs"
 	otherrouter "github.com/gatework/motor/app/other/router"
+	"github.com/gatework/motor/common/auditlog"
+	"github.com/gatework/motor/common/buildinfo"
 	"github.com/gatework/motor/common/database"
-	"github.com/gatework/motor/common/global"
 	"github.com/gatework/motor/common/health"
 	common "github.com/gatework/motor/common/middleware"
 	"github.com/gatework/motor/common/middleware/handler"
@@ -134,7 +135,7 @@ func subscribeQueue(ctx context.Context, q corestorage.Queue) error {
 		name    string
 		handler corestorage.Handler
 	}{
-		{global.LoginLog, models.SaveLoginLog}, {global.OperateLog, models.SaveOperaLog}, {global.APICheck, adminservice.SyncAPIs},
+		{auditlog.LoginTopic, models.SaveLoginLog}, {auditlog.OperationTopic, models.SaveOperaLog}, {adminservice.APIRegistryTopic, adminservice.SyncAPIs},
 	} {
 		if err := q.Subscribe(ctx, topic.name, topic.handler); err != nil {
 			return err
@@ -182,7 +183,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("encode api registry: %w", err)
 		}
-		if err = sdk.Runtime.QueueForTenant("").Publish(lifecycleContext(), corestorage.Message{Topic: global.APICheck, Values: map[string]any{"routes": string(routes)}}); err != nil {
+		if err = sdk.Runtime.QueueForTenant("").Publish(lifecycleContext(), corestorage.Message{Topic: adminservice.APIRegistryTopic, Values: map[string]any{"routes": string(routes)}}); err != nil {
 			return fmt.Errorf("publish api registry: %w", err)
 		}
 	}
@@ -198,7 +199,7 @@ func run() error {
 		return err
 	}
 
-	fmt.Println(pkg.Red(string(global.LogoContent)))
+	fmt.Println(pkg.Red(banner))
 	tip()
 	fmt.Println(pkg.Green("Server run at:"))
 	fmt.Printf("-  Local:   %s://localhost:%d/ \r\n", "http", config.Current().Settings.Application.Port)
@@ -596,7 +597,7 @@ func runStartupHooks() {
 //var Router runtime.Router
 
 func tip() {
-	usageStr := `欢迎使用 ` + pkg.Green(`motor `+global.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
+	usageStr := `欢迎使用 ` + pkg.Green(`motor `+buildinfo.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
 	fmt.Printf("%s \n\n", usageStr)
 }
 
@@ -634,6 +635,9 @@ func initRouter() error {
 		Use(api.SetRequestLogger)
 	return common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDB))
 }
+
+// banner identifies the backend in startup output.
+const banner = "\nmotor\n"
 
 // probePaths are the two routes the rate limiter must not answer for.
 var probePaths = map[string]bool{

@@ -25,7 +25,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/pkg"
 	"github.com/gatework/motor-core/storage"
-	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/auditlog"
 )
 
 // AuthCallbacks keeps the credential MAC on the same immutable startup key as
@@ -177,7 +177,7 @@ func LoginLogToDB(c *gin.Context, status string, msg string, username string) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
 	defer cancel()
-	message := storage.Message{Topic: global.LoginLog, Values: map[string]any{"payload": string(payload)}}
+	message := storage.Message{Topic: auditlog.LoginTopic, Values: map[string]any{"payload": string(payload)}}
 	if err := sdk.Runtime.QueueForTenant(c.Request.Host).Publish(ctx, message); err != nil {
 		log.Errorf("publish log message: %v", err)
 	}

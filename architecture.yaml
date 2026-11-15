@@ -61,7 +61,8 @@ declared:
   - ./common/dto
   - ./common/errkind
   - ./common/filestore
-  - ./common/global
+  - ./common/auditlog
+  - ./common/buildinfo
   - ./common/health
   - ./common/logincaptcha
   - ./common/middleware

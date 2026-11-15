@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	"github.com/gatework/motor-core/storage"
-	"github.com/gatework/motor/common/global"
+	adminservice "github.com/gatework/motor/app/admin/service"
+	"github.com/gatework/motor/common/auditlog"
 )
 
 type recordingQueue struct {
@@ -44,7 +45,7 @@ func TestQueueConsumersArePreparedBeforeStorageStarts(t *testing.T) {
 		if err := subscribeQueue(t.Context(), q); err != nil {
 			t.Fatal(err)
 		}
-		expected := []string{global.LoginLog, global.OperateLog, global.APICheck}
+		expected := []string{auditlog.LoginTopic, auditlog.OperationTopic, adminservice.APIRegistryTopic}
 		if !reflect.DeepEqual(q.topics, expected) {
 			t.Fatalf("topics %v; want %v", q.topics, expected)
 		}
@@ -62,11 +63,11 @@ func TestQueueConsumersArePreparedBeforeStorageStarts(t *testing.T) {
 	}
 }
 func TestQueueSubscriptionFailureStopsPreparation(t *testing.T) {
-	q := &recordingQueue{failAt: global.OperateLog}
+	q := &recordingQueue{failAt: auditlog.OperationTopic}
 	if err := subscribeQueue(t.Context(), q); err == nil {
 		t.Fatal("subscription error was discarded")
 	}
-	if _, exists := q.handlers[global.APICheck]; exists {
+	if _, exists := q.handlers[adminservice.APIRegistryTopic]; exists {
 		t.Fatal("subscribed after failure")
 	}
 	if q.runCalls != 0 {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gatework/motor-core/sdk/pkg"
 	"github.com/gatework/motor/cmd/app"
-	"github.com/gatework/motor/common/global"
+	"github.com/gatework/motor/common/buildinfo"
 
 	"github.com/spf13/cobra"
 
@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 }
 
 func tip() {
-	usageStr := `欢迎使用 ` + pkg.Green(`motor `+global.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
+	usageStr := `欢迎使用 ` + pkg.Green(`motor `+buildinfo.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
 	usageStr1 := `配置与开发约定见仓库 README.md 和 docs/contract.md`
 	fmt.Printf("%s\n", usageStr)
 	fmt.Printf("%s\n", usageStr1)
