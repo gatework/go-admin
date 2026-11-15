@@ -1,49 +1,38 @@
 package dto
 
 import (
+	"github.com/gin-gonic/gin"
+
 	"github.com/gatework/motor/common/dto"
 )
 
-// SysOperaLogGetPageReq carries validated administration request parameters.
-type SysOperaLogGetPageReq struct {
+// OperationLogSearch filters the operation log.
+type OperationLogSearch struct {
 	dto.Pagination `search:"-"`
-	SysOperaLogOrder
-	Title         string `form:"title" search:"type:contains;column:title;table:sys_opera_log" comment:"操作模块"`
-	Method        string `form:"method" search:"type:contains;column:method;table:sys_opera_log" comment:"函数"`
-	RequestMethod string `form:"requestMethod" search:"type:contains;column:request_method;table:sys_opera_log" comment:"请求方式: GET POST PUT DELETE"`
-	OperURL       string `form:"operUrl" search:"type:contains;column:oper_url;table:sys_opera_log" comment:"访问地址"`
-	OperIP        string `form:"operIp" search:"type:exact;column:oper_ip;table:sys_opera_log" comment:"客户端ip"`
-	Status        int    `form:"status" search:"type:exact;column:status;table:sys_opera_log" comment:"状态 1:正常 2:关闭"`
-	BeginTime     string `form:"beginTime" search:"type:gte;column:created_at;table:sys_opera_log" comment:"创建时间"`
-	EndTime       string `form:"endTime" search:"type:lte;column:created_at;table:sys_opera_log" comment:"更新时间"`
+	OperationLogOrder
+	Title         string `form:"title" search:"type:contains;column:title;table:sys_opera_log"`
+	Method        string `form:"method" search:"type:contains;column:method;table:sys_opera_log"`
+	RequestMethod string `form:"requestMethod" search:"type:contains;column:request_method;table:sys_opera_log"`
+	OperURL       string `form:"operUrl" search:"type:contains;column:oper_url;table:sys_opera_log"`
+	OperIP        string `form:"operIp" search:"type:exact;column:oper_ip;table:sys_opera_log"`
+	Status        int    `form:"status" search:"type:exact;column:status;table:sys_opera_log"`
+	BeginTime     string `form:"beginTime" search:"type:gte;column:created_at;table:sys_opera_log"`
+	EndTime       string `form:"endTime" search:"type:lte;column:created_at;table:sys_opera_log"`
 }
 
-// SysOperaLogOrder carries validated administration request parameters.
-type SysOperaLogOrder struct {
+// OperationLogOrder sorts the operation log.
+type OperationLogOrder struct {
 	CreatedAtOrder string `search:"type:order;column:created_at;table:sys_opera_log" form:"createdAtOrder"`
 }
 
 // GetNeedSearch returns the tagged query parameters.
-func (m *SysOperaLogGetPageReq) GetNeedSearch() any {
-	return *m
-}
+func (s *OperationLogSearch) GetNeedSearch() any { return *s }
 
-// SysOperaLogGetReq carries validated administration request parameters.
-type SysOperaLogGetReq struct {
-	ID int `uri:"id"`
-}
+// Bind decodes the query.
+func (s *OperationLogSearch) Bind(c *gin.Context) error { return c.ShouldBind(s) }
 
-// GetID returns the selected resource identity.
-func (s *SysOperaLogGetReq) GetID() any {
-	return s.ID
-}
-
-// SysOperaLogDeleteReq 功能删除请求参数
-type SysOperaLogDeleteReq struct {
-	IDs []int `json:"ids"`
-}
-
-// GetID returns the selected resource identity.
-func (s *SysOperaLogDeleteReq) GetID() any {
-	return s.IDs
+// OperationLogByID names one operation record in the URI, or several in a
+// DELETE body.
+type OperationLogByID struct {
+	dto.ObjectByID
 }
