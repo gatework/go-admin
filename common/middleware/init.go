@@ -32,8 +32,6 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) error {
 	r.Use(database)
 	// 日志处理
 	r.Use(LoggerToFile())
-	// 自定义错误处理
-	r.Use(CustomError)
 	// NoCache is a middleware function that appends headers
 	r.Use(NoCache)
 	// Secure is a middleware function that appends security

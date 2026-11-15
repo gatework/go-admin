@@ -345,13 +345,14 @@ func genTableInit(tx *gorm.DB, tablesList []string, i int, c *gin.Context) (tool
 // @Router /api/v1/sys/tables/info [put]
 // @Security Bearer
 func (e Table) Update(c *gin.Context) {
-	var data tools.SysTables
-	err := c.Bind(&data)
-	pkg.HasError(err, "数据解析失败", 500)
-
 	e.Context = c
 	e.Logger = logger.NewHelper(logger.Default())
 	log := e.Logger
+	var data tools.SysTables
+	if err := c.ShouldBind(&data); err != nil {
+		e.Error(400, nil, "数据解析失败")
+		return
+	}
 	db, err := pkg.GetORM(c)
 	if err != nil {
 		log.Errorf("get db connection error, %s", err.Error())

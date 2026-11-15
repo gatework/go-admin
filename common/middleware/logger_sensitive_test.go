@@ -55,18 +55,18 @@ func TestOperationLogScrubsNestedFieldsAndPreservesRequest(t *testing.T) {
 	}
 }
 
-func TestCustomErrorRedactsURLCredentials(t *testing.T) {
+func TestRecoverRedactsURLCredentials(t *testing.T) {
 	var output bytes.Buffer
 	original := logger.Default()
 	logger.SetDefault(logger.NewLogger(logger.WithOutput(&output)))
 	defer logger.SetDefault(original)
 	r := gin.New()
-	r.Use(CustomError)
-	r.GET("/broken", func(c *gin.Context) { panic("CustomError#422#invalid request") })
+	r.Use(Recover)
+	r.GET("/broken", func(c *gin.Context) { panic("invalid request") })
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/broken?token=panic-secret&name=visible", nil))
 	logged := output.Bytes()
 	if strings.Contains(string(logged), "panic-secret") || !strings.Contains(string(logged), "name=visible") {
-		t.Fatalf("unsafe or empty custom-error log: %s", logged)
+		t.Fatalf("unsafe or empty panic log: %s", logged)
 	}
 }

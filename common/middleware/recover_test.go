@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRecoverAnswersPanicsThatCustomErrorRethrows(t *testing.T) {
+func TestRecoverAnswersPanicsWithoutLeakingThem(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(Recover, CustomError)
-	engine.GET("/value", func(*gin.Context) { panic(struct{ reason string }{"not a CustomError protocol value"}) })
+	engine.Use(Recover)
+	engine.GET("/value", func(*gin.Context) { panic(struct{ reason string }{"internal detail"}) })
 	engine.GET("/nil", func(c *gin.Context) {
 		values := map[string][]int{}
 		c.Status(values[c.Query("missing")][0]) // a runtime.Error: index out of range
@@ -30,7 +30,7 @@ func TestRecoverAnswersPanicsThatCustomErrorRethrows(t *testing.T) {
 		if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":500`) {
 			t.Fatalf("%s: status %d body %s", path, response.Code, response.Body.String())
 		}
-		if strings.Contains(response.Body.String(), "runtime error") || strings.Contains(response.Body.String(), "CustomError protocol") {
+		if strings.Contains(response.Body.String(), "runtime error") || strings.Contains(response.Body.String(), "internal detail") {
 			t.Fatalf("%s leaked panic detail: %s", path, response.Body.String())
 		}
 	}

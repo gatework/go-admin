@@ -18,7 +18,7 @@ import (
 	"github.com/gatework/motor/internal/testconfig"
 )
 
-// bodyOf covers both the success and the CustomError shape: both carry msg.
+// bodyOf covers both the success and the error envelope: both carry msg.
 type bodyOf struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
@@ -47,7 +47,7 @@ func newEngine(t *testing.T, method, path string, h gin.HandlerFunc) *gin.Engine
 	})
 
 	r := gin.New()
-	r.Use(middleware.CustomError)
+	r.Use(middleware.Recover)
 	r.Handle(method, path, func(c *gin.Context) {
 		c.Set("db", db)
 		c.Set(pkg.LoggerKey, logger.NewHelper(logger.Default()))

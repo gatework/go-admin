@@ -13,8 +13,7 @@ import (
 
 // Recover turns a panic in any later middleware or handler into a logged 500
 // response. It must be the first middleware on the engine: gin.New installs no
-// recovery, and CustomError deliberately re-panics values outside its own
-// protocol, so without it one bad request tears down its connection with no
+// recovery, so without it one bad request tears down its connection with no
 // response and no request-scoped log line.
 func Recover(c *gin.Context) {
 	defer func() {
