@@ -170,11 +170,10 @@ func (w *Worker) RunTarget(parent context.Context, t models.Target) {
 		return w.recordReceipt(ctx, t, part, &output, &code, &steps)
 	}
 	tail, executeErr := session.Execute(ctx, parsed, ExecutionHooks{Before: before, Receipt: receipt})
-	if len(output)+len(tail) > MaxOutputBytes {
-		tail = tail[:max(0, MaxOutputBytes-len(output))]
+	output, full := appendCapped(output, tail, MaxOutputBytes)
+	if !full {
 		executeErr = InvalidErr
 	}
-	output += tail
 	if executeErr != nil {
 		if code == "receipt_persistence_failed" || code == "persistence_failed" {
 			if attempted {
@@ -442,12 +441,12 @@ func (w *Worker) beforeCommand(commandCtx context.Context, t models.Target, code
 }
 
 func (w *Worker) recordReceipt(ctx context.Context, t models.Target, part string, output, code *string, steps *int) error {
-	if len(*output)+len(part) > MaxOutputBytes {
-		*output += part[:max(0, MaxOutputBytes-len(*output))]
+	capped, full := appendCapped(*output, part, MaxOutputBytes)
+	*output = capped
+	if !full {
 		*code = "output_limit"
 		return InvalidErr
 	}
-	*output += part
 	next := *steps + 1
 	// An acknowledged remote command is evidence even if cancellation arrived
 	// in the same instant. Persist it under its own bounded cleanup context.
