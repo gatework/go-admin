@@ -14,30 +14,29 @@ import (
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/actions"
+	"github.com/gatework/motor/common/errkind"
 )
 
-// Error returns the operation's diagnostic message.
-type Error struct {
-	Code    int
-	Message string
-}
-
-// Error returns the operation's diagnostic message.
-func (e *Error) Error() string { return e.Message }
-
+// Fabric failures.
+//
+//revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// InvalidErr identifies invalid input failures.
-	InvalidErr = &Error{400, "Fabric 参数无效"}
-	// NotFoundErr identifies not found failures.
-	NotFoundErr = &Error{404, "Fabric 或设备不存在或无权查看"}
-	// ConflictErr identifies conflict failures.
-	ConflictErr = &Error{409, "Fabric 数据已更新，请重新加载"}
-	// ScopeErr identifies scope failures.
-	ScopeErr = &Error{403, "此操作需要完整 Fabric 数据权限"}
-	// UnavailableErr identifies unavailable failures.
-	UnavailableErr = &Error{503, "Fabric 设备连接尚未配置"}
+	// InvalidErr is a request the service refuses as malformed.
+	InvalidErr = errkind.New(errkind.Invalid, "fabric.invalid_input")
+	// NotFoundErr is a fabric or device that does not exist or is out of scope.
+	NotFoundErr = errkind.New(errkind.NotFound, "fabric.not_found")
+	// ConflictErr is a write against fabric data that has since changed.
+	ConflictErr = errkind.New(errkind.Conflict, "fabric.version_conflict")
+	// ScopeErr is an operation that needs the full fabric data scope.
+	ScopeErr = errkind.New(errkind.Forbidden, "fabric.full_scope_required")
+	// UnavailableErr is a fabric device whose connection is not configured.
+	UnavailableErr = errkind.New(errkind.Unavailable, "fabric.connection_not_configured")
+	// UnsupportedPlatformErr is a device platform fabric changes cannot drive.
+	UnsupportedPlatformErr = errkind.New(errkind.Invalid, "fabric.unsupported_platform")
 )
+
+//revive:enable:error-naming
 
 // Fabric applies access scopes to fabric inventory, evidence and change operations.
 type Fabric struct{ base.Service }

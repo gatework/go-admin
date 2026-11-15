@@ -39,7 +39,7 @@ type nativeTransport struct{ config ds.Config }
 // Open provides the open operation within the caller's authorized fabric scope.
 func (n nativeTransport) Open(ctx context.Context, d delivery.DeviceSnapshot, c delivery.Connection, fn func(Session) error) (err error) {
 	if c.Profile != "cisco_nxos" {
-		return transportReceiptError{fmt.Errorf("fabric.unsupported_platform"), true}
+		return transportReceiptError{UnsupportedPlatformErr, true}
 	}
 	cfg, e := n.config.ConnectionConfig(d, c)
 	if e != nil {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/gatework/motor/common/request"
@@ -330,14 +331,12 @@ func prepareFabric(e *Fabric, c *gin.Context) (*service.Fabric, bool) {
 	return s, true
 }
 
+// respond answers err by its kind; a missing row is NotFoundErr.
 func (e Fabric) respond(err error) {
-	code, message := 500, "Fabric 操作失败，请稍后重试"
-	if safe, ok := errors.AsType[*service.Error](err); ok {
-		code, message = safe.Code, safe.Message
-	} else if errors.Is(err, gorm.ErrRecordNotFound) {
-		code, message = 404, "Fabric 记录不存在或无权查看"
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = fmt.Errorf("%w: %w", service.NotFoundErr, err)
 	}
-	e.Error(code, nil, message)
+	request.Fail(&e.API, err)
 }
 
 func (e Fabric) id(c *gin.Context, key string) (int, bool) {
