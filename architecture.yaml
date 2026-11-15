@@ -60,6 +60,7 @@ declared:
   - ./common/actions
   - ./common/database
   - ./common/dto
+  - ./common/errkind
   - ./common/filestore
   - ./common/global
   - ./common/health

@@ -62,6 +62,16 @@ func isErrorConstructor(sf *sourceFile, values []ast.Expr, index int) bool {
 	if !ok {
 		return false
 	}
-	return sf.imports[pkg.Name] == "errors" && selector.Sel.Name == "New" ||
-		sf.imports[pkg.Name] == "fmt" && selector.Sel.Name == "Errorf"
+	switch sf.imports[pkg.Name] {
+	case "errors", classifiedErrors:
+		return selector.Sel.Name == "New"
+	case "fmt":
+		return selector.Sel.Name == "Errorf"
+	default:
+		return false
+	}
 }
+
+// classifiedErrors declares the project's classified sentinels; they follow
+// the same naming rule as errors.New.
+const classifiedErrors = "github.com/gatework/motor/common/errkind"
