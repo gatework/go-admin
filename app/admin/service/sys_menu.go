@@ -142,19 +142,28 @@ func (e *Menu) Update(ctx context.Context, c *dto.MenuUpdate) error {
 
 // Delete 删除SysMenu
 func (e *Menu) Delete(ctx context.Context, d *dto.MenuDelete) error {
-	var err error
-	var data models.SysMenu
-
-	db := e.DB.WithContext(ctx).Model(&data).Delete(&data, d.IDs)
-	if err = db.Error; err != nil {
-		e.Logger.Errorf("Delete error: %s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		err = errors.New("无权删除该数据")
-		return err
-	}
-	return nil
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockMenuTree(tx); err != nil {
+			return err
+		}
+		var menus []models.SysMenu
+		if err := tx.Where("menu_id IN ?", d.IDs).Find(&menus).Error; err != nil {
+			return err
+		}
+		if len(menus) == 0 {
+			return errors.New("无权删除该数据")
+		}
+		// Child menus left behind would drop out of every tree while keeping
+		// their rows and grants; delete them first, or together.
+		var children int64
+		if err := tx.Model(&models.SysMenu{}).Where("parent_id IN ? AND menu_id NOT IN ?", d.IDs, d.IDs).Count(&children).Error; err != nil {
+			return err
+		}
+		if children != 0 {
+			return errors.New("菜单下仍有子菜单，不能删除")
+		}
+		return tx.Delete(&menus).Error
+	})
 }
 
 // ListFlat 获取菜单数据

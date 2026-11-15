@@ -148,19 +148,33 @@ func (e *Department) Update(ctx context.Context, c *dto.DepartmentUpdate) error 
 
 // Delete 删除SysDept
 func (e *Department) Delete(ctx context.Context, d *dto.DepartmentDelete) error {
-	var err error
-	var data models.SysDept
-
-	db := e.DB.WithContext(ctx).Model(&data).Delete(&data, d.GetID())
-	if err = db.Error; err != nil {
-		e.Logger.Errorf("Delete error: %s", err)
-		return err
-	}
-	if db.RowsAffected == 0 {
-		err = errors.New("无权删除该数据")
-		return err
-	}
-	return nil
+	return e.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var departments []models.SysDept
+		if err := lockAdminRows(tx, (&models.SysDept{}).TableName()).Where("dept_id IN ?", d.IDs).Find(&departments).Error; err != nil {
+			return err
+		}
+		if len(departments) == 0 {
+			return errors.New("无权删除该数据")
+		}
+		// A department still holding sub-departments or users is not deleted:
+		// the sub-departments would vanish from the tree and the users would
+		// point at a department that no longer exists.
+		var children int64
+		if err := tx.Model(&models.SysDept{}).Where("parent_id IN ? AND dept_id NOT IN ?", d.IDs, d.IDs).Count(&children).Error; err != nil {
+			return err
+		}
+		if children != 0 {
+			return errors.New("部门下仍有子部门，不能删除")
+		}
+		var members int64
+		if err := tx.Model(&models.SysUser{}).Where("dept_id IN ?", d.IDs).Count(&members).Error; err != nil {
+			return err
+		}
+		if members != 0 {
+			return errors.New("部门下仍有用户，不能删除")
+		}
+		return tx.Delete(&departments).Error
+	})
 }
 
 // Tree 设置组织数据

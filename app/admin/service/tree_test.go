@@ -136,3 +136,41 @@ func TestRoleSidebarIncludesAncestorsOnce(t *testing.T) {
 		t.Fatalf("sidebar menus %v", titles)
 	}
 }
+
+// Deleting a department or menu that something still hangs off is refused;
+// deleting a whole subtree at once, or a leaf, goes through.
+func TestDeletesRefuseToOrphanChildren(t *testing.T) {
+	db := integrityDB(t)
+	for _, d := range []models.SysDept{{DeptID: 1, DeptName: "HQ"}, {DeptID: 2, DeptName: "Network", ParentID: 1}, {DeptID: 3, DeptName: "Empty", ParentID: 1}} {
+		if err := db.Create(&d).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Create(&models.SysUser{UserID: 9, Username: "operator", DeptID: 2}).Error; err != nil {
+		t.Fatal(err)
+	}
+	departments := &Department{}
+	departments.DB, departments.Logger = db, logger.NewHelper(logger.Default())
+	for _, ids := range [][]int{{1}, {2}} {
+		if err := departments.Delete(t.Context(), &dto.DepartmentDelete{IDs: ids}); err == nil {
+			t.Fatalf("department %v deleted while something depends on it", ids)
+		}
+	}
+	if err := departments.Delete(t.Context(), &dto.DepartmentDelete{IDs: []int{3}}); err != nil {
+		t.Fatalf("empty leaf department not deleted: %v", err)
+	}
+
+	for _, m := range []models.SysMenu{{MenuID: 1, Title: "Root", MenuType: "M"}, {MenuID: 2, Title: "Leaf", MenuType: "C", ParentID: 1}} {
+		if err := db.Create(&m).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	menus := &Menu{}
+	menus.DB, menus.Logger = db, logger.NewHelper(logger.Default())
+	if err := menus.Delete(t.Context(), &dto.MenuDelete{IDs: []int{1}}); err == nil {
+		t.Fatal("menu with a child deleted")
+	}
+	if err := menus.Delete(t.Context(), &dto.MenuDelete{IDs: []int{1, 2}}); err != nil {
+		t.Fatalf("whole subtree not deleted: %v", err)
+	}
+}
