@@ -17,10 +17,10 @@ import (
 // Three of the generator's endpoints do not read. /gen/toproject writes seven
 // Go and Vue source files onto this host, one of them under the path
 // gen.frontpath names; /gen/apitofile writes a migration; /gen/todb inserts
-// menus and APIs. All three are GET, all three are listed in CasbinExclude,
-// and AuthCheckRole skips what is on that list - so Enforce never runs for
-// them and any account that can log in may call them. That is a bargain a
-// workstation can make and a deployment cannot.
+// menus and APIs. They pass AuthCheckRole like every generator route, so they
+// reach the administrator and any role granted the generator's menus - but
+// writing source files onto the serving host is a bargain a workstation can
+// make and a deployment cannot, whoever holds the grant.
 //
 // dev is the shipped default and is where the generator is meant to be used.
 // demo keeps them because demo mode already has a better answer than a 404:
