@@ -12,7 +12,6 @@ import (
 	"github.com/gatework/motor-core/sdk/pkg/cronjob"
 
 	"github.com/gatework/motor/app/jobs/models"
-	"github.com/gatework/motor/common/dto"
 )
 
 func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
@@ -33,14 +32,14 @@ func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
 	c := cronjob.NewWithSeconds()
 	s := Job{DB: db, Cron: c}
 	for range 2 {
-		if err := s.Start(&dto.GetRequest{ID: job.JobID}); err != nil {
+		if err := s.Start(t.Context(), job.JobID); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var starts sync.WaitGroup
 	for range 12 {
 		starts.Go(func() {
-			if err := s.Start(&dto.GetRequest{ID: job.JobID}); err != nil {
+			if err := s.Start(t.Context(), job.JobID); err != nil {
 				t.Error(err)
 			}
 		})
@@ -49,7 +48,7 @@ func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
 	if got := len(c.Entries()); got != 1 {
 		t.Errorf("repeated start registered %d entries, want 1", got)
 	}
-	if err := s.Stop(&dto.DeleteRequest{ID: job.JobID}); err != nil {
+	if err := s.Stop(t.Context(), job.JobID); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(c.Entries()); got != 0 {
@@ -115,7 +114,7 @@ func TestRemoveJob(t *testing.T) {
 				t.Fatal(err)
 			}
 			s := Job{DB: db, Cron: c}
-			err = s.Stop(&dto.DeleteRequest{ID: job.JobID})
+			err = s.Stop(t.Context(), job.JobID)
 			if blocked {
 				if err == nil || err.Error() != "操作超时！" {
 					t.Errorf("RemoveJob error = %v, want timeout error", err)

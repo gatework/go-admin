@@ -3,6 +3,8 @@ package jobs
 import (
 	"fmt"
 	"sync/atomic"
+
+	"github.com/robfig/cron/v3"
 )
 
 // tasks maps a sys_job invoke target to the Task it runs. It is written only
@@ -28,4 +30,13 @@ func RegisterTask(name string, task Task) {
 		panic(fmt.Sprintf("jobs: task %q registered twice", name))
 	}
 	tasks[name] = task
+}
+
+// scheduleParser reads cron expressions the way the schedulers do: with a
+// leading seconds field and an optional day of week.
+var scheduleParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.DowOptional | cron.Descriptor)
+
+// ParseSchedule validates a job's cron expression.
+func ParseSchedule(expression string) (cron.Schedule, error) {
+	return scheduleParser.Parse(expression)
 }

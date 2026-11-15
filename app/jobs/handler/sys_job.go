@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"net/http"
+
+	"gorm.io/gorm"
 
 	"github.com/gatework/motor/common/request"
 
@@ -13,7 +17,6 @@ import (
 	"github.com/gatework/motor/app/jobs"
 	"github.com/gatework/motor/app/jobs/service"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/dto"
 )
 
 // Job carries sys job state for this module.
@@ -21,64 +24,56 @@ type Job struct {
 	api.API
 }
 
-// Stop 调用service实现
-func (e Job) Stop(c *gin.Context) {
-	v := dto.DeleteRequest{}
-	s := service.Job{}
-	var err error
-	e.API, err = request.New(c)
-	if err == nil {
-		err = e.Bind(&v)
-	}
-	s.Service = e.Service()
-	if err != nil {
-		e.Logger.Error(err)
-		e.Error(500, err, err.Error())
-		return
-	}
-
-	s.Cron = sdk.Runtime.Crontab(c.Request.Host)
-	s.Tenant = c.Request.Host
-	s.Permission = actions.GetPermissionFromContext(c)
-	s.DB = s.DB.WithContext(c.Request.Context())
-	err = s.Stop(&v)
-	if err != nil {
-		e.Logger.Errorf("RemoveJob error, %s", err.Error())
-		e.Error(500, err, "")
-		return
-	}
-	e.OK(nil, "")
+// jobByID names the job in the path.
+type jobByID struct {
+	ID int `uri:"id" binding:"required,min=1"`
 }
 
-// Start 启动job service实现
-func (e Job) Start(c *gin.Context) {
+// Stop disables a scheduled job.
+// @Summary 停止任务
+// @Tags 定时任务
+// @Param id path int true "任务编号"
+// @Success 200 {object} response.Response
+// @Router /api/v1/job/remove/{id} [post]
+// @Security Bearer
+func (e Job) Stop(c *gin.Context) { e.setState(c, (*service.Job).Stop) }
+
+// Start enables a scheduled job.
+// @Summary 启动任务
+// @Tags 定时任务
+// @Param id path int true "任务编号"
+// @Success 200 {object} response.Response
+// @Router /api/v1/job/start/{id} [post]
+// @Security Bearer
+func (e Job) Start(c *gin.Context) { e.setState(c, (*service.Job).Start) }
+
+func (e Job) setState(c *gin.Context, change func(*service.Job, context.Context, int) error) {
 	var err error
 	e.API, err = request.New(c)
-	log := e.Logger
-	db := e.DB
 	if err != nil {
-		log.Error(err)
-		e.Error(500, err, err.Error())
+		e.Logger.Error(err)
+		e.Error(http.StatusInternalServerError, nil, "数据库连接获取失败")
 		return
 	}
-	var v dto.GetRequest
-	err = c.BindUri(&v)
-	if err != nil {
-		log.Warnf("参数验证错误, error: %s", err)
-		e.Error(http.StatusUnprocessableEntity, err, "参数验证失败")
+	var target jobByID
+	if err := c.ShouldBindUri(&target); err != nil {
+		e.Error(http.StatusUnprocessableEntity, nil, "参数验证失败")
 		return
 	}
 	s := service.Job{
-		DB:         db,
-		Logger:     log,
+		Service:    e.Service(),
 		Cron:       sdk.Runtime.Crontab(c.Request.Host),
 		Tenant:     c.Request.Host,
-		Permission: actions.GetPermissionFromContext(c)}
-	s.DB = s.DB.WithContext(c.Request.Context())
-	err = s.Start(&v)
+		Permission: actions.GetPermissionFromContext(c),
+	}
+	err = change(&s, c.Request.Context(), target.ID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		e.Error(http.StatusNotFound, nil, "任务不存在或无权操作")
+		return
+	}
 	if err != nil {
-		log.Errorf("GetCrontabKey error, %s", err.Error())
-		e.Error(500, err, err.Error())
+		e.Logger.Errorf("changing job %d state: %v", target.ID, err)
+		e.Error(http.StatusInternalServerError, nil, "操作失败")
 		return
 	}
 	e.OK(nil, "")

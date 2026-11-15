@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gatework/motor/app/jobs"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/robfig/cron/v3"
 
 	"github.com/gatework/motor-core/sdk/api"
 
@@ -82,8 +83,7 @@ func (s *SysJobControl) Bind(ctx *gin.Context) error {
 		}
 	}
 	if _, ok := s.present["cronexpression"]; ok || ctx.Request.Method == http.MethodPost {
-		parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.DowOptional | cron.Descriptor)
-		if _, err := parser.Parse(s.CronExpression); err != nil {
+		if _, err := jobs.ParseSchedule(s.CronExpression); err != nil {
 			return err
 		}
 	}
