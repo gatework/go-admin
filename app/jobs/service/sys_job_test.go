@@ -31,16 +31,16 @@ func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := cronjob.NewWithSeconds()
-	s := SysJob{DB: db, Cron: c}
+	s := Job{DB: db, Cron: c}
 	for range 2 {
-		if err := s.StartJob(&dto.GetRequest{ID: job.JobID}); err != nil {
+		if err := s.Start(&dto.GetRequest{ID: job.JobID}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var starts sync.WaitGroup
 	for range 12 {
 		starts.Go(func() {
-			if err := s.StartJob(&dto.GetRequest{ID: job.JobID}); err != nil {
+			if err := s.Start(&dto.GetRequest{ID: job.JobID}); err != nil {
 				t.Error(err)
 			}
 		})
@@ -49,7 +49,7 @@ func TestRepeatedStartThenStopLeavesNoEntries(t *testing.T) {
 	if got := len(c.Entries()); got != 1 {
 		t.Errorf("repeated start registered %d entries, want 1", got)
 	}
-	if err := s.RemoveJob(&dto.DeleteRequest{ID: job.JobID}); err != nil {
+	if err := s.Stop(&dto.DeleteRequest{ID: job.JobID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(c.Entries()); got != 0 {
@@ -114,8 +114,8 @@ func TestRemoveJob(t *testing.T) {
 			if err := db.Create(&job).Error; err != nil {
 				t.Fatal(err)
 			}
-			s := SysJob{DB: db, Cron: c}
-			err = s.RemoveJob(&dto.DeleteRequest{ID: job.JobID})
+			s := Job{DB: db, Cron: c}
+			err = s.Stop(&dto.DeleteRequest{ID: job.JobID})
 			if blocked {
 				if err == nil || err.Error() != "操作超时！" {
 					t.Errorf("RemoveJob error = %v, want timeout error", err)

@@ -81,7 +81,7 @@ func TestJobWritesReconcileScheduler(t *testing.T) {
 		t.Fatalf("presence update lost data: %+v", saved)
 	}
 	entries := c.Entries()
-	if len(entries) != 1 || entries[0].Job.(*jobs.ExecJob).Args != "" {
+	if len(entries) != 1 || entries[0].Job.(*jobs.TaskJob).Args != "" {
 		t.Fatal("update left stale schedule")
 	}
 	invalid := httptest.NewRequest(http.MethodPut, "/sysjob", strings.NewReader(fmt.Sprintf(`{"jobId":%d,"cronExpression":"invalid"}`, saved.JobID)))

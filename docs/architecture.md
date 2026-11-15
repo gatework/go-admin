@@ -25,24 +25,26 @@ Service 在查询时通过 `actions.Permission(tableName, p)` 这个 GORM Scope 
 
 ## 定时任务
 
-两类任务，配置在 `sys_job` 表：
+两类任务，配置在 `sys_job` 表（`job_type`：`models.TypeHTTP` = 1，`models.TypeTask` = 2；
+`status`：`models.StatusStopped` = 1，`models.StatusEnabled` = 2）：
 
 - **HTTP 任务** —— 按 Cron 表达式请求指定 URL
-- **函数任务** —— 调用注册在 `app/jobs` 中的 Go 函数
+- **函数任务** —— 调用在 `app/jobs` 注册的 Go 实现
 
-自定义函数任务需实现 `JobExec` 接口（`app/jobs/type.go:10`）：
+自定义函数任务实现 `jobs.Task`：
 
 ```go
-type JobExec interface {
-    Exec(arg interface{}) error
+type Task interface {
+    Exec(arg any) error
 }
 ```
 
-并注册进 `app/jobs/examples.go` 的 `jobList` 映射，键名与 `sys_job` 表中配置的调用目标
-对应。
+在启动阶段、`jobs.Setup` 之前调用 `jobs.RegisterTask("名称", 实现)` 注册，名称即 `sys_job`
+的调用目标（参照 `app/jobs/examples.go` 的 `RegisterBuiltinTasks`）。重复注册或在调度器
+启动后注册会 panic。
 
-任务内需要数据库连接时，通过 `sdk.Runtime.GetDbByKey("*")` 获取，不要反向 import
-`app/admin/service`。
+每个租户一个调度器，由数据库租约选出的单个实例执行；其他实例待命，租约过期后接管。
+任务内需要数据库连接时通过 `sdk.Runtime.DB(租户)` 获取，不要反向 import `app/admin/service`。
 
 ## 配置扩展
 

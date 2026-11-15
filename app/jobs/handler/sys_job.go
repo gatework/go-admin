@@ -24,7 +24,7 @@ type Job struct {
 // Stop 调用service实现
 func (e Job) Stop(c *gin.Context) {
 	v := dto.DeleteRequest{}
-	s := service.SysJob{}
+	s := service.Job{}
 	var err error
 	e.API, err = request.New(c)
 	if err == nil {
@@ -41,7 +41,7 @@ func (e Job) Stop(c *gin.Context) {
 	s.Tenant = c.Request.Host
 	s.Permission = actions.GetPermissionFromContext(c)
 	s.DB = s.DB.WithContext(c.Request.Context())
-	err = s.RemoveJob(&v)
+	err = s.Stop(&v)
 	if err != nil {
 		e.Logger.Errorf("RemoveJob error, %s", err.Error())
 		e.Error(500, err, "")
@@ -68,14 +68,14 @@ func (e Job) Start(c *gin.Context) {
 		e.Error(http.StatusUnprocessableEntity, err, "参数验证失败")
 		return
 	}
-	s := service.SysJob{
+	s := service.Job{
 		DB:         db,
 		Logger:     log,
 		Cron:       sdk.Runtime.Crontab(c.Request.Host),
 		Tenant:     c.Request.Host,
 		Permission: actions.GetPermissionFromContext(c)}
 	s.DB = s.DB.WithContext(c.Request.Context())
-	err = s.StartJob(&v)
+	err = s.Start(&v)
 	if err != nil {
 		log.Errorf("GetCrontabKey error, %s", err.Error())
 		e.Error(500, err, err.Error())

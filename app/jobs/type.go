@@ -8,7 +8,7 @@ type Job interface {
 	addJob(scheduler *cron.Cron) (int, error)
 }
 
-// JobExec carries job exec state for this module.
-type JobExec interface {
+// Task carries job exec state for this module.
+type Task interface {
 	Exec(arg any) error
 }

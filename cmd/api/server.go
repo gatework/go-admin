@@ -103,7 +103,7 @@ func setup() error {
 // makes that possible; while it was there this could only be a goroutine, and
 // a goroutine is outside the panic guard.
 func startCronJobs() {
-	jobs.InitJob()
+	jobs.RegisterBuiltinTasks()
 	jobs.Setup(sdk.Runtime.Databases())
 }
 

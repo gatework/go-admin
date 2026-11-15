@@ -2,9 +2,10 @@ package jobs
 
 import "github.com/gatework/motor-core/logger"
 
-// InitJob registers the built-in job implementations before schedulers start.
-func InitJob() {
-	jobList = map[string]JobExec{"ExamplesOne": ExamplesOne{}}
+// RegisterBuiltinTasks registers the tasks this module ships. The host calls
+// it once, before Setup.
+func RegisterBuiltinTasks() {
+	RegisterTask("ExamplesOne", ExamplesOne{})
 }
 
 // ExamplesOne demonstrates a scheduler target without an external side effect.

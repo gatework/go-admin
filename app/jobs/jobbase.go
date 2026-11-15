@@ -18,10 +18,8 @@ import (
 
 const retryCount = 3
 
-var jobList map[string]JobExec
-
-// JobCore carries job core state for this module.
-type JobCore struct {
+// Definition carries job core state for this module.
+type Definition struct {
 	InvokeTarget   string
 	Name           string
 	JobID          int
@@ -32,25 +30,25 @@ type JobCore struct {
 
 // HTTPJob 任务类型 http
 type HTTPJob struct {
-	JobCore
+	Definition
 	allowed   func() bool
 	execution context.Context //nolint:containedctx // Scheduler-owned lifecycle context; request contexts are never retained.
 }
 
-// ExecJob carries exec job state for this module.
-type ExecJob struct {
-	JobCore
+// TaskJob carries exec job state for this module.
+type TaskJob struct {
+	Definition
 	allowed func() bool
 }
 
 // Run provides run for this module.
-func (e *ExecJob) Run() {
+func (e *TaskJob) Run() {
 	if e.allowed != nil && !e.allowed() {
 		return
 	}
 	logger := log.NewHelper(log.Default())
 	started := time.Now()
-	job := jobList[e.InvokeTarget]
+	job := tasks[e.InvokeTarget]
 	if job == nil {
 		logger.Warn("job: execution target is not registered")
 		return
@@ -127,6 +125,7 @@ func Setup(dbs map[string]*gorm.DB) {
 
 	log.NewHelper(log.Default()).Info("starting tenant schedulers")
 
+	schedulersStarted.Store(true)
 	owner := newOwnerID()
 	for k, db := range dbs {
 		sdk.Runtime.SetCrontab(k, cronjob.NewWithSeconds())
@@ -134,8 +133,8 @@ func Setup(dbs map[string]*gorm.DB) {
 	}
 }
 
-// AddJob 添加任务 AddJob(invokeTarget string, jobId int, jobName string, cronExpression string)
-func AddJob(c *cron.Cron, job Job) (int, error) {
+// addToScheduler 添加任务 addToScheduler(invokeTarget string, jobId int, jobName string, cronExpression string)
+func addToScheduler(c *cron.Cron, job Job) (int, error) {
 	if job == nil {
 		log.NewHelper(log.Default()).Warn("job implementation is missing")
 		return 0, nil
@@ -152,7 +151,7 @@ func (h *HTTPJob) addJob(c *cron.Cron) (int, error) {
 	return int(id), nil
 }
 
-func (e *ExecJob) addJob(c *cron.Cron) (int, error) {
+func (e *TaskJob) addJob(c *cron.Cron) (int, error) {
 	id, err := c.AddJob(e.CronExpression, e)
 	if err != nil {
 

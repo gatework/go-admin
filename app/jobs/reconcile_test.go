@@ -48,7 +48,7 @@ func TestReconcileCommittedChangesAndStandby(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("update left %d entries", len(entries))
 	}
-	updated := entries[0].Job.(*ExecJob)
+	updated := entries[0].Job.(*TaskJob)
 	if updated.Args != "" || updated.CronExpression != "0 */2 * * * *" {
 		t.Fatalf("stale job: %+v", updated)
 	}

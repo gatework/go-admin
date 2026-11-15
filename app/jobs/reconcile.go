@@ -73,19 +73,19 @@ func loadJobs(ctx context.Context, db *gorm.DB) ([]models.SysJob, error) {
 	return list, err
 }
 
-func jobCore(job models.SysJob) JobCore {
-	return JobCore{JobID: job.JobID, Name: job.JobName, InvokeTarget: job.InvokeTarget,
+func jobCore(job models.SysJob) Definition {
+	return Definition{JobID: job.JobID, Name: job.JobName, InvokeTarget: job.InvokeTarget,
 		CronExpression: job.CronExpression, Args: job.Args}
 }
 
-func entryCore(job cron.Job) (JobCore, int) {
+func entryCore(job cron.Job) (Definition, int) {
 	switch j := job.(type) {
 	case *HTTPJob:
-		return j.JobCore, models.TypeHTTP
-	case *ExecJob:
-		return j.JobCore, models.TypeTask
+		return j.Definition, models.TypeHTTP
+	case *TaskJob:
+		return j.Definition, models.TypeTask
 	default:
-		return JobCore{}, 0
+		return Definition{}, 0
 	}
 }
 
@@ -143,13 +143,13 @@ func applyJobs(ctx context.Context, c *cron.Cron, list []models.SysJob, executio
 		var runnable Job
 		switch job.JobType {
 		case models.TypeHTTP:
-			runnable = &HTTPJob{JobCore: jobCore(*job), allowed: execution.allowed, execution: execution.ctx}
+			runnable = &HTTPJob{Definition: jobCore(*job), allowed: execution.allowed, execution: execution.ctx}
 		case models.TypeTask:
-			runnable = &ExecJob{JobCore: jobCore(*job), allowed: execution.allowed}
+			runnable = &TaskJob{Definition: jobCore(*job), allowed: execution.allowed}
 		default:
 			return fmt.Errorf("unsupported job type %d for job %d", job.JobType, job.JobID)
 		}
-		id, err := AddJob(c, runnable)
+		id, err := addToScheduler(c, runnable)
 		if err != nil {
 			return fmt.Errorf("registering job %d: %w", job.JobID, err)
 		}

@@ -16,27 +16,27 @@ import (
 	"github.com/gatework/motor/common/dto"
 )
 
-// SysJob carries sys job state for this module.
-type SysJob struct {
+// Job carries sys job state for this module.
+type Job struct {
 	service.Service
 	Cron       *cron.Cron
 	Tenant     string
 	Permission *actions.DataPermission
 }
 
-// RemoveJob persists stopped intent so a restart or lease takeover cannot
+// Stop persists stopped intent so a restart or lease takeover cannot
 // resurrect it. Running invocations are allowed to finish.
-func (e *SysJob) RemoveJob(c *dto.DeleteRequest) error {
+func (e *Job) Stop(c *dto.DeleteRequest) error {
 	return e.setStatus(c.ID, models.StatusStopped)
 }
 
-// StartJob is idempotent and enables the persisted job. Standby requests
+// Start is idempotent and enables the persisted job. Standby requests
 // persist intent; only the lease holder dispatches it after reconciliation.
-func (e *SysJob) StartJob(c *dto.GetRequest) error {
+func (e *Job) Start(c *dto.GetRequest) error {
 	return e.setStatus(c.ID, models.StatusEnabled)
 }
 
-func (e *SysJob) setStatus(id int, status int) error {
+func (e *Job) setStatus(id int, status int) error {
 	var job models.SysJob
 	db := e.DB.Scopes(actions.Permission(job.TableName(), e.Permission))
 	if err := db.First(&job, id).Error; err != nil {
