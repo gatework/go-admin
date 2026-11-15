@@ -1,4 +1,4 @@
-package provider
+package zabbix
 
 import (
 	"context"
@@ -13,20 +13,20 @@ import (
 
 	"github.com/gatework/motor/common/secret"
 
-	"github.com/gatework/go-zabbix"
+	zbx "github.com/gatework/go-zabbix"
 	"github.com/gatework/motor/app/net/models/inventory"
 )
 
-// ZabbixConfig describes zabbix config for network operations.
-type ZabbixConfig struct {
+// Config describes zabbix config for network operations.
+type Config struct {
 	URL   string
 	Token secret.Secret
 }
 
-// Zabbix describes zabbix for network operations.
-type Zabbix struct {
-	config  ZabbixConfig
-	client  *zabbix.Client
+// Client queries one Zabbix server with its API token.
+type Client struct {
+	config  Config
+	client  *zbx.Client
 	initErr error
 }
 
@@ -42,21 +42,21 @@ func cloneHTTPTransport() *http.Transport {
 	return &http.Transport{}
 }
 
-// ZabbixFromEnvironment provides the zabbix from environment operation within the caller's authorized network scope.
-func ZabbixFromEnvironment() *Zabbix {
-	return NewZabbix(ZabbixConfig{URL: os.Getenv("ZABBIX_API_URL"), Token: secret.Secret(os.Getenv("ZABBIX_API_TOKEN"))})
+// FromEnvironment provides the zabbix from environment operation within the caller's authorized network scope.
+func FromEnvironment() *Client {
+	return New(Config{URL: os.Getenv("ZABBIX_API_URL"), Token: secret.Secret(os.Getenv("ZABBIX_API_TOKEN"))})
 }
 
-// NewZabbix provides the new zabbix operation within the caller's authorized network scope.
-func NewZabbix(config ZabbixConfig) *Zabbix {
+// New provides the new zabbix operation within the caller's authorized network scope.
+func New(config Config) *Client {
 	config.URL = strings.TrimSpace(config.URL)
-	p := &Zabbix{config: config}
+	p := &Client{config: config}
 	if p.Configured() {
 		httpClient := &http.Client{Transport: zabbixHTTPTransport, Timeout: 20 * time.Second}
-		client, err := zabbix.New(config.URL,
-			zabbix.WithHTTPClient(httpClient),
-			zabbix.WithAPIToken(config.Token.Reveal()),
-			zabbix.WithMaxResponseBytes(4<<20),
+		client, err := zbx.New(config.URL,
+			zbx.WithHTTPClient(httpClient),
+			zbx.WithAPIToken(config.Token.Reveal()),
+			zbx.WithMaxResponseBytes(4<<20),
 		)
 		if err != nil {
 			p.initErr = err
@@ -68,11 +68,11 @@ func NewZabbix(config ZabbixConfig) *Zabbix {
 }
 
 // Configured provides the configured operation within the caller's authorized network scope.
-func (p *Zabbix) Configured() bool {
+func (p *Client) Configured() bool {
 	u, err := url.Parse(p.config.URL)
 	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && strings.TrimSpace(p.config.Token.Reveal()) != ""
 }
-func queryZabbix[T any](ctx context.Context, p *Zabbix, query func(context.Context) ([]T, error)) ([]T, error) {
+func queryZabbix[T any](ctx context.Context, p *Client, query func(context.Context) ([]T, error)) ([]T, error) {
 	if !p.Configured() {
 		return nil, inventory.ZabbixNotConfiguredErr
 	}
@@ -91,21 +91,21 @@ func queryZabbix[T any](ctx context.Context, p *Zabbix, query func(context.Conte
 	return rows, nil
 }
 
-// ZabbixHost describes zabbix host for network operations.
-type ZabbixHost struct {
+// Host describes zabbix host for network operations.
+type Host struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Host string `json:"host"`
 }
 
-// ZabbixHostList describes zabbix host list for network operations.
-type ZabbixHostList struct {
-	Items   []ZabbixHost `json:"items"`
-	HasMore bool         `json:"hasMore"`
+// HostList describes zabbix host list for network operations.
+type HostList struct {
+	Items   []Host `json:"items"`
+	HasMore bool   `json:"hasMore"`
 }
 
-// ZabbixItem describes zabbix item for network operations.
-type ZabbixItem struct {
+// Item describes zabbix item for network operations.
+type Item struct {
 	ID        string `json:"id"`
 	HostID    string `json:"hostId"`
 	Name      string `json:"name"`
@@ -119,32 +119,32 @@ type ZabbixItem struct {
 }
 
 // IsRateFor provides the is rate for operation within the caller's authorized network scope.
-func (i ZabbixItem) IsRateFor(hostID string) bool {
+func (i Item) IsRateFor(hostID string) bool {
 	return i.HostID == hostID && (i.ValueType == "0" || i.ValueType == "3") && i.Status == "0" && (i.Units == "bps" || i.Units == "Bps")
 }
 
-// ZabbixItemList describes zabbix item list for network operations.
-type ZabbixItemList struct {
-	Items   []ZabbixItem `json:"items"`
-	HasMore bool         `json:"hasMore"`
+// ItemList describes zabbix item list for network operations.
+type ItemList struct {
+	Items   []Item `json:"items"`
+	HasMore bool   `json:"hasMore"`
 }
 
-// ZabbixSample describes zabbix sample for network operations.
-type ZabbixSample struct {
+// Sample describes zabbix sample for network operations.
+type Sample struct {
 	Clock int64
 	Value string
 }
 
-// ZabbixTrend describes zabbix trend for network operations.
-type ZabbixTrend struct {
+// Trend describes zabbix trend for network operations.
+type Trend struct {
 	Clock    int64
 	Avg, Max string
 	Count    int64
 }
 
-func zabbixItem(r zabbix.Item) ZabbixItem {
+func zabbixItem(r zbx.Item) Item {
 	clock, _ := strconv.ParseInt(r.LastClock, 10, 64)
-	return ZabbixItem{
+	return Item{
 		ID: r.ItemID, HostID: r.HostID, Name: r.Name, Key: r.Key, Units: r.Units,
 		ValueType: r.ValueType, Status: r.Status, State: r.State, LastValue: r.LastValue, LastClock: clock,
 	}
@@ -159,14 +159,14 @@ func validZabbixText(value string, limit int) bool {
 var zabbixItemOutput = []string{"itemid", "hostid", "name", "key_", "units", "value_type", "status", "state", "lastvalue", "lastclock"}
 
 // Hosts provides the hosts operation within the caller's authorized network scope.
-func (p *Zabbix) Hosts(ctx context.Context, keyword string) (ZabbixHostList, error) {
-	result := ZabbixHostList{Items: []ZabbixHost{}}
+func (p *Client) Hosts(ctx context.Context, keyword string) (HostList, error) {
+	result := HostList{Items: []Host{}}
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" || !validZabbixText(keyword, 128) {
 		return result, inventory.InvalidErr
 	}
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Host, error) {
-		return p.client.Host().Get(ctx, zabbix.HostGetParams{
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.Host, error) {
+		return p.client.Host().Get(ctx, zbx.HostGetParams{
 			Output:      []string{"hostid", "name", "host"},
 			Search:      map[string]any{"name": keyword, "host": keyword},
 			SearchByAny: true,
@@ -185,19 +185,19 @@ func (p *Zabbix) Hosts(ctx context.Context, keyword string) (ZabbixHostList, err
 		if !zabbixIdentifier.MatchString(r.HostID) || !validZabbixText(r.Name, 512) || !validZabbixText(r.Host, 512) {
 			return result, inventory.ZabbixUpstreamErr
 		}
-		result.Items = append(result.Items, ZabbixHost{ID: r.HostID, Name: r.Name, Host: r.Host})
+		result.Items = append(result.Items, Host{ID: r.HostID, Name: r.Name, Host: r.Host})
 	}
 	return result, nil
 }
 
 // Items provides the items operation within the caller's authorized network scope.
-func (p *Zabbix) Items(ctx context.Context, hostID, keyword string) (ZabbixItemList, error) {
-	result := ZabbixItemList{Items: []ZabbixItem{}}
+func (p *Client) Items(ctx context.Context, hostID, keyword string) (ItemList, error) {
+	result := ItemList{Items: []Item{}}
 	keyword = strings.TrimSpace(keyword)
 	if !zabbixIdentifier.MatchString(hostID) || !validZabbixText(keyword, 128) {
 		return result, inventory.InvalidErr
 	}
-	params := zabbix.ItemGetParams{
+	params := zbx.ItemGetParams{
 		Output:    zabbixItemOutput,
 		HostIDs:   []string{hostID},
 		Filter:    map[string]any{"value_type": []string{"0", "3"}, "status": "0", "units": []string{"bps", "Bps"}},
@@ -208,7 +208,7 @@ func (p *Zabbix) Items(ctx context.Context, hostID, keyword string) (ZabbixItemL
 		params.Search = map[string]any{"name": keyword, "key_": keyword}
 		params.SearchByAny = true
 	}
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Item, error) {
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.Item, error) {
 		return p.client.Item().Get(ctx, params)
 	})
 	if err != nil {
@@ -228,13 +228,13 @@ func (p *Zabbix) Items(ctx context.Context, hostID, keyword string) (ZabbixItemL
 }
 
 // Host provides the host operation within the caller's authorized network scope.
-func (p *Zabbix) Host(ctx context.Context, id string) (ZabbixHost, error) {
-	var result ZabbixHost
+func (p *Client) Host(ctx context.Context, id string) (Host, error) {
+	var result Host
 	if !zabbixIdentifier.MatchString(id) {
 		return result, inventory.CircuitBindingErr
 	}
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Host, error) {
-		return p.client.Host().Get(ctx, zabbix.HostGetParams{
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.Host, error) {
+		return p.client.Host().Get(ctx, zbx.HostGetParams{
 			Output: []string{"hostid", "name", "host"}, HostIDs: []string{id}, Limit: 2,
 		})
 	})
@@ -244,17 +244,17 @@ func (p *Zabbix) Host(ctx context.Context, id string) (ZabbixHost, error) {
 	if len(rows) != 1 || rows[0].HostID != id || !validZabbixText(rows[0].Name, 512) || !validZabbixText(rows[0].Host, 512) {
 		return result, inventory.CircuitBindingErr
 	}
-	return ZabbixHost{ID: id, Name: rows[0].Name, Host: rows[0].Host}, nil
+	return Host{ID: id, Name: rows[0].Name, Host: rows[0].Host}, nil
 }
 
 // Item provides the item operation within the caller's authorized network scope.
-func (p *Zabbix) Item(ctx context.Context, id string) (ZabbixItem, error) {
-	var result ZabbixItem
+func (p *Client) Item(ctx context.Context, id string) (Item, error) {
+	var result Item
 	if !zabbixIdentifier.MatchString(id) {
 		return result, inventory.CircuitBindingErr
 	}
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Item, error) {
-		return p.client.Item().Get(ctx, zabbix.ItemGetParams{
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.Item, error) {
+		return p.client.Item().Get(ctx, zbx.ItemGetParams{
 			Output: zabbixItemOutput, ItemIDs: []string{id}, Limit: 2,
 		})
 	})
@@ -268,7 +268,7 @@ func (p *Zabbix) Item(ctx context.Context, id string) (ZabbixItem, error) {
 }
 
 // History provides the history operation within the caller's authorized network scope.
-func (p *Zabbix) History(ctx context.Context, id, valueType string, from, till int64) ([]ZabbixSample, bool, error) {
+func (p *Client) History(ctx context.Context, id, valueType string, from, till int64) ([]Sample, bool, error) {
 	if !zabbixIdentifier.MatchString(id) || (valueType != "0" && valueType != "3") {
 		return nil, false, inventory.CircuitBindingErr
 	}
@@ -276,8 +276,8 @@ func (p *Zabbix) History(ctx context.Context, id, valueType string, from, till i
 	if valueType == "3" {
 		history = 3
 	}
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.HistoryValue, error) {
-		return p.client.History().Get(ctx, zabbix.HistoryGetParams{
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.HistoryValue, error) {
+		return p.client.History().Get(ctx, zbx.HistoryGetParams{
 			Output: []string{"clock", "value"}, ItemIDs: []string{id}, History: &history,
 			TimeFrom: &from, TimeTill: &till,
 			SortField: []string{"clock"}, SortOrder: []string{"DESC"}, Limit: 12001,
@@ -292,27 +292,27 @@ func (p *Zabbix) History(ctx context.Context, id, valueType string, from, till i
 	if len(rows) > 12001 {
 		rows = rows[:12001]
 	}
-	result := make([]ZabbixSample, 0, len(rows))
+	result := make([]Sample, 0, len(rows))
 	for _, r := range rows {
 		clock, err := strconv.ParseInt(r.Clock, 10, 64)
 		if err != nil || clock < 0 {
 			return nil, partial, inventory.ZabbixUpstreamErr
 		}
-		result = append(result, ZabbixSample{Clock: clock, Value: r.Value})
+		result = append(result, Sample{Clock: clock, Value: r.Value})
 	}
 	return result, partial, nil
 }
 
 // Trends provides the trends operation within the caller's authorized network scope.
-func (p *Zabbix) Trends(ctx context.Context, id string, from, till int64) ([]ZabbixTrend, bool, error) {
+func (p *Client) Trends(ctx context.Context, id string, from, till int64) ([]Trend, bool, error) {
 	if !zabbixIdentifier.MatchString(id) {
 		return nil, false, inventory.CircuitBindingErr
 	}
 	// Zabbix 7.4 does not sort trend.get. The circuit view queries one item over
 	// seven days; the extra row detects an incomplete response if that bound is
 	// exceeded. The service orders the observed points before presentation.
-	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Trend, error) {
-		return p.client.Trend().Get(ctx, zabbix.TrendGetParams{
+	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zbx.Trend, error) {
+		return p.client.Trend().Get(ctx, zbx.TrendGetParams{
 			Output: []string{"clock", "num", "value_avg", "value_max"}, ItemIDs: []string{id},
 			TimeFrom: &from, TimeTill: &till, Limit: 201,
 		})
@@ -325,14 +325,14 @@ func (p *Zabbix) Trends(ctx context.Context, id string, from, till int64) ([]Zab
 	if len(rows) > 201 {
 		rows = rows[:201]
 	}
-	result := make([]ZabbixTrend, 0, len(rows))
+	result := make([]Trend, 0, len(rows))
 	for _, r := range rows {
 		clock, err := strconv.ParseInt(r.Clock, 10, 64)
 		count, e := strconv.ParseInt(r.Num, 10, 64)
 		if err != nil || e != nil || clock < 0 || count < 0 {
 			return nil, partial, inventory.ZabbixUpstreamErr
 		}
-		result = append(result, ZabbixTrend{Clock: clock, Avg: r.ValueAvg, Max: r.ValueMax, Count: count})
+		result = append(result, Trend{Clock: clock, Avg: r.ValueAvg, Max: r.ValueMax, Count: count})
 	}
 	return result, partial, nil
 }

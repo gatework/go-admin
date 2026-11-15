@@ -1,4 +1,4 @@
-package provider
+package netdisco
 
 import (
 	"bytes"
@@ -26,31 +26,31 @@ type Config struct {
 }
 
 // FromEnvironment loads the server-owned device transport configuration.
-func FromEnvironment() *Netdisco {
+func FromEnvironment() *Client {
 	return New(Config{URL: os.Getenv("NETDISCO_URL"), Username: os.Getenv("NETDISCO_USERNAME"), Password: secret.Secret(os.Getenv("NETDISCO_PASSWORD")), APIKey: secret.Secret(os.Getenv("NETDISCO_API_KEY"))})
 }
 
-// Netdisco describes netdisco for network operations.
-type Netdisco struct {
+// Client describes netdisco for network operations.
+type Client struct {
 	config   Config
 	timeout  time.Duration
 	maxBytes int64
 }
 
 // New provides the new operation within the caller's authorized network scope.
-func New(config Config) *Netdisco {
+func New(config Config) *Client {
 	config.URL = strings.TrimRight(strings.TrimSpace(config.URL), "/")
-	return &Netdisco{config: config, timeout: 20 * time.Second, maxBytes: 32 << 20}
+	return &Client{config: config, timeout: 20 * time.Second, maxBytes: 32 << 20}
 }
 
 // Configured provides the configured operation within the caller's authorized network scope.
-func (p *Netdisco) Configured() bool {
+func (p *Client) Configured() bool {
 	u, err := url.Parse(p.config.URL)
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsRune(p.config.URL, '#') && (p.config.APIKey.IsSet() || (p.config.Username != "" && p.config.Password.IsSet()))
 }
 
 // Fetch provides the fetch operation within the caller's authorized network scope.
-func (p *Netdisco) Fetch(ctx context.Context) ([]inventory.SourceFacts, error) {
+func (p *Client) Fetch(ctx context.Context) ([]inventory.SourceFacts, error) {
 	if !p.Configured() {
 		return nil, inventory.NotConfiguredErr
 	}

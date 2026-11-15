@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gatework/motor/app/net/models/inventory"
-	"github.com/gatework/motor/app/net/service/inventory/provider"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 )
 
 func trafficCircuit(t *testing.T) (*Circuit, *circuitSource, inventory.Circuit, time.Time) {
@@ -37,8 +37,8 @@ func TestCircuitTrafficPreservesPeakUnitsMissingAndStaleCurrent(t *testing.T) {
 	out.LastValue = "2"
 	out.LastClock = now.Unix() - 301
 	source.items["11"] = out
-	source.history["10"] = []provider.ZabbixSample{{Clock: now.Unix() - 10, Value: "10"}, {Clock: now.Unix() - 11, Value: "1000"}, {Clock: now.Unix() - 12, Value: "0"}}
-	source.history["11"] = []provider.ZabbixSample{{Clock: now.Unix() - 10, Value: "1.25"}}
+	source.history["10"] = []zabbix.Sample{{Clock: now.Unix() - 10, Value: "10"}, {Clock: now.Unix() - 11, Value: "1000"}, {Clock: now.Unix() - 12, Value: "0"}}
+	source.history["11"] = []zabbix.Sample{{Clock: now.Unix() - 10, Value: "1.25"}}
 	result, err := s.Traffic(context.Background(), row.ID, "1h", fullScope())
 	if err != nil || len(result.Series) != 2 {
 		t.Fatalf("traffic: %+v %v", result, err)
@@ -69,7 +69,7 @@ func TestCircuitTrafficTrendsUseMaxAndIndependentLastValue(t *testing.T) {
 	item.LastClock = now.Unix() - 5
 	item.LastValue = "42"
 	source.items["10"] = item
-	source.trends["10"] = []provider.ZabbixTrend{{Clock: now.Add(-time.Hour).Unix(), Avg: "20", Max: "900", Count: 60}, {Clock: now.Add(-3 * time.Hour).Unix(), Avg: "10", Max: "500", Count: 60}}
+	source.trends["10"] = []zabbix.Trend{{Clock: now.Add(-time.Hour).Unix(), Avg: "20", Max: "900", Count: 60}, {Clock: now.Add(-3 * time.Hour).Unix(), Avg: "10", Max: "500", Count: 60}}
 	result, err := s.Traffic(context.Background(), row.ID, "7d", fullScope())
 	if err != nil {
 		t.Fatal(err)
@@ -129,9 +129,9 @@ func TestCircuitTrafficRevalidatesBindingsAndLimitsSeriesFailures(t *testing.T) 
 func TestCircuitHistoryBucketsPreserveGapsAndPartialEvidence(t *testing.T) {
 	s, source, row, now := trafficCircuit(t)
 	for i := range 12000 {
-		source.history["10"] = append(source.history["10"], provider.ZabbixSample{Clock: now.Unix() - int64(i), Value: "1"})
+		source.history["10"] = append(source.history["10"], zabbix.Sample{Clock: now.Unix() - int64(i), Value: "1"})
 	}
-	source.history["10"] = append(source.history["10"], provider.ZabbixSample{Clock: now.Unix() - 12000, Value: "99"})
+	source.history["10"] = append(source.history["10"], zabbix.Sample{Clock: now.Unix() - 12000, Value: "99"})
 	source.partial = true
 	result, err := s.Traffic(context.Background(), row.ID, "6h", fullScope())
 	a := result.Series[0]
@@ -141,7 +141,7 @@ func TestCircuitHistoryBucketsPreserveGapsAndPartialEvidence(t *testing.T) {
 	source.partial = false
 	source.history["10"] = nil
 	for _, seconds := range []int64{0, 180, 360, 540, 2400, 2580, 2760} {
-		source.history["10"] = append(source.history["10"], provider.ZabbixSample{Clock: now.Unix() - seconds, Value: "1"})
+		source.history["10"] = append(source.history["10"], zabbix.Sample{Clock: now.Unix() - seconds, Value: "1"})
 	}
 	result, err = s.Traffic(context.Background(), row.ID, "1h", fullScope())
 	if err != nil {
@@ -165,7 +165,7 @@ func TestCircuitTrafficZeroInvalidAndLargeRatesRemainJSONSafe(t *testing.T) {
 	item := source.items["10"]
 	item.LastClock, item.LastValue = now.Unix(), "0"
 	source.items["10"] = item
-	source.history["10"] = []provider.ZabbixSample{{Clock: now.Unix(), Value: "0"}}
+	source.history["10"] = []zabbix.Sample{{Clock: now.Unix(), Value: "0"}}
 	result, err := s.Traffic(context.Background(), row.ID, "1h", fullScope())
 	a := result.Series[0]
 	if err != nil || a.CurrentBps == nil || *a.CurrentBps != 0 || a.PeakBps == nil || *a.PeakBps != 0 || a.State != "ok" {
@@ -173,7 +173,7 @@ func TestCircuitTrafficZeroInvalidAndLargeRatesRemainJSONSafe(t *testing.T) {
 	}
 	item.LastValue = "NaN"
 	source.items["10"] = item
-	source.history["10"] = []provider.ZabbixSample{{Clock: now.Unix(), Value: "1e308"}, {Clock: now.Unix() - 1, Value: "1e308"}}
+	source.history["10"] = []zabbix.Sample{{Clock: now.Unix(), Value: "1e308"}, {Clock: now.Unix() - 1, Value: "1e308"}}
 	result, err = s.Traffic(context.Background(), row.ID, "1h", fullScope())
 	if err != nil || result.Series[0].CurrentBps != nil {
 		t.Fatalf("invalid current invented data: %+v %v", result, err)

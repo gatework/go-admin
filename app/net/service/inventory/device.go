@@ -16,7 +16,7 @@ import (
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
-	"github.com/gatework/motor/app/net/service/inventory/provider"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/csvsafe"
 	"github.com/gatework/motor/common/database"
@@ -219,7 +219,7 @@ func (s *Device) source() Source {
 	if s.Source != nil {
 		return s.Source
 	}
-	return provider.FromEnvironment()
+	return netdisco.FromEnvironment()
 }
 func (s *Device) scoped(ctx context.Context, p *actions.DataPermission) *gorm.DB {
 	if p == nil {

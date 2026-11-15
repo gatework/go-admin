@@ -1,4 +1,4 @@
-package provider
+package zabbix
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatework/go-zabbix"
+	zbx "github.com/gatework/go-zabbix"
 	"github.com/gatework/motor/app/net/models/inventory"
 )
 
@@ -24,7 +24,7 @@ type zabbixRequest struct {
 	Params  map[string]any `json:"params"`
 }
 
-func zabbixFixture(t *testing.T, response map[string]any) (*Zabbix, <-chan zabbixRequest) {
+func zabbixFixture(t *testing.T, response map[string]any) (*Client, <-chan zabbixRequest) {
 	t.Helper()
 	requests := make(chan zabbixRequest, 1)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,15 +57,15 @@ func zabbixFixture(t *testing.T, response map[string]any) (*Zabbix, <-chan zabbi
 	t.Cleanup(server.Close)
 	httpClient := server.Client()
 	httpClient.Timeout = 20 * time.Second
-	client, err := zabbix.New(server.URL,
-		zabbix.WithHTTPClient(httpClient),
-		zabbix.WithAPIToken("fixture-secret"),
-		zabbix.WithMaxResponseBytes(4<<20),
+	client, err := zbx.New(server.URL,
+		zbx.WithHTTPClient(httpClient),
+		zbx.WithAPIToken("fixture-secret"),
+		zbx.WithMaxResponseBytes(4<<20),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewZabbix(ZabbixConfig{URL: server.URL, Token: "fixture-secret"})
+	p := New(Config{URL: server.URL, Token: "fixture-secret"})
 	p.client = client
 	return p, requests
 }
@@ -149,7 +149,7 @@ func TestZabbixHostAndItemBindings(t *testing.T) {
 		{"hostid": "1", "name": "Router", "host": "router"},
 	}})
 	host, err := p.Host(context.Background(), "1")
-	if err != nil || host != (ZabbixHost{ID: "1", Name: "Router", Host: "router"}) {
+	if err != nil || host != (Host{ID: "1", Name: "Router", Host: "router"}) {
 		t.Fatalf("host = %+v, %v", host, err)
 	}
 	assertZabbixRequest(t, requests, "host.get", `{
@@ -162,7 +162,7 @@ func TestZabbixHostAndItemBindings(t *testing.T) {
 		},
 	}})
 	item, err := p.Item(context.Background(), "10")
-	want := ZabbixItem{
+	want := Item{
 		ID: "10", HostID: "1", Name: "Receive", Key: "net.if.in", Units: "Bps",
 		ValueType: "0", Status: "0", State: "1", LastValue: "12.5", LastClock: 1234,
 	}
@@ -227,7 +227,7 @@ func TestZabbixHistoryCapValueTypesAndTrendQuery(t *testing.T) {
 		{"clock": "0", "num": "1", "value_avg": "2", "value_max": "3"},
 	}})
 	rows, partial, err := p.Trends(context.Background(), "10", 0, 2000)
-	if err != nil || partial || len(rows) != 2 || rows[0] != (ZabbixTrend{Clock: 1000, Count: 3, Avg: "12.5", Max: "900"}) || rows[1].Clock != 0 {
+	if err != nil || partial || len(rows) != 2 || rows[0] != (Trend{Clock: 1000, Count: 3, Avg: "12.5", Max: "900"}) || rows[1].Clock != 0 {
 		t.Fatalf("trend observations changed: %+v %v %v", rows, partial, err)
 	}
 	assertZabbixRequest(t, requests, "trend.get", `{
@@ -295,7 +295,7 @@ func TestZabbixSampleTimesAndCountsRejectMalformedValues(t *testing.T) {
 }
 
 func TestZabbixConfigurationContextAndSafeError(t *testing.T) {
-	invalidToken := NewZabbix(ZabbixConfig{URL: "https://example.invalid/api", Token: "fixture\nsecret"})
+	invalidToken := New(Config{URL: "https://example.invalid/api", Token: "fixture\nsecret"})
 	_, initErr := invalidToken.Host(context.Background(), "1")
 	if !errors.Is(initErr, inventory.ZabbixUpstreamErr) || strings.Contains(initErr.Error(), "secret") {
 		t.Fatalf("SDK initialization failure must be reported safely: %v", initErr)
@@ -304,7 +304,7 @@ func TestZabbixConfigurationContextAndSafeError(t *testing.T) {
 		"http://example.invalid/api", "https://user:password@example.invalid/api",
 		"https://example.invalid/api?token=x", "https://example.invalid/api?", "https://example.invalid/api#secret",
 	} {
-		p := NewZabbix(ZabbixConfig{URL: url, Token: "x"})
+		p := New(Config{URL: url, Token: "x"})
 		if p.Configured() {
 			t.Fatalf("unsafe config accepted: %s", url)
 		}

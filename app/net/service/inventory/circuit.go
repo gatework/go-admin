@@ -12,7 +12,7 @@ import (
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
-	"github.com/gatework/motor/app/net/service/inventory/provider"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/database"
 )
@@ -21,12 +21,12 @@ import (
 // here, and deterministic tests need neither credentials nor a live Zabbix.
 type CircuitSource interface {
 	Configured() bool
-	Hosts(ctx context.Context, query string) (provider.ZabbixHostList, error)
-	Items(ctx context.Context, hostID string, query string) (provider.ZabbixItemList, error)
-	Host(ctx context.Context, id string) (provider.ZabbixHost, error)
-	Item(ctx context.Context, id string) (provider.ZabbixItem, error)
-	History(ctx context.Context, id string, valueType string, from int64, to int64) ([]provider.ZabbixSample, bool, error)
-	Trends(ctx context.Context, id string, from int64, to int64) ([]provider.ZabbixTrend, bool, error)
+	Hosts(ctx context.Context, query string) (zabbix.HostList, error)
+	Items(ctx context.Context, hostID string, query string) (zabbix.ItemList, error)
+	Host(ctx context.Context, id string) (zabbix.Host, error)
+	Item(ctx context.Context, id string) (zabbix.Item, error)
+	History(ctx context.Context, id string, valueType string, from int64, to int64) ([]zabbix.Sample, bool, error)
+	Trends(ctx context.Context, id string, from int64, to int64) ([]zabbix.Trend, bool, error)
 }
 
 // Circuit describes circuit for network operations.
@@ -241,7 +241,7 @@ func circuitPersistenceError(err error) error {
 }
 
 // Hosts provides the hosts operation within the caller's authorized network scope.
-func (s *Circuit) Hosts(ctx context.Context, keyword string) (provider.ZabbixHostList, error) {
+func (s *Circuit) Hosts(ctx context.Context, keyword string) (zabbix.HostList, error) {
 	result, err := s.source().Hosts(ctx, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)
@@ -250,7 +250,7 @@ func (s *Circuit) Hosts(ctx context.Context, keyword string) (provider.ZabbixHos
 }
 
 // Items provides the items operation within the caller's authorized network scope.
-func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (provider.ZabbixItemList, error) {
+func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (zabbix.ItemList, error) {
 	result, err := s.source().Items(ctx, hostID, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)
@@ -275,7 +275,7 @@ func (s *Circuit) source() CircuitSource {
 	if s.Source != nil {
 		return s.Source
 	}
-	return provider.ZabbixFromEnvironment()
+	return zabbix.FromEnvironment()
 }
 func (s *Circuit) scoped(ctx context.Context, p *actions.DataPermission) *gorm.DB {
 	return s.DB.WithContext(ctx).Model(&inventory.Circuit{}).Scopes(circuitPermission(inventory.Circuit{}.TableName(), p))

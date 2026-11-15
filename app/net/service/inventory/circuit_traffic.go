@@ -12,7 +12,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
-	"github.com/gatework/motor/app/net/service/inventory/provider"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 )
 
 // Traffic provides the traffic operation within the caller's authorized network scope.
@@ -94,13 +94,13 @@ func (s *Circuit) populateTrafficSeries(ctx context.Context, source CircuitSourc
 	}
 	var count int
 	if series.Mode == "trend" {
-		var rows []provider.ZabbixTrend
+		var rows []zabbix.Trend
 		rows, series.Partial, err = source.Trends(ctx, item.ID, from, till)
 		if err == nil {
 			series.Points, series.PeakBps, count = trendPoints(rows, from, till, multiplier)
 		}
 	} else {
-		var rows []provider.ZabbixSample
+		var rows []zabbix.Sample
 		rows, series.Partial, err = source.History(ctx, item.ID, item.ValueType, from, till)
 		if err == nil {
 			series.Points, series.PeakBps, count = historyPoints(rows, from, till, multiplier)
@@ -151,11 +151,11 @@ func trafficPoint(clock int64, value *float64) dto.TrafficPoint {
 // omitted; a gap larger than max(5 minutes, 3 x median observed interval) gets
 // a null marker. Each marker consumes an otherwise empty bucket, so even with
 // gaps the final chart contains at most 720 points.
-func historyPoints(rows []provider.ZabbixSample, from, till int64, multiplier float64) ([]dto.TrafficPoint, *float64, int) {
+func historyPoints(rows []zabbix.Sample, from, till int64, multiplier float64) ([]dto.TrafficPoint, *float64, int) {
 	points := []dto.TrafficPoint{}
 	var peak *float64
 	valid := 0
-	filtered := make([]provider.ZabbixSample, 0, len(rows))
+	filtered := make([]zabbix.Sample, 0, len(rows))
 	for _, row := range rows {
 		if row.Clock >= from && row.Clock <= till {
 			filtered = append(filtered, row)
@@ -215,7 +215,7 @@ func historyPoints(rows []provider.ZabbixSample, from, till int64, multiplier fl
 	}
 	return points, peak, valid
 }
-func trendPoints(rows []provider.ZabbixTrend, from, till int64, multiplier float64) ([]dto.TrafficPoint, *float64, int) {
+func trendPoints(rows []zabbix.Trend, from, till int64, multiplier float64) ([]dto.TrafficPoint, *float64, int) {
 	points := []dto.TrafficPoint{}
 	var peak *float64
 	valid := 0
@@ -242,7 +242,7 @@ func trendPoints(rows []provider.ZabbixTrend, from, till int64, multiplier float
 	return points, peak, valid
 }
 
-func historyGap(filtered []provider.ZabbixSample) int64 {
+func historyGap(filtered []zabbix.Sample) int64 {
 	intervals := []int64{}
 	for i := 1; i < len(filtered); i++ {
 		if delta := filtered[i].Clock - filtered[i-1].Clock; delta > 0 {
