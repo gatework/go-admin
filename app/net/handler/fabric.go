@@ -103,7 +103,7 @@ func (e Fabric) PreviewRules(c *gin.Context) {
 	}
 	var r dto.RulesReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	rows, err := s.PreviewRules(c.Request.Context(), &r, actions.GetPermissionFromContext(c))
@@ -132,7 +132,7 @@ func (e Fabric) SaveRules(c *gin.Context) {
 	}
 	var r dto.RulesReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.UpdateRules(c.Request.Context(), &r, user.ID(c), actions.GetPermissionFromContext(c))
@@ -186,7 +186,7 @@ func (e Fabric) SetMember(c *gin.Context) {
 	}
 	var r dto.MemberReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.UpdateMember(c.Request.Context(), id, &r, user.ID(c), actions.GetPermissionFromContext(c))
@@ -217,7 +217,7 @@ func (e Fabric) Settings(c *gin.Context) {
 	}
 	var r dto.SettingsReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.Settings(c.Request.Context(), id, &r, actions.GetPermissionFromContext(c))
@@ -343,7 +343,7 @@ func (e Fabric) respond(err error) {
 func (e Fabric) id(c *gin.Context, key string) (int, bool) {
 	id, err := strconv.Atoi(c.Param(key))
 	if err != nil || id <= 0 {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return 0, false
 	}
 	return id, true
@@ -352,7 +352,7 @@ func (e Fabric) id(c *gin.Context, key string) (int, bool) {
 func (e Fabric) page(c *gin.Context) (*dto.PageReq, bool) {
 	r := &dto.PageReq{}
 	if c.ShouldBindQuery(r) != nil || r.Validate() != nil {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return nil, false
 	}
 	return r, true

@@ -30,11 +30,11 @@ func circuitText(value *string, limit int) bool {
 // Validate normalizes the request and rejects invalid or conflicting fields.
 func (r *CircuitControlReq) Validate(edit bool) error {
 	if (edit && r.Version <= 0) || (!edit && r.Version != 0) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	r.CircuitNo = strings.ToUpper(strings.TrimSpace(r.CircuitNo))
 	if !circuitNumber.MatchString(r.CircuitNo) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	for _, field := range []struct {
 		value *string
@@ -44,11 +44,11 @@ func (r *CircuitControlReq) Validate(edit bool) error {
 		{&r.Notes, 10000}, {&r.RouteNotes, 10000}, {&r.Currency, 3}, {&r.Fee, 13}, {&r.InstalledOn, 10}, {&r.ExpiresOn, 10},
 	} {
 		if !circuitText(field.value, field.max) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 	}
 	if r.Name == "" || r.Provider == "" {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	if r.Status == "" {
 		r.Status = "planned"
@@ -69,10 +69,10 @@ func (r *CircuitControlReq) Validate(edit bool) error {
 		!slices.Contains([]string{"production_primary", "backup", "office_internet", "site_interconnect", "cloud_access", "partner_access", "management", "other"}, r.Purpose) ||
 		!slices.Contains([]string{"us", "vendor", "shared"}, r.Payer) ||
 		!slices.Contains([]string{"", "monthly", "quarterly", "yearly", "one_time"}, r.BillingCycle) || !circuitCurrency.MatchString(r.Currency) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	if r.BandwidthMbps != nil && (*r.BandwidthMbps < 1 || *r.BandwidthMbps > 1000000) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	if err := r.validateBilling(); err != nil {
 		return err
@@ -83,14 +83,14 @@ func (r *CircuitControlReq) Validate(edit bool) error {
 		}
 	}
 	if r.AEndpoint.DeviceID != nil && r.ZEndpoint.DeviceID != nil && *r.AEndpoint.DeviceID == *r.ZEndpoint.DeviceID {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	return nil
 }
 
 func validateCircuitEndpoint(e *inventory.CircuitEndpoint) error {
 	if e.DeviceID != nil && *e.DeviceID <= 0 {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	for _, field := range []struct {
 		value *string
@@ -101,20 +101,20 @@ func validateCircuitEndpoint(e *inventory.CircuitEndpoint) error {
 		{&e.Monitoring.HostName, 512}, {&e.Monitoring.InItemName, 512}, {&e.Monitoring.OutItemName, 512},
 	} {
 		if !circuitText(field.value, field.max) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 	}
 	if e.IP != "" {
 		ip, err := netip.ParseAddr(e.IP)
 		if err != nil || ip.Zone() != "" {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		e.IP = ip.Unmap().String()
 	}
 	b := &e.Monitoring
 	for _, id := range []string{b.HostID, b.InItemID, b.OutItemID} {
 		if id != "" && !zabbixID.MatchString(id) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 	}
 	if b.HostID == "" && (b.InItemID != "" || b.OutItemID != "") {
@@ -141,18 +141,18 @@ type CircuitPageReq struct {
 // Validate normalizes the request and rejects invalid or conflicting fields.
 func (r *CircuitPageReq) Validate() error {
 	if r.PageIndex < 0 || r.PageIndex > 1000000 || r.PageSize < 0 || r.PageSize > 200 {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	for _, field := range []struct {
 		value *string
 		max   int
 	}{{&r.Keyword, 512}, {&r.Status, 20}, {&r.Category, 32}, {&r.Provider, 160}, {&r.Region, 120}, {&r.Organization, 160}, {&r.Monitored, 5}} {
 		if !circuitText(field.value, field.max) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 	}
 	if (r.Status != "" && !slices.Contains(circuitStatuses, r.Status)) || (r.Category != "" && !slices.Contains(circuitCategories, r.Category)) || !slices.Contains([]string{"", "true", "false"}, r.Monitored) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	r.GetPageIndex()
 	r.GetPageSize()
@@ -175,7 +175,7 @@ type CircuitDeleteReq struct {
 func (r *CircuitControlReq) validateBilling() error {
 	if r.Fee != "" {
 		if !circuitMoney.MatchString(r.Fee) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		parts := strings.SplitN(r.Fee, ".", 2)
 		whole := strings.TrimLeft(parts[0], "0")
@@ -191,12 +191,12 @@ func (r *CircuitControlReq) validateBilling() error {
 	for _, value := range []string{r.InstalledOn, r.ExpiresOn} {
 		if value != "" {
 			if _, err := time.Parse("2006-01-02", value); err != nil {
-				return inventory.InvalidInputErr
+				return inventory.InvalidErr
 			}
 		}
 	}
 	if r.InstalledOn != "" && r.ExpiresOn != "" && r.ExpiresOn < r.InstalledOn {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	return nil
 }

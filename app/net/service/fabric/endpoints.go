@@ -29,7 +29,7 @@ func ParseEndpointQuery(value string) (EndpointQuery, error) {
 	value = strings.TrimSpace(value)
 	if p, err := netip.ParsePrefix(value); err == nil {
 		if p.Addr().Zone() != "" {
-			return EndpointQuery{}, InvalidInputErr
+			return EndpointQuery{}, InvalidErr
 		}
 		p = p.Masked()
 		return EndpointQuery{Kind: "cidr", Value: p.String(), Prefix: p}, nil
@@ -47,7 +47,7 @@ func ParseEndpointQuery(value string) (EndpointQuery, error) {
 			return EndpointQuery{Kind: "mac", Value: strings.ToLower(mac.String())}, nil
 		}
 	}
-	return EndpointQuery{}, InvalidInputErr
+	return EndpointQuery{}, InvalidErr
 }
 
 // Matches provides the matches operation within the caller's authorized fabric scope.

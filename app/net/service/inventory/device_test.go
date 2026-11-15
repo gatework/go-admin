@@ -246,12 +246,12 @@ func TestVersionConflictAndValidationLeaveValuesUnchanged(t *testing.T) {
 	}
 	req.Version = updated.Version
 	req.Status = "online"
-	if _, err := s.Update(ctx, row.ID, &req, 7, fullScope()); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err := s.Update(ctx, row.ID, &req, 7, fullScope()); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("unsupported status accepted: %v", err)
 	}
 	req.Status = "active"
 	req.ContactEmail = "not an email"
-	if _, err := s.Update(ctx, row.ID, &req, 7, fullScope()); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err := s.Update(ctx, row.ID, &req, 7, fullScope()); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("invalid email accepted: %v", err)
 	}
 	actual, _ := s.Get(ctx, row.ID, fullScope())

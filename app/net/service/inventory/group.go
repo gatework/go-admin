@@ -26,7 +26,7 @@ func (s *DeviceGroup) Tree(ctx context.Context, p *actions.DataPermission) (dto.
 // The inventory tree intentionally keeps empty groups for group administration.
 func (s *DeviceGroup) TreeForDeviceType(ctx context.Context, p *actions.DataPermission, deviceType string) (dto.DeviceGroupTree, error) {
 	if deviceType == "" {
-		return dto.DeviceGroupTree{Items: []dto.DeviceGroupNode{}}, inventory.InvalidInputErr
+		return dto.DeviceGroupTree{Items: []dto.DeviceGroupNode{}}, inventory.InvalidErr
 	}
 	return s.tree(ctx, p, deviceType)
 }
@@ -35,7 +35,7 @@ func (s *DeviceGroup) TreeForDeviceType(ctx context.Context, p *actions.DataPerm
 func (s *DeviceGroup) Create(ctx context.Context, r *dto.DeviceGroupReq, actor int) (dto.DeviceGroupNode, error) {
 	result := dto.DeviceGroupNode{Children: []dto.DeviceGroupNode{}}
 	if actor <= 0 {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	if err := r.Validate(false); err != nil {
 		return result, err
@@ -70,7 +70,7 @@ func (s *DeviceGroup) Create(ctx context.Context, r *dto.DeviceGroupReq, actor i
 func (s *DeviceGroup) Update(ctx context.Context, id int, r *dto.DeviceGroupReq, actor int) (dto.DeviceGroupNode, error) {
 	result := dto.DeviceGroupNode{Children: []dto.DeviceGroupNode{}}
 	if actor <= 0 || id <= 0 {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	if err := r.Validate(true); err != nil {
 		return result, err
@@ -87,7 +87,7 @@ func (s *DeviceGroup) Update(ctx context.Context, id int, r *dto.DeviceGroupReq,
 			return inventory.ConflictErr
 		}
 		if row.Code != r.Code {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		if err := validateGroupParent(tx, id, r.ParentID); err != nil {
 			return err
@@ -105,7 +105,7 @@ func (s *DeviceGroup) Update(ctx context.Context, id int, r *dto.DeviceGroupReq,
 // Delete removes the selected records within the caller's authorized scope.
 func (s *DeviceGroup) Delete(ctx context.Context, id int, version int64, actor int) error {
 	if id <= 0 || version <= 0 || actor <= 0 {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := grouping.Lock(tx); err != nil {
@@ -204,12 +204,12 @@ func validateGroupParent(tx *gorm.DB, id int, parent *int) error {
 	seen := map[int]bool{}
 	for parent != nil {
 		if *parent == id || seen[*parent] {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		seen[*parent] = true
 		row, err := loadGroup(tx, *parent)
 		if err != nil {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		parent = row.ParentID
 	}
@@ -299,18 +299,18 @@ func resolveMembership(groups grouping.Directory, row inventory.Device, id *int,
 	for _, group := range groups {
 		if group.ID == *id {
 			if !group.Enabled && !grouping.SameID(row.GroupID, id) {
-				return nil, inventory.InvalidInputErr
+				return nil, inventory.InvalidErr
 			}
 			return id, nil
 		}
 	}
-	return nil, inventory.InvalidInputErr
+	return nil, inventory.InvalidErr
 }
 
 // AssignGroup provides the assign group operation within the caller's authorized network scope.
 func (s *Device) AssignGroup(ctx context.Context, r *dto.DeviceGroupAssignReq, actor int, p *actions.DataPermission) (int, error) {
 	if actor <= 0 {
-		return 0, inventory.InvalidInputErr
+		return 0, inventory.InvalidErr
 	}
 	if err := r.Validate(); err != nil {
 		return 0, err

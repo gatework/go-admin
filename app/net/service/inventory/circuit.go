@@ -65,7 +65,7 @@ func circuitPermission(table string, p *actions.DataPermission) func(*gorm.DB) *
 func (s *Circuit) Get(ctx context.Context, id int, p *actions.DataPermission) (inventory.Circuit, error) {
 	var row inventory.Circuit
 	if id <= 0 {
-		return row, inventory.InvalidInputErr
+		return row, inventory.InvalidErr
 	}
 	err := s.scoped(ctx, p).Where("id = ?", id).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -108,7 +108,7 @@ func circuitFilters(r *dto.CircuitPageReq) func(*gorm.DB) *gorm.DB {
 func (s *Circuit) Create(ctx context.Context, r *dto.CircuitControlReq, actor int, p *actions.DataPermission) (inventory.Circuit, error) {
 	var row inventory.Circuit
 	if actor <= 0 {
-		return row, inventory.InvalidInputErr
+		return row, inventory.InvalidErr
 	}
 	if !circuitScopeAllowed(p) {
 		return row, inventory.CircuitScopeErr
@@ -136,7 +136,7 @@ func (s *Circuit) Create(ctx context.Context, r *dto.CircuitControlReq, actor in
 func (s *Circuit) Update(ctx context.Context, id int, r *dto.CircuitControlReq, actor int, p *actions.DataPermission) (inventory.Circuit, error) {
 	var result inventory.Circuit
 	if actor <= 0 {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	if err := r.Validate(true); err != nil {
 		return result, err
@@ -183,7 +183,7 @@ func (s *Circuit) Update(ctx context.Context, id int, r *dto.CircuitControlReq, 
 // Delete removes the selected records within the caller's authorized scope.
 func (s *Circuit) Delete(ctx context.Context, id int, version int64, actor int, p *actions.DataPermission) error {
 	if version <= 0 || actor <= 0 {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	row, err := s.Get(ctx, id, p)
 	if err != nil {
@@ -225,7 +225,7 @@ func (s *Circuit) Options(ctx context.Context, p *actions.DataPermission) (dto.C
 	return result, nil
 }
 func safeCircuitSourceError(err error) error {
-	for _, safe := range []error{inventory.InvalidInputErr, inventory.CircuitBindingErr, inventory.ZabbixNotConfiguredErr, inventory.ZabbixTimeoutErr} {
+	for _, safe := range []error{inventory.InvalidErr, inventory.CircuitBindingErr, inventory.ZabbixNotConfiguredErr, inventory.ZabbixTimeoutErr} {
 		if errors.Is(err, safe) {
 			return safe
 		}

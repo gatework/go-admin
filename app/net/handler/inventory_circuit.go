@@ -304,7 +304,7 @@ func (e Circuit) respond(err error) { request.Fail(&e.API, err) }
 func (e Circuit) id(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return 0, false
 	}
 	return id, true
@@ -313,7 +313,7 @@ func (e Circuit) id(c *gin.Context) (int, bool) {
 func (e Circuit) pageRequest(c *gin.Context) (*dto.CircuitPageReq, bool) {
 	r := &dto.CircuitPageReq{}
 	if c.ShouldBindQuery(r) != nil || r.Validate() != nil {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return nil, false
 	}
 	return r, true
@@ -321,7 +321,7 @@ func (e Circuit) pageRequest(c *gin.Context) (*dto.CircuitPageReq, bool) {
 
 func (e Circuit) body(c *gin.Context, out any) bool {
 	if !decodeStrictJSON(c, out, 128<<10) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return false
 	}
 	return true

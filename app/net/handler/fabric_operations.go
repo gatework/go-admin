@@ -57,7 +57,7 @@ func (e Fabric) CreateCollection(c *gin.Context) {
 	}
 	var r dto.CollectionCreateReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.CreateCollection(c.Request.Context(), id, &r, user.ID(c), actions.GetPermissionFromContext(c))
@@ -140,7 +140,7 @@ func (e Fabric) PreviewChange(c *gin.Context) {
 	}
 	var r dto.ChangeCreateReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.PreviewChange(c.Request.Context(), id, &r, user.ID(c), actions.GetPermissionFromContext(c))
@@ -195,7 +195,7 @@ func (e Fabric) ExecuteChange(c *gin.Context) {
 	}
 	var r dto.VersionReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.ExecuteChange(c.Request.Context(), id, &r, user.ID(c), actions.GetPermissionFromContext(c))
@@ -226,7 +226,7 @@ func (e Fabric) CancelChange(c *gin.Context) {
 	}
 	var r dto.VersionReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	row, err := s.CancelChange(c.Request.Context(), id, &r, user.ID(c), actions.GetPermissionFromContext(c))

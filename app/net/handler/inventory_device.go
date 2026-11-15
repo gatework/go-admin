@@ -105,7 +105,7 @@ func (e Device) Update(c *gin.Context) {
 	}
 	var req dto.DeviceUpdateReq
 	if !decodeStrictJSON(c, &req, 64<<10) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	row, err := s.Update(c.Request.Context(), id, &req, user.ID(c), actions.GetPermissionFromContext(c))
@@ -133,7 +133,7 @@ func (e Device) AssignGroup(c *gin.Context) {
 	}
 	var req dto.DeviceGroupAssignReq
 	if !decodeDeviceBody(c, &req) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	updated, err := s.AssignGroup(c.Request.Context(), &req, user.ID(c), actions.GetPermissionFromContext(c))
@@ -201,7 +201,7 @@ func (e Device) Sync(c *gin.Context) {
 	}
 	// The upstream is exclusively environment-configured; this operation has no body.
 	if body, err := io.ReadAll(io.LimitReader(c.Request.Body, 1)); err != nil || len(body) != 0 {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	admin := account.IsAdmin(user.RoleName(c))
@@ -264,7 +264,7 @@ func (e Device) respond(err error) { request.Fail(&e.API, err) }
 func (e Device) pageRequest(c *gin.Context) (*dto.DevicePageReq, bool) {
 	req := &dto.DevicePageReq{}
 	if c.ShouldBindQuery(req) != nil || req.Validate() != nil {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return nil, false
 	}
 	return req, true
@@ -273,7 +273,7 @@ func (e Device) pageRequest(c *gin.Context) (*dto.DevicePageReq, bool) {
 func (e Device) id(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return 0, false
 	}
 	return id, true

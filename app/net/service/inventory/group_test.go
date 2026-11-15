@@ -92,10 +92,10 @@ func TestGroupsRejectCyclesStaleDeletionAndDisabledAssignments(t *testing.T) {
 	gs := &DeviceGroup{Service: s.Service}
 	a := groupFixture(t, s, "a", nil)
 	b := groupFixture(t, s, "b", &a.ID)
-	if _, err := gs.Update(ctx, a.ID, &dto.DeviceGroupReq{Code: "changed-code", Name: a.Name, Enabled: true, Version: a.Version}, 7); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err := gs.Update(ctx, a.ID, &dto.DeviceGroupReq{Code: "changed-code", Name: a.Name, Enabled: true, Version: a.Version}, 7); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("mutable stable code: %v", err)
 	}
-	if _, err := gs.Update(ctx, a.ID, &dto.DeviceGroupReq{Code: a.Code, Name: a.Name, ParentID: &b.ID, Enabled: true, Version: a.Version}, 7); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err := gs.Update(ctx, a.ID, &dto.DeviceGroupReq{Code: a.Code, Name: a.Name, ParentID: &b.ID, Enabled: true, Version: a.Version}, 7); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("cycle accepted: %v", err)
 	}
 	if err := gs.Delete(ctx, a.ID, a.Version, 7); !errors.Is(err, inventory.GroupNotEmptyErr) {
@@ -125,7 +125,7 @@ func TestGroupsRejectCyclesStaleDeletionAndDisabledAssignments(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _, _ = s.Page(ctx, &dto.DevicePageReq{Keyword: "192.0.2.2"}, fullScope())
-	if _, err := s.AssignGroup(ctx, assignment(rows, &b.ID, "manual"), 7, fullScope()); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err := s.AssignGroup(ctx, assignment(rows, &b.ID, "manual"), 7, fullScope()); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("disabled assignment accepted: %v", err)
 	}
 	if err := gs.Delete(ctx, b.ID, b.Version, 7); !errors.Is(err, inventory.ConflictErr) {

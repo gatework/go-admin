@@ -20,7 +20,7 @@ func TestGroupValidationPreservesDomainBounds(t *testing.T) {
 	} {
 		row := valid
 		edit(&row)
-		if err := row.Validate(true); !errors.Is(err, inventory.InvalidInputErr) {
+		if err := row.Validate(true); !errors.Is(err, inventory.InvalidErr) {
 			t.Errorf("accepted invalid group: %+v %v", row, err)
 		}
 	}
@@ -35,7 +35,7 @@ func TestAssignmentRequiresDistinctBoundedVersionedSelection(t *testing.T) {
 		{GroupSource: "auto"}, {GroupSource: "unknown", Devices: valid.Devices}, {GroupSource: "manual", Devices: []DeviceVersion{{ID: 1, Version: 0}}},
 		{GroupSource: "auto", Devices: []DeviceVersion{{ID: 1, Version: 1}, {ID: 1, Version: 1}}},
 	} {
-		if err := request.Validate(); !errors.Is(err, inventory.InvalidInputErr) {
+		if err := request.Validate(); !errors.Is(err, inventory.InvalidErr) {
 			t.Errorf("accepted invalid assignment: %+v %v", request, err)
 		}
 	}
@@ -47,7 +47,7 @@ func TestAssignmentRequiresDistinctBoundedVersionedSelection(t *testing.T) {
 		t.Fatalf("maximum selection: %v", err)
 	}
 	request.Devices = append(request.Devices, DeviceVersion{ID: 201, Version: 1})
-	if err := request.Validate(); !errors.Is(err, inventory.InvalidInputErr) {
+	if err := request.Validate(); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("unbounded assignment: %v", err)
 	}
 }

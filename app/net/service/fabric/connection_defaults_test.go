@@ -34,7 +34,7 @@ func TestFabricEffectiveConnectionSupportsAutomaticNXOSAndRejectsChangedDriver(t
 	if err = s.DB.Model(&d).Update("os", "IOS-XE").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err = w.checkSource(ctx, target.Device, target.Connection, target.SourceHash); !errors.Is(err, opsConflictErr) {
+	if err = w.checkSource(ctx, target.Device, target.Connection, target.SourceHash); !errors.Is(err, ConflictErr) {
 		t.Fatalf("changed inferred driver accepted: %v", err)
 	}
 }

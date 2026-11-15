@@ -179,7 +179,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 		return q.Error
 	}
 	if p.UserID == 0 {
-		return opsScopeErr
+		return ScopeErr
 	}
 	var role struct{ RoleKey string }
 	if e := opsDB(ctx, w.s).Table("sys_role").Select("role_key").Where("role_id = ?", p.RoleID).Scan(&role).Error; e != nil {
@@ -191,7 +191,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 			return e
 		}
 		if grants == 0 {
-			return opsScopeErr
+			return ScopeErr
 		}
 	}
 	devices, e := w.s.RequireFullScope(ctx, c.FabricID, &p)
@@ -203,7 +203,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 		ids = append(ids, d.ID)
 	}
 	if opsHash(ids) != opsHash(c.Authorization) {
-		return opsScopeErr
+		return ScopeErr
 	}
 	return nil
 }
@@ -279,7 +279,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 		_, sourceConfig, sourceErr := w.s.changeConfig(ctx, c.FabricID, c.SourceDeviceID)
 		if sourceErr != nil || !t.PreEvidence.Complete() || len(beforeObs.Records) != 1 || opsHash(beforeObs.Records[0]) != t.ConfigHash || !plan.Eligible(beforeObs.Records[0]) || !aclServiceContextMatches(sourceConfig, beforeObs.Records[0], plan.Change()) {
 			t.ErrorCode = "configuration_drift"
-			return opsConflictErr
+			return ConflictErr
 		}
 		if err = w.persistSnapshot(ctx, c.FabricID, 0, models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}, t.PreEvidence, started, time.Now().UTC()); err != nil {
 			return err
@@ -295,7 +295,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 		afterObs := t.PostEvidence.Dimensions["configuration"]
 		if !afterObs.Complete() || len(afterObs.Records) != 1 || !plan.Satisfied(afterObs.Records[0], beforeObs.Records[0]) {
 			t.ErrorCode = "postcheck_unconfirmed"
-			return opsConflictErr
+			return ConflictErr
 		}
 		t.ConfigurationVerified = true
 		if err := w.persistSnapshot(ctx, c.FabricID, 0, models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}, t.PostEvidence, postStarted, time.Now().UTC()); err != nil {
@@ -304,7 +304,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 		t.RuntimeState = postRuntimeState(t.PostEvidence, afterObs.Records[0])
 		if t.RuntimeState != "healthy" {
 			t.ErrorCode = "runtime_" + t.RuntimeState
-			return opsConflictErr
+			return ConflictErr
 		}
 		return nil
 	})
@@ -317,7 +317,7 @@ func (w *Worker) persistChange(ctx context.Context, c *models.Change) error {
 			return q.Error
 		}
 		if q.RowsAffected != 1 {
-			return opsConflictErr
+			return ConflictErr
 		}
 		for _, t := range c.Targets {
 			if e := tx.Model(&delivery.Target{}).Where("id = ? AND order_id = ?", t.DeliveryTargetID, c.DeliveryOrderID).Updates(map[string]any{"status": t.Status, "attempted": t.Attempted, "completed_steps": t.CompletedSteps, "error_code": t.ErrorCode}).Error; e != nil {
@@ -405,7 +405,7 @@ func postRuntimeState(snapshot vxlan.Snapshot, configuration vxlan.Record) strin
 
 func (w *Worker) checkLease(ctx context.Context, held lease.Lease) error {
 	if e := lease.Check(opsDB(ctx, w.s), held); errors.Is(e, lease.LostErr) {
-		return opsConflictErr
+		return ConflictErr
 	} else if e != nil {
 		return e
 	}
@@ -584,7 +584,7 @@ func (w *Worker) authorizeChangeCommand(ctx context.Context, c *models.Change, t
 	}
 	group, e := w.s.groupingHash(ctx, c.FabricID)
 	if e != nil || group != c.GroupingHash {
-		return opsConflictErr
+		return ConflictErr
 	}
 	return nil
 }

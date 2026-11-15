@@ -20,7 +20,7 @@ func (s *Circuit) Traffic(ctx context.Context, id int, period string, p *actions
 	result := dto.CircuitTraffic{Period: period, Series: []dto.CircuitTrafficSeries{}}
 	duration, ok := map[string]time.Duration{"1h": time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour}[period]
 	if !ok {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	row, err := s.Get(ctx, id, p)
 	if err != nil {

@@ -98,7 +98,7 @@ func (s *Fabric) PreviewRules(ctx context.Context, r *dto.RulesReq, p *actions.D
 func (s *Fabric) UpdateRules(ctx context.Context, r *dto.RulesReq, actor int, p *actions.DataPermission) (models.RuleSet, error) {
 	var out models.RuleSet
 	if actor <= 0 || r.Version <= 0 {
-		return out, InvalidInputErr
+		return out, InvalidErr
 	}
 	if err := s.validateRules(ctx, r.Rules); err != nil {
 		return out, err
@@ -128,21 +128,21 @@ func (s *Fabric) UpdateRules(ctx context.Context, r *dto.RulesReq, actor int, p 
 }
 func (s *Fabric) validateRules(ctx context.Context, rules []models.Rule) error {
 	if len(rules) > 100 {
-		return InvalidInputErr
+		return InvalidErr
 	}
 	for _, r := range rules {
 		if r.FabricID <= 0 || r.Pattern == "" || !validText(r.Pattern, 256) {
-			return InvalidInputErr
+			return InvalidErr
 		}
 		if _, err := regexp.Compile("(?i)" + r.Pattern); err != nil {
-			return InvalidInputErr
+			return InvalidErr
 		}
 		var n int64
 		if err := s.DB.WithContext(ctx).Model(&models.Fabric{}).Where("id = ?", r.FabricID).Count(&n).Error; err != nil {
 			return err
 		}
 		if n != 1 {
-			return InvalidInputErr
+			return InvalidErr
 		}
 	}
 	return nil

@@ -117,7 +117,7 @@ func TestZabbixHostAndItemLookupsAreBoundedAndRejectWrongOwnership(t *testing.T)
 		"sortfield":["name"],"limit":201
 	}`)
 	for _, keyword := range []string{"", strings.Repeat("a", 129), "a\x00b"} {
-		if _, err = p.Hosts(context.Background(), keyword); !errors.Is(err, inventory.InvalidInputErr) {
+		if _, err = p.Hosts(context.Background(), keyword); !errors.Is(err, inventory.InvalidErr) {
 			t.Fatalf("bad host search: %v", err)
 		}
 	}

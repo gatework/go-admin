@@ -33,8 +33,8 @@ var (
 	// PersistenceErr is a write that failed; the stored inventory is unchanged.
 	// It is an internal failure: the HTTP answer is internal_error.
 	PersistenceErr = errkind.New(errkind.Unknown, "inventory.persistence_failed")
-	// InvalidInputErr is a request the service refuses as malformed.
-	InvalidInputErr = errkind.New(errkind.Invalid, "inventory.invalid_input")
+	// InvalidErr is a request the service refuses as malformed.
+	InvalidErr = errkind.New(errkind.Invalid, "inventory.invalid_input")
 	// GroupNotFoundErr is a device group that does not exist.
 	GroupNotFoundErr = errkind.New(errkind.NotFound, "inventory.group_not_found")
 	// GroupNotEmptyErr is a delete of a group that still has children or devices.

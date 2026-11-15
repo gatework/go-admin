@@ -56,7 +56,7 @@ func (s *Device) SyncStatus(ctx context.Context) (SyncStatus, error) {
 func (s *Device) Sync(ctx context.Context, actor int, p *actions.DataPermission, admin bool) (SyncResult, error) {
 	result := SyncResult{}
 	if actor <= 0 {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	if config.Current().Settings.Application.EnableDP && !admin && (p == nil || p.DataScope != actions.DataScopeAll) {
 		return result, inventory.SyncScopeErr

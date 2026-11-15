@@ -41,7 +41,7 @@ func opStrings(v any) []string {
 func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateReq, actor int, p *actions.DataPermission) (models.Change, error) {
 	var out models.Change
 	if r == nil || actor <= 0 || len(r.RequestKey) < 8 || len(r.RequestKey) > 100 || len(r.TargetDeviceIDs) == 0 || len(r.TargetDeviceIDs) > 100 {
-		return out, opsInvalidErr
+		return out, InvalidErr
 	}
 	devices, e := s.RequireFullScope(ctx, id, p)
 	if e != nil {
@@ -62,7 +62,7 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 	e = opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&out).Error
 	if e == nil {
 		if out.PayloadHash != payload {
-			return models.Change{}, opsConflictErr
+			return models.Change{}, ConflictErr
 		}
 		return out, nil
 	}
@@ -125,40 +125,40 @@ func controlledPlan(source vxlan.Record, r *dto.ChangeCreateReq) (*vxlan.ChangeP
 	for key, v := range opMap(source["vlan_vnis"]) {
 		if fmt.Sprint(v) == strconv.Itoa(r.VNI) {
 			if vlan != "" {
-				return nil, opsInvalidErr
+				return nil, InvalidErr
 			}
 			vlan = key
 		}
 	}
 	vid, e := strconv.Atoi(vlan)
 	if e != nil {
-		return nil, opsInvalidErr
+		return nil, InvalidErr
 	}
 	svi := opMap(opMap(source["interfaces"])["Vlan"+vlan])
 	if svi == nil {
-		return nil, opsInvalidErr
+		return nil, InvalidErr
 	}
 	change := vxlan.Record{"kind": r.Kind, "vlan": vid, "vni": r.VNI}
 	switch r.Kind {
 	case "vlan_vni_add", "svi_gateway_add":
 		addresses := opStrings(svi["addresses"])
 		if len(addresses) != 1 || svi["anycast"] != true {
-			return nil, opsInvalidErr
+			return nil, InvalidErr
 		}
 		change["address"] = addresses[0]
 		change["vrf"] = svi["vrf"]
 	case "svi_acl":
 		if r.Direction != "in" && r.Direction != "out" {
-			return nil, opsInvalidErr
+			return nil, InvalidErr
 		}
 		name, ok := opMap(svi["acl_bindings"])[r.Direction].(string)
 		if !ok || name == "" {
-			return nil, opsInvalidErr
+			return nil, InvalidErr
 		}
 		entries := opMap(source["acls"])[name]
 		policy := vxlan.ResolveACLPolicy(source, entries)
 		if policy == nil {
-			return nil, opsInvalidErr
+			return nil, InvalidErr
 		}
 		change["acl"] = name
 		change["direction"] = r.Direction
@@ -167,7 +167,7 @@ func controlledPlan(source vxlan.Record, r *dto.ChangeCreateReq) (*vxlan.ChangeP
 		change["create_acl"] = false
 		change["previous_binding"] = nil
 	default:
-		return nil, opsInvalidErr
+		return nil, InvalidErr
 	}
 	return vxlan.NewChangePlan(change)
 }
@@ -190,7 +190,7 @@ func (s *Fabric) GetChange(ctx context.Context, id int, p *actions.DataPermissio
 // Changes provides the changes operation within the caller's authorized fabric scope.
 func (s *Fabric) Changes(ctx context.Context, id int, r *dto.PageReq, p *actions.DataPermission) ([]models.Change, int64, error) {
 	if r == nil {
-		return nil, 0, InvalidInputErr
+		return nil, 0, InvalidErr
 	}
 	if e := r.Validate(); e != nil {
 		return nil, 0, e
@@ -204,14 +204,14 @@ func (s *Fabric) Changes(ctx context.Context, id int, r *dto.PageReq, p *actions
 // ExecuteChange provides the execute change operation within the caller's authorized fabric scope.
 func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, actor int, p *actions.DataPermission) (models.Change, error) {
 	if actor <= 0 {
-		return models.Change{}, InvalidInputErr
+		return models.Change{}, InvalidErr
 	}
 	c, e := s.GetChange(ctx, id, p)
 	if e != nil {
 		return c, e
 	}
 	if r == nil || r.Version != c.Version || c.Status != "preview" {
-		return c, opsConflictErr
+		return c, ConflictErr
 	}
 	if !ds.FromEnvironment().Enabled {
 		return c, ds.DisabledErr
@@ -225,7 +225,7 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 			return q.Error
 		}
 		if q.RowsAffected != 1 {
-			return opsConflictErr
+			return ConflictErr
 		}
 		if e := tx.Model(&delivery.Order{}).Where("id = ? AND kind = ?", c.DeliveryOrderID, "fabric").Updates(map[string]any{"status": "queued", "version": gorm.Expr("version + 1")}).Error; e != nil {
 			return e
@@ -241,14 +241,14 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 // CancelChange provides the cancel change operation within the caller's authorized fabric scope.
 func (s *Fabric) CancelChange(ctx context.Context, id int, r *dto.VersionReq, actor int, p *actions.DataPermission) (models.Change, error) {
 	if actor <= 0 {
-		return models.Change{}, InvalidInputErr
+		return models.Change{}, InvalidErr
 	}
 	c, e := s.GetChange(ctx, id, p)
 	if e != nil {
 		return c, e
 	}
 	if r == nil || r.Version != c.Version || (c.Status != "preview" && c.Status != "queued") {
-		return c, opsConflictErr
+		return c, ConflictErr
 	}
 	for i := range c.Targets {
 		c.Targets[i].Status = "cancelled"
@@ -260,7 +260,7 @@ func (s *Fabric) CancelChange(ctx context.Context, id int, r *dto.VersionReq, ac
 			return q.Error
 		}
 		if q.RowsAffected != 1 {
-			return opsConflictErr
+			return ConflictErr
 		}
 		if e := tx.Model(&delivery.Order{}).Where("id = ? AND kind = ?", c.DeliveryOrderID, "fabric").Updates(map[string]any{"status": "cancelled", "cancel_requested": true, "finished_at": now}).Error; e != nil {
 			return e
@@ -305,7 +305,7 @@ func (s *Fabric) changeConfig(ctx context.Context, fabric, device int) (models.O
 		return o, nil, e
 	}
 	if o.SourceHash != sourceHash(opsDevice(d), c) || o.MembershipVersion != m.Version || o.RuleVersion != m.RuleVersion || d.Status != "active" {
-		return o, nil, opsConflictErr
+		return o, nil, ConflictErr
 	}
 	return o, o.Data.Records[0], nil
 }
@@ -315,18 +315,18 @@ func (s *Fabric) validateChange(ctx context.Context, c models.Change) error {
 		return e
 	}
 	if group != c.GroupingHash || opsHash(c.Plan) != c.PlanHash {
-		return opsConflictErr
+		return ConflictErr
 	}
 	so, cfg, e := s.changeConfig(ctx, c.FabricID, c.SourceDeviceID)
 	if e != nil {
 		return e
 	}
 	if so.SourceHash != c.SourceHash || opsHash(cfg) != c.SourceConfigHash {
-		return opsConflictErr
+		return ConflictErr
 	}
 	expected, e := controlledPlan(cfg, &dto.ChangeCreateReq{Kind: c.Kind, VNI: c.VNI, Direction: c.Direction})
 	if e != nil || opsHash(expected.Change()) != c.PlanHash {
-		return opsConflictErr
+		return ConflictErr
 	}
 	sourceConfig := cfg
 	for _, t := range c.Targets {
@@ -338,7 +338,7 @@ func (s *Fabric) validateChange(ctx context.Context, c models.Change) error {
 			return e
 		}
 		if o.SourceHash != t.SourceHash || opsHash(cfg) != t.ConfigHash || !aclServiceContextMatches(sourceConfig, cfg, expected.Change()) {
-			return opsConflictErr
+			return ConflictErr
 		}
 	}
 	return nil
@@ -408,7 +408,7 @@ func (s *Fabric) previewTargets(ctx context.Context, id int, targets []models.Co
 			return nil, nil, e
 		}
 		if !plan.Eligible(cfg) || !aclServiceContextMatches(config, cfg, plan.Change()) {
-			return nil, nil, InvalidInputErr
+			return nil, nil, InvalidErr
 		}
 		commands := plan.Commands()
 		script := strings.Join(commands, "\n")
@@ -425,14 +425,14 @@ func previewDeviceScope(devices []network.Device, r *dto.ChangeCreateReq) (map[i
 	}
 	source, ok := byID[r.SourceDeviceID]
 	if !ok || !strings.EqualFold(source.DeviceRole, "leaf_switch") {
-		return nil, nil, opsScopeErr
+		return nil, nil, ScopeErr
 	}
 	ids := append([]int{}, r.TargetDeviceIDs...)
 	sort.Ints(ids)
 	for i, device := range ids {
 		d, ok := byID[device]
 		if !ok || device == r.SourceDeviceID || !strings.EqualFold(d.DeviceRole, "leaf_switch") || (i > 0 && ids[i-1] == device) {
-			return nil, nil, opsInvalidErr
+			return nil, nil, InvalidErr
 		}
 	}
 	return byID, ids, nil

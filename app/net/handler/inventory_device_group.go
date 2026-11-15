@@ -51,7 +51,7 @@ func (e DeviceGroup) Create(c *gin.Context) {
 	}
 	var req dto.DeviceGroupReq
 	if !decodeDeviceBody(c, &req) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	row, err := s.Create(c.Request.Context(), &req, user.ID(c))
@@ -84,7 +84,7 @@ func (e DeviceGroup) Update(c *gin.Context) {
 	}
 	var req dto.DeviceGroupReq
 	if !decodeDeviceBody(c, &req) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	row, err := s.Update(c.Request.Context(), id, &req, user.ID(c))
@@ -136,7 +136,7 @@ func (e DeviceGroup) Delete(c *gin.Context) {
 	}
 	var req dto.DeviceGroupDeleteReq
 	if !decodeDeviceBody(c, &req) {
-		e.respond(inventory.InvalidInputErr)
+		e.respond(inventory.InvalidErr)
 		return
 	}
 	if err := s.Delete(c.Request.Context(), id, req.Version, user.ID(c)); err != nil {

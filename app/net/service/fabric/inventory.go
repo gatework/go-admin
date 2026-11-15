@@ -27,8 +27,8 @@ func (e *Error) Error() string { return e.Message }
 
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// InvalidInputErr identifies invalid input failures.
-	InvalidInputErr = &Error{400, "Fabric 参数无效"}
+	// InvalidErr identifies invalid input failures.
+	InvalidErr = &Error{400, "Fabric 参数无效"}
 	// NotFoundErr identifies not found failures.
 	NotFoundErr = &Error{404, "Fabric 或设备不存在或无权查看"}
 	// ConflictErr identifies conflict failures.
@@ -53,7 +53,7 @@ func deviceScope(db *gorm.DB, p *actions.DataPermission) *gorm.DB {
 // complete is based on the actual membership set, never the caller's role label.
 func (s *Fabric) VisibleMembers(ctx context.Context, id int, p *actions.DataPermission) ([]networkmodels.Device, bool, error) {
 	if id <= 0 {
-		return nil, false, InvalidInputErr
+		return nil, false, InvalidErr
 	}
 	var fabric models.Fabric
 	if err := s.DB.WithContext(ctx).First(&fabric, id).Error; err != nil {
@@ -131,7 +131,7 @@ func (s *Fabric) Page(ctx context.Context, r *dto.PageReq, p *actions.DataPermis
 func (s *Fabric) Settings(ctx context.Context, id int, r *dto.SettingsReq, p *actions.DataPermission) (models.Fabric, error) {
 	var f models.Fabric
 	if r.Version <= 0 || r.RuntimeMinutes < 1 || r.RuntimeMinutes > 1440 || r.ConfigMinutes < 1 || r.ConfigMinutes > 1440 {
-		return f, InvalidInputErr
+		return f, InvalidErr
 	}
 	if _, err := s.RequireFullScope(ctx, id, p); err != nil {
 		return f, err
@@ -190,7 +190,7 @@ func pageBounds(n int, r *dto.PageReq) (int, int) {
 func (s *Fabric) UpdateMember(ctx context.Context, id int, r *dto.MemberReq, actor int, p *actions.DataPermission) (dto.Member, error) {
 	var out dto.Member
 	if actor <= 0 || id <= 0 || (r.Mode != "auto" && r.Mode != "manual") || r.FabricID != nil && *r.FabricID <= 0 {
-		return out, InvalidInputErr
+		return out, InvalidErr
 	}
 	var d networkmodels.Device
 	if err := deviceScope(s.DB.WithContext(ctx), p).First(&d, id).Error; err != nil {

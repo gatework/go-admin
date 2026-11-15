@@ -20,7 +20,7 @@ import (
 func (s *Fabric) ChangeCandidates(ctx context.Context, id int, r *dto.CandidatesReq, p *actions.DataPermission) (dto.Candidates, error) {
 	out := dto.Candidates{Ready: []dto.Candidate{}, Unchanged: []dto.Candidate{}, Blocked: []dto.Candidate{}}
 	if r == nil || r.SourceDeviceID <= 0 || r.VNI < 1 || r.VNI > 16777215 || len(r.TargetDeviceIDs) > 100 || (r.TargetDeviceIDs != nil && len(r.TargetDeviceIDs) == 0) {
-		return out, InvalidInputErr
+		return out, InvalidErr
 	}
 	devices, err := s.RequireFullScope(ctx, id, p)
 	if err != nil {
@@ -140,7 +140,7 @@ func candidateTargets(r *dto.CandidatesReq, eligibleIDs map[int]bool) (map[int]b
 	requested := map[int]bool{}
 	for _, target := range r.TargetDeviceIDs {
 		if !eligibleIDs[target] || target == r.SourceDeviceID || requested[target] {
-			return nil, InvalidInputErr
+			return nil, InvalidErr
 		}
 		requested[target] = true
 	}

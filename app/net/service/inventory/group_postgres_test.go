@@ -37,7 +37,7 @@ func TestPostgresGroupOpposingMovesCannotCreateCycle(t *testing.T) {
 		err := <-results
 		if err == nil {
 			success++
-		} else if errors.Is(err, inventory.InvalidInputErr) {
+		} else if errors.Is(err, inventory.InvalidErr) {
 			rejected++
 		} else {
 			t.Fatal(err)
@@ -91,7 +91,7 @@ func TestPostgresGroupDeletionAndAssignmentCannotLeaveDanglingMembership(t *test
 			if err := gs.Delete(ctx, group.ID, group.Version, 7); err != nil {
 				t.Fatal(err)
 			}
-		} else if !errors.Is(assignErr, inventory.InvalidInputErr) || deleteErr != nil {
+		} else if !errors.Is(assignErr, inventory.InvalidErr) || deleteErr != nil {
 			t.Fatalf("unexpected race result: assign=%v delete=%v", assignErr, deleteErr)
 		}
 		var dangling int64

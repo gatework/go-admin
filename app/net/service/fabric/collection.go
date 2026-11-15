@@ -20,15 +20,6 @@ import (
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
 
-//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var opsInvalidErr = InvalidInputErr
-
-//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var opsConflictErr = ConflictErr
-
-//nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var opsScopeErr = ScopeErr
-
 func collectionDimensions(mode string) []string {
 	if mode == "configuration" {
 		return []string{"configuration"}
@@ -46,7 +37,7 @@ func opsDevice(d network.Device) delivery.DeviceSnapshot {
 // CreateCollection creates collection within the caller's authorized scope.
 func (s *Fabric) CreateCollection(ctx context.Context, id int, r *dto.CollectionCreateReq, actor int, p *actions.DataPermission) (models.Collection, error) {
 	if actor <= 0 || r == nil || len(r.RequestKey) < 8 || len(r.RequestKey) > 100 || (r.Mode != "all" && r.Mode != "runtime" && r.Mode != "configuration") {
-		return models.Collection{}, opsInvalidErr
+		return models.Collection{}, InvalidErr
 	}
 	devices, e := s.RequireFullScope(ctx, id, p)
 	if e != nil {
@@ -65,7 +56,7 @@ func (s *Fabric) CreateCollection(ctx context.Context, id int, r *dto.Collection
 // Collections provides the collections operation within the caller's authorized fabric scope.
 func (s *Fabric) Collections(ctx context.Context, id int, r *dto.PageReq, p *actions.DataPermission) ([]models.Collection, int64, error) {
 	if r == nil {
-		return nil, 0, InvalidInputErr
+		return nil, 0, InvalidErr
 	}
 	if e := r.Validate(); e != nil {
 		return nil, 0, e
@@ -149,7 +140,7 @@ func (s *Fabric) createCollection(ctx context.Context, id int, r *dto.Collection
 	e := opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error
 	if e == nil {
 		if existing.PayloadHash != hash {
-			return existing, opsConflictErr
+			return existing, ConflictErr
 		}
 		return existing, nil
 	}
@@ -161,7 +152,7 @@ func (s *Fabric) createCollection(ctx context.Context, id int, r *dto.Collection
 		return existing, e
 	}
 	if len(targets) == 0 {
-		return existing, opsInvalidErr
+		return existing, InvalidErr
 	}
 	group, e := s.groupingHash(ctx, id)
 	if e != nil {
@@ -243,7 +234,7 @@ func (w *Worker) finishCollection(ctx context.Context, job *models.Collection) e
 }
 func (w *Worker) persistSnapshot(ctx context.Context, fabric, id int, t models.CollectionTarget, snapshot vxlan.Snapshot, started, finished time.Time) error {
 	if opsHash(snapshot.Target) != opsHash(targetRecord(t.Device)) || fmt.Sprint(snapshot.FabricKey) != fmt.Sprint(fabric) || snapshot.ObservedAt == nil || snapshot.ObservedAt.Before(started.Add(-time.Second)) || snapshot.ObservedAt.After(finished.Add(time.Second)) {
-		return opsInvalidErr
+		return InvalidErr
 	}
 	var member models.Membership
 	if e := opsDB(ctx, w.s).First(&member, "device_id = ? AND fabric_id = ? AND status = ?", t.DeviceID, fabric, "assigned").Error; e != nil {
@@ -299,7 +290,7 @@ func (w *Worker) checkSource(ctx context.Context, d delivery.DeviceSnapshot, c d
 		return e
 	}
 	if current.Status != "active" || sourceHash(opsDevice(current), connection) != hash {
-		return opsConflictErr
+		return ConflictErr
 	}
 	return nil
 }
@@ -398,7 +389,7 @@ func persistFabricDimension(tx *gorm.DB, fabric, id int, t models.CollectionTarg
 		}
 	}
 	if !validObservation(o, dimension, started, finished) {
-		return opsInvalidErr
+		return InvalidErr
 	}
 	var latest models.Observation
 	e := tx.Where("device_id = ? AND dimension = ?", t.DeviceID, dimension).Order("observed_at DESC,id DESC").First(&latest).Error

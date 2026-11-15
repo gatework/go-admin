@@ -58,7 +58,7 @@ func (s *Device) Page(ctx context.Context, r *dto.DevicePageReq, p *actions.Data
 func (s *Device) Get(ctx context.Context, id int, p *actions.DataPermission) (inventory.Device, error) {
 	var row inventory.Device
 	if id <= 0 {
-		return row, inventory.InvalidInputErr
+		return row, inventory.InvalidErr
 	}
 	err := s.scoped(ctx, p).Where("id = ?", id).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -111,7 +111,7 @@ func filters(r *dto.DevicePageReq) func(*gorm.DB) *gorm.DB {
 func (s *Device) Update(ctx context.Context, id int, r *dto.DeviceUpdateReq, actor int, p *actions.DataPermission) (inventory.Device, error) {
 	var row inventory.Device
 	if id <= 0 || actor <= 0 {
-		return row, inventory.InvalidInputErr
+		return row, inventory.InvalidErr
 	}
 	if err := r.Validate(); err != nil {
 		return row, err

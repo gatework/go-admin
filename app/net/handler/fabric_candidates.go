@@ -29,7 +29,7 @@ func (e Fabric) ChangeCandidates(c *gin.Context) {
 	}
 	var r dto.CandidatesReq
 	if !decodeFabricRequest(c, &r) {
-		e.respond(service.InvalidInputErr)
+		e.respond(service.InvalidErr)
 		return
 	}
 	out, err := s.ChangeCandidates(c.Request.Context(), id, &r, actions.GetPermissionFromContext(c))

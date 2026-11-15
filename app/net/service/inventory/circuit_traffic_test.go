@@ -119,7 +119,7 @@ func TestCircuitTrafficRevalidatesBindingsAndLimitsSeriesFailures(t *testing.T) 
 	if err != nil || result.Configured || len(result.Series) != 0 {
 		t.Fatalf("missing config: %+v %v", result, err)
 	}
-	if _, err = s.Traffic(context.Background(), row.ID, "bogus", fullScope()); !errors.Is(err, inventory.InvalidInputErr) {
+	if _, err = s.Traffic(context.Background(), row.ID, "bogus", fullScope()); !errors.Is(err, inventory.InvalidErr) {
 		t.Fatalf("bad period: %v", err)
 	}
 	if _, err = s.Traffic(context.Background(), row.ID, "1h", nil); !errors.Is(err, inventory.CircuitNotFoundErr) {

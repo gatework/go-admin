@@ -42,14 +42,14 @@ func (r *DeviceGroupReq) Validate(update bool) error {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Description = strings.TrimSpace(r.Description)
 	if (update && r.Version <= 0) || r.Position < 0 || (r.ParentID != nil && *r.ParentID <= 0) || len(r.Code) > 100 || !groupCode.MatchString(r.Code) || r.Name == "" {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	for _, field := range []struct {
 		value string
 		max   int
 	}{{r.Name, 128}, {r.Description, 4000}} {
 		if utf8.RuneCountInString(field.value) > field.max || strings.ContainsRune(field.value, 0) {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 	}
 	return nil
@@ -79,12 +79,12 @@ func ValidSource(source string) bool { return source == "auto" || source == "man
 // Validate normalizes the request and rejects invalid or conflicting fields.
 func (r *DeviceGroupAssignReq) Validate() error {
 	if len(r.Devices) == 0 || len(r.Devices) > 200 || !ValidSource(r.GroupSource) || (r.GroupID != nil && *r.GroupID <= 0) {
-		return inventory.InvalidInputErr
+		return inventory.InvalidErr
 	}
 	seen := map[int]bool{}
 	for _, row := range r.Devices {
 		if row.ID <= 0 || row.Version <= 0 || seen[row.ID] {
-			return inventory.InvalidInputErr
+			return inventory.InvalidErr
 		}
 		seen[row.ID] = true
 	}

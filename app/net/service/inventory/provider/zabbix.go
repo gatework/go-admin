@@ -163,7 +163,7 @@ func (p *Zabbix) Hosts(ctx context.Context, keyword string) (ZabbixHostList, err
 	result := ZabbixHostList{Items: []ZabbixHost{}}
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" || !validZabbixText(keyword, 128) {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	rows, err := queryZabbix(ctx, p, func(ctx context.Context) ([]zabbix.Host, error) {
 		return p.client.Host().Get(ctx, zabbix.HostGetParams{
@@ -195,7 +195,7 @@ func (p *Zabbix) Items(ctx context.Context, hostID, keyword string) (ZabbixItemL
 	result := ZabbixItemList{Items: []ZabbixItem{}}
 	keyword = strings.TrimSpace(keyword)
 	if !zabbixIdentifier.MatchString(hostID) || !validZabbixText(keyword, 128) {
-		return result, inventory.InvalidInputErr
+		return result, inventory.InvalidErr
 	}
 	params := zabbix.ItemGetParams{
 		Output:    zabbixItemOutput,
