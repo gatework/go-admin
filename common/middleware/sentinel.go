@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/alibaba/sentinel-golang/core/system"
@@ -16,11 +17,11 @@ import (
 //
 // The threshold comes from extend.ratelimit.inboundqps; see config.RateLimit
 // for the values it accepts.
-func Sentinel() gin.HandlerFunc {
+func Sentinel() (gin.HandlerFunc, error) {
 	qps := config.Ext().RateLimit.Threshold()
 	if qps <= 0 {
 		log.NewHelper(log.Default()).Info("rate limit disabled by extend.ratelimit.inboundqps")
-		return func(c *gin.Context) { c.Next() }
+		return func(c *gin.Context) { c.Next() }, nil
 	}
 
 	if _, err := system.LoadRules([]*system.Rule{
@@ -34,7 +35,7 @@ func Sentinel() gin.HandlerFunc {
 			Strategy: system.NoAdaptive,
 		},
 	}); err != nil {
-		log.NewHelper(log.Default()).Fatalf("Unexpected error: %+v", err)
+		return nil, fmt.Errorf("rate limit: loading rules: %w", err)
 	}
 
 	log.NewHelper(log.Default()).Infof("rate limit: %.0f inbound req/s", qps)
@@ -51,5 +52,5 @@ func Sentinel() gin.HandlerFunc {
 				"code": http.StatusTooManyRequests,
 			})
 		}),
-	)
+	), nil
 }

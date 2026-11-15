@@ -170,7 +170,9 @@ func run() error {
 	if config.Current().Settings.Application.Mode == pkg.ModeProd.String() {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	buildRouter()
+	if err := buildRouter(); err != nil {
+		return err
+	}
 	reportGeneratorWriteRoutes()
 
 	srv := newHTTPServer(config.Current().Settings.Application, sdk.Runtime.Engine())
@@ -560,10 +562,13 @@ func runShutdownHooks(timeout time.Duration) error {
 // despite the name: those callbacks run after initRouter has built the engine.
 // Two lines apart, and describing them as equivalent is a mistake this
 // repository has already made once in writing.
-func buildRouter() {
+func buildRouter() error {
 	sdk.Runtime.RunPhase(runtime.BeforeRouter)
-	initRouter()
+	if err := initRouter(); err != nil {
+		return fmt.Errorf("build router: %w", err)
+	}
 	runStartupHooks()
+	return nil
 }
 
 // runStartupHooks runs the router registries and then the before callbacks.
@@ -595,19 +600,15 @@ func tip() {
 	fmt.Printf("%s \n\n", usageStr)
 }
 
-func initRouter() {
-	var r *gin.Engine
+func initRouter() error {
 	h := sdk.Runtime.Engine()
 	if h == nil {
 		h = gin.New()
 		sdk.Runtime.SetEngine(h)
 	}
-	switch h := h.(type) {
-	case *gin.Engine:
-		r = h
-	default:
-		log.NewHelper(log.Default()).Fatal("not support other engine")
-		//os.Exit(-1)
+	r, ok := h.(*gin.Engine)
+	if !ok {
+		return fmt.Errorf("host engine is %T, not a gin engine", h)
 	}
 	// First, so that a panic anywhere below still produces a logged 500.
 	r.Use(common.Recover)
@@ -617,14 +618,15 @@ func initRouter() {
 	if config.Current().Settings.SSL.Enable {
 		r.Use(handler.TLSHandler())
 	}
-	//r.Use(middleware.Metrics())
-	r.Use(exemptProbes(common.Sentinel())).
+	limiter, err := common.Sentinel()
+	if err != nil {
+		return err
+	}
+	r.Use(exemptProbes(limiter)).
 		// Assigns or keeps the X-Request-Id, echoes it on the response and
 		// binds a request logger carrying it.
 		Use(api.SetRequestLogger)
-
-	common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDB))
-
+	return common.InitMiddlewareWithDatabase(r, exemptProbes(common.WithContextDB))
 }
 
 // probePaths are the two routes the rate limiter must not answer for.

@@ -43,7 +43,9 @@ func TestInitMiddlewareRegistersUsableJwtHandlerFunc(t *testing.T) {
 	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "test-secret-key" })
 
 	gin.SetMode(gin.TestMode)
-	InitMiddleware(gin.New())
+	if err := InitMiddlewareWithDatabase(gin.New(), WithContextDB); err != nil {
+		t.Fatal(err)
+	}
 
 	h, ok := sdk.Runtime.GetHandlerFunc(JwtTokenCheck)
 	if !ok {
@@ -64,7 +66,9 @@ func TestInitMiddlewareBuildsOneSharedJwtInstance(t *testing.T) {
 	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "test-secret-key" })
 
 	gin.SetMode(gin.TestMode)
-	InitMiddleware(gin.New())
+	if err := InitMiddlewareWithDatabase(gin.New(), WithContextDB); err != nil {
+		t.Fatal(err)
+	}
 
 	shared := GetAuthMiddleware()
 	if shared == nil {

@@ -18,7 +18,11 @@ func serve(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(Sentinel())
+	limiter, err := Sentinel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Use(limiter)
 	r.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 	return r
 }

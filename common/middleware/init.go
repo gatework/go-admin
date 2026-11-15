@@ -1,9 +1,10 @@
 package middleware
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 
-	log "github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk"
 	"github.com/gatework/motor-core/sdk/runtime"
 	"github.com/gatework/motor/common/actions"
@@ -19,15 +20,14 @@ const (
 	PermissionCheck = runtime.PermissionCheck
 )
 
-// InitMiddleware handles the initmiddleware operation.
-func InitMiddleware(r *gin.Engine) {
-	InitMiddlewareWithDatabase(r, WithContextDB)
-}
-
 // InitMiddlewareWithDatabase lets the host exempt process-level probes from
 // tenant database selection without coupling common to application routes.
-func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
+func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) error {
 	r.Use(DemoEvn())
+	// CORS preflight is answered before the tenant database is resolved: a
+	// preflight carries no credentials and needs no database, and answering it
+	// after the lookup turned every preflight to an unknown host into a 503.
+	r.Use(Options)
 	// 数据库链接
 	r.Use(database)
 	// 日志处理
@@ -36,8 +36,6 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
 	r.Use(CustomError)
 	// NoCache is a middleware function that appends headers
 	r.Use(NoCache)
-	// 跨域处理
-	r.Use(Options)
 	// Secure is a middleware function that appends security
 	r.Use(Secure)
 
@@ -57,9 +55,10 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) {
 	authMiddleware, err = AuthInit()
 	if err != nil {
 		// A process with no JWT middleware must not start serving requests.
-		log.NewHelper(log.Default()).Fatalf("JWT Init Error, %s", err.Error())
+		return fmt.Errorf("jwt middleware: %w", err)
 	}
 	sdk.Runtime.SetMiddleware(JwtTokenCheck, authMiddleware.MiddlewareFunc())
 	sdk.Runtime.SetMiddleware(RoleCheck, AuthCheckRole())
 	sdk.Runtime.SetMiddleware(PermissionCheck, actions.PermissionAction())
+	return nil
 }

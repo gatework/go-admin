@@ -4,7 +4,6 @@ import (
 	"time"
 
 	jwt "github.com/gatework/motor-core/jwtauth"
-	log "github.com/gatework/motor-core/logger"
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor/common/middleware/handler"
 )
@@ -59,7 +58,9 @@ func AuthInit() (*jwt.GinJWTMiddleware, error) {
 // call chain with a far less useful stack trace.
 func GetAuthMiddleware() *jwt.GinJWTMiddleware {
 	if authMiddleware == nil {
-		log.NewHelper(log.Default()).Fatal("JWT middleware not initialized; InitMiddleware must run before any module's InitRouter")
+		// A startup-ordering bug, not a runtime condition: panic rather than
+		// log.Fatal, which would skip every deferred cleanup on the way out.
+		panic("JWT middleware not initialized; InitMiddlewareWithDatabase must run before any module's InitRouter")
 	}
 	return authMiddleware
 }
