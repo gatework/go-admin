@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/jwtauth/user"
 	"github.com/gatework/motor/app/admin/service"
 	"github.com/gatework/motor/common/account"
@@ -62,7 +61,7 @@ func accountAction(operation string, admin bool) gin.HandlerFunc {
 			e.Error(500, err, "account service unavailable")
 			return
 		}
-		if admin && jwt.ExtractClaims(c)[jwt.RoleKey] != "admin" {
+		if admin && !account.IsAdmin(user.RoleName(c)) {
 			e.Error(403, account.InvalidErr, "administrator required")
 			return
 		}

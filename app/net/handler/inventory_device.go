@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gatework/motor/common/request"
 
 	"github.com/gin-gonic/gin"
 
-	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/jwtauth/user"
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
 	"github.com/gatework/motor-core/sdk/api"
@@ -212,7 +213,7 @@ func (e Device) Sync(c *gin.Context) {
 		e.respond(inventory.InvalidInputErr)
 		return
 	}
-	admin := jwt.ExtractClaims(c)[jwt.RoleKey] == "admin"
+	admin := account.IsAdmin(user.RoleName(c))
 	result, err := s.Sync(c.Request.Context(), user.ID(c), actions.GetPermissionFromContext(c), admin)
 	if err != nil {
 		e.respond(err)

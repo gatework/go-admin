@@ -140,7 +140,7 @@ func (s Service) Register(r Registration) error {
 		} else if e != nil {
 			return e
 		}
-		if role.Admin || role.RoleKey == "admin" || role.Status != "2" {
+		if role.Admin || IsAdmin(role.RoleKey) || role.Status != "2" {
 			return DisabledErr
 		}
 		// Never bind privileged fields from the request. This role starts with no administrative grants.

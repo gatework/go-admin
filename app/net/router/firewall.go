@@ -3,6 +3,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/gatework/motor/common/account"
+
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/response"
 	"github.com/gatework/motor-core/sdk"
@@ -39,7 +41,7 @@ func firewallRoutePermission() gin.HandlerFunc {
 			deny()
 			return
 		}
-		if role == "admin" {
+		if account.IsAdmin(role) {
 			c.Next()
 			return
 		}

@@ -3,6 +3,8 @@ package router
 import (
 	"strings"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gin-gonic/gin"
 
 	jwt "github.com/gatework/motor-core/jwtauth"
@@ -43,7 +45,7 @@ func fabricRoutePermission() gin.HandlerFunc {
 			deny()
 			return
 		}
-		if role == "admin" {
+		if account.IsAdmin(role) {
 			c.Next()
 			return
 		}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gatework/motor/common/account"
+
 	"gorm.io/gorm"
 
 	vxlan "github.com/gatework/go-vxlan"
@@ -183,7 +185,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 	if e := opsDB(ctx, w.s).Table("sys_role").Select("role_key").Where("role_id = ?", p.RoleID).Scan(&role).Error; e != nil {
 		return e
 	}
-	if role.RoleKey != "admin" {
+	if !account.IsAdmin(role.RoleKey) {
 		var grants int64
 		if e := opsDB(ctx, w.s).Table("sys_role_menu rm").Joins("JOIN sys_menu m ON m.menu_id = rm.menu_id").Where("rm.role_id = ? AND m.permission = ? AND m.deleted_at = 0", p.RoleID, "network:fabric:execute").Count(&grants).Error; e != nil {
 			return e

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gatework/motor/app/admin/models"
 	"github.com/gatework/motor/common/request"
 
@@ -468,7 +470,7 @@ func (e User) Current(c *gin.Context) {
 
 	var mp = make(map[string]any)
 	mp["roles"] = roles
-	if user.RoleName(c) == "admin" || user.RoleName(c) == "系统管理员" {
+	if account.IsAdmin(user.RoleName(c)) {
 		mp["permissions"] = permissions
 		mp["buttons"] = buttons
 	} else {

@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
@@ -54,7 +56,7 @@ func WebsocketHandlers(mw *jwt.GinJWTMiddleware) (gin.HandlerFunc, gin.HandlerFu
 
 func websocketOwner(c *gin.Context) (socketKey, bool) {
 	key := socketKey{tenant: Tenant(c.Request.Host), user: user.ID(c), id: c.Param("id"), channel: c.Param("channel")}
-	if key.user <= 0 || key.tenant != "*" || user.RoleName(c) != "admin" || key.channel != "log" || key.id == "" || len(key.id) > 128 || !sameWebsocketOrigin(c.Request) {
+	if key.user <= 0 || key.tenant != "*" || !account.IsAdmin(user.RoleName(c)) || key.channel != "log" || key.id == "" || len(key.id) > 128 || !sameWebsocketOrigin(c.Request) {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 403, "msg": "无权访问日志流"})
 		return socketKey{}, false
 	}

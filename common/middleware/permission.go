@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gin-gonic/gin"
 
 	mycasbin "github.com/gatework/motor-core/casbin"
@@ -36,7 +38,7 @@ func AuthCheckRole() gin.HandlerFunc {
 		var res, casbinExclude bool
 		var err error
 		//检查权限
-		if v["rolekey"] == "admin" {
+		if roleKey, _ := v["rolekey"].(string); account.IsAdmin(roleKey) {
 			c.Next()
 			return
 		}
@@ -92,7 +94,7 @@ func EnforceRoleFor(c *gin.Context, path, method string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	if v["rolekey"] == "admin" {
+	if roleKey, _ := v["rolekey"].(string); account.IsAdmin(roleKey) {
 		return true, nil
 	}
 	e := sdk.Runtime.Casbin(c.Request.Host)

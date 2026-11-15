@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gatework/motor/common/account"
+
 	"errors"
 
 	"gorm.io/gorm"
@@ -366,7 +368,7 @@ func (e *SysMenu) getByRoleName(roleName string) ([]models.SysMenu, error) {
 	var err error
 	data := make([]models.SysMenu, 0)
 
-	if roleName == "admin" {
+	if account.IsAdmin(roleName) {
 		// The soft-delete condition is GORM's to add: it appends one for the
 		// model's DeletedAt field on every query. Writing it by hand duplicates
 		// that and hard-codes what "deleted" looks like — a column that stops
