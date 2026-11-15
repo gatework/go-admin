@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -334,10 +331,7 @@ func (e Delivery) id(c *gin.Context, key string) (int, bool) {
 }
 
 func (e Delivery) body(c *gin.Context, v any) bool {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (service.MaxTotalBytes*6)+(64<<10))
-	d := json.NewDecoder(c.Request.Body)
-	d.DisallowUnknownFields()
-	if d.Decode(v) != nil || d.Decode(new(any)) != io.EOF {
+	if !decodeStrictJSON(c, v, (service.MaxTotalBytes*6)+(64<<10)) {
 		e.respond(service.InvalidErr)
 		return false
 	}

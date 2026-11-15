@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 
@@ -60,15 +58,8 @@ func (e Diagnostics) Start(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
 	var request service.Request
-	if err := decoder.Decode(&request); err != nil {
-		respondDiagnostics(a, service.InvalidErr)
-		return
-	}
-	if decoder.Decode(new(any)) != io.EOF {
+	if !decodeStrictJSON(c, &request, 4096) {
 		respondDiagnostics(a, service.InvalidErr)
 		return
 	}

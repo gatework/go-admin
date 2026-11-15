@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -117,10 +114,7 @@ func decodeWirelessRequest(c *gin.Context, v any) bool {
 	if strings.Contains(c.FullPath(), "/imports/") {
 		limit = 64 << 20
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
-	d := json.NewDecoder(c.Request.Body)
-	d.DisallowUnknownFields()
-	return d.Decode(v) == nil && d.Decode(new(any)) == io.EOF
+	return decodeStrictJSON(c, v, limit)
 }
 
 // Switches returns scoped wireless data.

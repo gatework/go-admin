@@ -1,11 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -81,13 +78,7 @@ func decodeFirewallRequest(c *gin.Context, v any) error {
 	if strings.HasSuffix(c.FullPath(), "/imports") {
 		limit = 2*config.DefaultMaxBytes + 65536
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
-	d := json.NewDecoder(c.Request.Body)
-	d.DisallowUnknownFields()
-	if e := d.Decode(v); e != nil {
-		return service.InvalidErr
-	}
-	if d.Decode(new(any)) != io.EOF {
+	if !decodeStrictJSON(c, v, limit) {
 		return service.InvalidErr
 	}
 	return nil

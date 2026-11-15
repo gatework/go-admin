@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -326,10 +324,7 @@ func (e Circuit) pageRequest(c *gin.Context) (*dto.CircuitPageReq, bool) {
 }
 
 func (e Circuit) body(c *gin.Context, out any) bool {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(out) != nil || decoder.Decode(new(any)) != io.EOF {
+	if !decodeStrictJSON(c, out, 128<<10) {
 		e.respond(inventory.InvalidInputErr)
 		return false
 	}

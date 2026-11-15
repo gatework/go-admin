@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"strconv"
 
 	"github.com/gatework/motor/common/request"
@@ -117,10 +114,7 @@ func (e Fabric) PreviewRules(c *gin.Context) {
 	e.OK(rows, "预览成功")
 }
 func decodeFabricRequest(c *gin.Context, target any) bool {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(target) == nil && decoder.Decode(new(any)) == io.EOF
+	return decodeStrictJSON(c, target, 128<<10)
 }
 
 // SaveRules updates rules with an optimistic version predicate.

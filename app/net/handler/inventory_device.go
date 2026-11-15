@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -105,15 +104,8 @@ func (e Device) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
 	var req dto.DeviceUpdateReq
-	if err := decoder.Decode(&req); err != nil {
-		e.respond(inventory.InvalidInputErr)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if !decodeStrictJSON(c, &req, 64<<10) {
 		e.respond(inventory.InvalidInputErr)
 		return
 	}
@@ -250,10 +242,7 @@ func (e Device) Export(c *gin.Context) {
 }
 
 func decodeDeviceBody(c *gin.Context, target any) bool {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(target) == nil && decoder.Decode(new(any)) == io.EOF
+	return decodeStrictJSON(c, target, 64<<10)
 }
 
 func prepareDevice(e *Device, c *gin.Context) (*service.Device, bool) {
