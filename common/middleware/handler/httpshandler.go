@@ -7,15 +7,20 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 )
 
-// TLSHandler handles the tlshandler operation.
+// TLSHandler redirects plain-HTTP requests to HTTPS on ssl.domain.
+//
+// The redirect is decided once per process: the options come from the
+// configuration read at start-up, as the listener's TLS setting does. When it
+// redirects, the chain stops. Returning without Abort let gin run every later
+// handler after the redirect had already been written.
 func TLSHandler() gin.HandlerFunc {
+	redirect := secure.New(secure.Options{
+		SSLRedirect: true,
+		SSLHost:     config.Current().Settings.SSL.Domain,
+	})
 	return func(c *gin.Context) {
-		secureMiddleware := secure.New(secure.Options{
-			SSLRedirect: true,
-			SSLHost:     config.Current().Settings.SSL.Domain,
-		})
-		err := secureMiddleware.Process(c.Writer, c.Request)
-		if err != nil {
+		if err := redirect.Process(c.Writer, c.Request); err != nil {
+			c.Abort()
 			return
 		}
 		c.Next()
