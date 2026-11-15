@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gatework/motor/internal/testconfig"
@@ -76,5 +79,51 @@ func TestInitMiddlewareBuildsOneSharedJwtInstance(t *testing.T) {
 	}
 	if shared != authMiddleware {
 		t.Error("GetAuthMiddleware did not return the package-level instance InitMiddleware built")
+	}
+}
+
+// A missing JWT secret is a configuration error: it is returned to the host,
+// which reports it and exits through its own deferred cleanup. It used to end
+// the process from inside the library with log.Fatal.
+func TestInitMiddlewareReturnsAJWTConfigurationError(t *testing.T) {
+	freshRuntime(t)
+	testconfig.Apply(t, func(s *config.Config) { s.JWT.Secret = "" })
+	gin.SetMode(gin.TestMode)
+	if err := InitMiddlewareWithDatabase(gin.New(), WithContextDB); err == nil {
+		t.Fatal("JWT setup without a secret reported success")
+	}
+}
+
+func TestProductionRefusesAShortJWTSecret(t *testing.T) {
+	if err := checkSecret("prod", "motor"); err == nil {
+		t.Fatal("five-byte production secret accepted")
+	}
+	if err := checkSecret("prod", strings.Repeat("k", minProductionSecret)); err != nil {
+		t.Fatalf("adequate production secret refused: %v", err)
+	}
+	if err := checkSecret("dev", "motor"); err != nil {
+		t.Fatalf("development secret refused: %v", err)
+	}
+}
+
+// Tokens carried in a URL end up in access and proxy logs. Only a websocket
+// upgrade may present one there, and it is moved into the header and removed
+// from the URL before the request is logged or authenticated.
+func TestQueryTokensAreAcceptedOnlyForWebsocketUpgrades(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	var authorization, rawQuery string
+	engine.GET("/ws", WebsocketToken, func(c *gin.Context) {
+		authorization, rawQuery = c.GetHeader("Authorization"), c.Request.URL.RawQuery
+	})
+	request := httptest.NewRequest(http.MethodGet, "/ws?token=abc&channel=1", nil)
+	request.Header.Set("Upgrade", "websocket")
+	engine.ServeHTTP(httptest.NewRecorder(), request)
+	if authorization != "Bearer abc" || strings.Contains(rawQuery, "abc") {
+		t.Fatalf("upgrade: authorization %q, query %q", authorization, rawQuery)
+	}
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws?token=abc", nil))
+	if authorization != "" || strings.Contains(rawQuery, "abc") {
+		t.Fatalf("plain request: authorization %q, query %q", authorization, rawQuery)
 	}
 }

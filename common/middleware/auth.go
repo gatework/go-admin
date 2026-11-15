@@ -1,10 +1,16 @@
 package middleware
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/sdk/config"
+	"github.com/gatework/motor-core/sdk/pkg"
 	"github.com/gatework/motor/common/middleware/handler"
 )
 
@@ -15,20 +21,34 @@ import (
 // instance.
 var authMiddleware *jwt.GinJWTMiddleware
 
-// AuthInit jwt验证new
+// minProductionSecret is the shortest HMAC-SHA256 signing key accepted in
+// production: a key shorter than the hash output can be brute-forced offline
+// from any token the server has issued.
+const minProductionSecret = 32
+
+// defaultTokenTimeout applies when jwt.timeout is not set.
+const defaultTokenTimeout = time.Hour
+
+// AuthInit builds the JWT middleware from the current configuration.
+//
+// An empty secret is refused in every mode: core only rejects a nil key, so
+// an empty one used to sign tokens with no key at all, and anyone could mint
+// an administrator's token. Production also needs a key of at least
+// minProductionSecret bytes. Tokens live for jwt.timeout in every mode; dev
+// used to issue tokens valid for a hundred years.
 func AuthInit() (*jwt.GinJWTMiddleware, error) {
-	timeout := time.Hour
-	if config.Current().Settings.Application.Mode == "dev" {
-		timeout = time.Duration(876010) * time.Hour
-	} else {
-		if config.Current().Settings.JWT.Timeout != 0 {
-			timeout = time.Duration(config.Current().Settings.JWT.Timeout) * time.Second
-		}
+	settings := config.Current().Settings
+	secret := settings.JWT.Secret
+	if err := checkSecret(settings.Application.Mode, secret); err != nil {
+		return nil, err
 	}
-	secret := config.Current().Settings.JWT.Secret
+	timeout := defaultTokenTimeout
+	if settings.JWT.Timeout > 0 {
+		timeout = time.Duration(settings.JWT.Timeout) * time.Second
+	}
 	payload, authorize := handler.AuthCallbacks(secret)
 	return jwt.New(&jwt.GinJWTMiddleware{
-		Realm:           "test zone",
+		Realm:           "motor",
 		Key:             []byte(secret),
 		Timeout:         timeout,
 		MaxRefresh:      time.Hour,
@@ -37,11 +57,42 @@ func AuthInit() (*jwt.GinJWTMiddleware, error) {
 		Authenticator:   handler.Authenticator,
 		Authorizator:    authorize,
 		Unauthorized:    handler.Unauthorized,
-		TokenLookup:     "header: Authorization, query: token, cookie: jwt",
-		TokenHeadName:   "Bearer",
-		TimeFunc:        time.Now,
+		// No query parameter: a token in a URL lands in access logs, proxy
+		// logs and browser history. The log websocket, which a browser cannot
+		// give headers, goes through WebsocketToken instead.
+		TokenLookup:   "header: Authorization, cookie: jwt",
+		TokenHeadName: "Bearer",
+		TimeFunc:      time.Now,
 	})
 
+}
+
+func checkSecret(mode, secret string) error {
+	switch {
+	case secret == "":
+		return errors.New("jwt.secret is empty: tokens would be signed with no key")
+	case mode == pkg.ModeProd.String() && len(secret) < minProductionSecret:
+		return fmt.Errorf("jwt.secret is %d bytes; production needs at least %d", len(secret), minProductionSecret)
+	default:
+		return nil
+	}
+}
+
+// WebsocketToken lets a browser authenticate a websocket upgrade with
+// ?token=, the one place it cannot send an Authorization header. It moves the
+// token into the header and removes it from the URL before anything logs it.
+// Install it before the JWT middleware on websocket routes only.
+func WebsocketToken(c *gin.Context) {
+	query := c.Request.URL.Query()
+	token := query.Get("token")
+	if token != "" && c.GetHeader("Authorization") == "" && strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
+		c.Request.Header.Set("Authorization", "Bearer "+token)
+	}
+	if query.Has("token") {
+		query.Del("token")
+		c.Request.URL.RawQuery = query.Encode()
+	}
+	c.Next()
 }
 
 // GetAuthMiddleware returns the shared JWT middleware instance InitMiddleware

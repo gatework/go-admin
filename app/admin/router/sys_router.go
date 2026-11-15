@@ -58,7 +58,7 @@ func sysSwaggerRouter(r *gin.RouterGroup) {
 }
 
 func sysCheckRoleRouterInit(r *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	wss := r.Group("").Use(authMiddleware.MiddlewareFunc())
+	wss := r.Group("").Use(middleware.WebsocketToken).Use(authMiddleware.MiddlewareFunc())
 	{
 		connect, disconnect := authhandler.WebsocketHandlers(authMiddleware)
 		wss.GET("/ws/:id/:channel", connect)

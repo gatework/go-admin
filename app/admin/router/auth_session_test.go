@@ -34,7 +34,7 @@ func TestJWTConfigurationReloadKeepsOneKeySnapshot(t *testing.T) {
 	token := tokenFor(t, mw, db, "snapshot-admin", "snapshot.test")
 	testconfig.Apply(t, func(settings *config.Config) {
 		settings.
-			JWT.Secret = "replacement-test-key"
+			JWT.Secret = "replacement-test-key-of-adequate-length"
 	})
 	if w := request(userRouter(mw), "snapshot.test", token); !strings.Contains(w.Body.String(), "snapshot-admin") {
 		t.Fatalf("config reload split signer and credential stamp: %s", w.Body.String())

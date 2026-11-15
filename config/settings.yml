@@ -25,7 +25,8 @@ settings:
     # 数据库日志开关
     enableddb: false
   jwt:
-    # token 密钥，生产环境时及的修改
+    # token 签名密钥。不能为空；mode: prod 时至少 32 字节，否则拒绝启动。
+    # 生产环境用环境变量注入，例如 ${MOTOR_JWT_SECRET}，不要提交进仓库。
     secret: motor
     # token 过期时间 单位：秒
     timeout: 3600
