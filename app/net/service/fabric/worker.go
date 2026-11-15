@@ -18,6 +18,7 @@ import (
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/lease"
 	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/worker"
 )
@@ -34,7 +35,7 @@ type Worker struct {
 // NewWorker constructs an application-owned background worker.
 func NewWorker(s *Fabric, t Transport) *Worker {
 	if t == nil {
-		t = nativeTransport{config: ds.FromEnvironment()}
+		t = nativeTransport{access: deviceaccess.FromEnvironment()}
 	}
 	// A background worker has no caller to return an error to; its log line is the
 	// only trace of a failed tick, so it must never depend on the host's wiring.

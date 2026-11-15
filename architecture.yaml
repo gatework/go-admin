@@ -33,6 +33,7 @@ declared:
   - ./app/net/router
   - ./app/net/service
   - ./app/net/service/delivery
+  - ./app/net/service/deviceaccess
   - ./app/net/service/diagnostics
   - ./app/net/service/dto/delivery
   - ./app/net/service/dto/fabric

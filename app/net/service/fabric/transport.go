@@ -18,7 +18,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	network "github.com/gatework/motor/app/net/models/inventory"
-	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 // Transport lends one authenticated operation for preflight, writes and readback.
@@ -32,7 +32,7 @@ type Session interface {
 	vxlan.Session
 	Write(ctx context.Context, command string) error
 }
-type nativeTransport struct{ config ds.Config }
+type nativeTransport struct{ access deviceaccess.Config }
 
 // Native transport retains explicit closure evidence even when the callback
 // returns a policy/readback error; a closed failed operation need not strand a lease.
@@ -41,7 +41,7 @@ func (n nativeTransport) Open(ctx context.Context, d delivery.DeviceSnapshot, c 
 	if c.Profile != "cisco_nxos" {
 		return transportReceiptError{UnsupportedPlatformErr, true}
 	}
-	cfg, e := n.config.ConnectionConfig(d, c)
+	cfg, e := n.access.ConnectionConfig(d.IP, c)
 	if e != nil {
 		return transportReceiptError{e, true}
 	}
@@ -87,8 +87,7 @@ func opsDB(ctx context.Context, s *Fabric) *gorm.DB {
 }
 
 func (s *Fabric) deviceConnection(ctx context.Context, d network.Device) (delivery.Connection, error) {
-	workflow := ds.Workflow{Service: s.Service, Config: ds.FromEnvironment()}
-	return workflow.ConnectionForDevice(ctx, d)
+	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d)
 }
 func opsJSON(v any) string {
 	encoded, e := models.OperationsValue(v)

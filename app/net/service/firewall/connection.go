@@ -11,10 +11,9 @@ import (
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/connection"
-	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/inventory"
-	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	ns "github.com/gatework/motor/app/net/service/inventory"
 )
@@ -122,7 +121,7 @@ func effectiveFirewallConnection(d inventory.Device, stored connection.Settings)
 			c.Reason = "address_invalid"
 			break
 		}
-		_, err := ds.FromEnvironment().ConnectionConfig(delivery.DeviceSnapshot{ID: d.ID, IP: d.IP}, c.Settings)
+		_, err := deviceaccess.FromEnvironment().ConnectionConfig(d.IP, c.Settings)
 		c.CredentialsConfigured = err == nil
 		if err != nil {
 			c.Reason = "credentials_missing"

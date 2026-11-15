@@ -12,7 +12,7 @@
 
 ## Startup and schema
 
-Root startup calls `NewWorker(*Fabric, nil)`, then `Start()` and `Close(context.Context)`. Default native transport uses the same delivery credentials, profile overrides, host-key policy and connection settings. `NETWORK_DELIVERY_ENABLED=true` is required for writes; read-only collection requires configured device credentials. Tests inject `Transport` and never connect to real devices.
+Root startup calls `NewWorker(*Fabric, nil)`, then `Start()` and `Close(context.Context)`. Default native transport uses the shared device access (`app/net/service/deviceaccess`): the same credentials, profile overrides, host-key policy and connection settings as delivery. `NETWORK_DELIVERY_ENABLED=true` is required for writes; read-only collection requires configured device credentials. Tests inject `Transport` and never connect to real devices.
 
 Migrate `models.Collection`, `models.Change`, and updated delivery `Order` (`Kind`, `FabricID`). Observation schema belongs to Fabric core. No extra target/receipt tables are required: operational target evidence is stored in the owning job alongside delivery targets.
 

@@ -3,7 +3,6 @@ package delivery
 import (
 	"context"
 	"errors"
-	"os/exec"
 
 	"gorm.io/gorm"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/gatework/motor/app/net/models/connection"
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/delivery"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	network "github.com/gatework/motor/app/net/service/inventory"
@@ -28,7 +28,7 @@ func (s *Workflow) Connection(ctx context.Context, id int, p *actions.DataPermis
 // SetConnection persists the selected connection settings.
 func (s *Workflow) SetConnection(ctx context.Context, id int, r dto.Connection, actor int, p *actions.DataPermission) (models.Connection, error) {
 	if r.Profile != "" {
-		if _, e := connectorProfile(r.Profile); e != nil {
+		if _, e := deviceaccess.ConnectorProfile(r.Profile); e != nil {
 			return models.Connection{}, InvalidErr
 		}
 	}
@@ -90,47 +90,22 @@ func (s *Workflow) Devices(ctx context.Context, r *ndto.DevicePageReq, p *action
 		if !ok {
 			c = models.Connection{DeviceID: d.ID, Protocol: "ssh", Port: 22}
 		}
-		out = append(out, Device{Device: d, Connection: s.effectiveConnection(d, c)})
+		out = append(out, Device{Device: d, Connection: s.Config.Access.Effective(d, c)})
 	}
 	return out, count, nil
 }
 func (s *Workflow) connection(ctx context.Context, d inventory.Device) (models.Connection, error) {
-	c, e := connection.Load(ctx, s.DB, d.ID)
-	if e != nil {
-		return c, e
-	}
-	return s.effectiveConnection(d, c), nil
+	return s.Config.Access.Resolve(ctx, s.DB, d)
+}
+
+// ConnectionForDevice resolves the connection of an inventory row already
+// loaded by a scoped service or an execution-time identity check.
+func (s *Workflow) ConnectionForDevice(ctx context.Context, d inventory.Device) (models.Connection, error) {
+	return s.connection(ctx, d)
 }
 
 // Device describes delivery device for delivery operations.
 type Device struct {
 	inventory.Device
 	Connection models.Connection `json:"connection"`
-}
-
-func (s *Workflow) effectiveConnection(d inventory.Device, c models.Connection) models.Connection {
-	c.InferredProfile = inferProfile(d)
-	c.ProfileSource = "manual"
-	c.Ready, c.Reason = false, ""
-	if c.Profile == "" {
-		c.Profile, c.ProfileSource = c.InferredProfile, "automatic"
-	}
-	if _, err := connectorProfile(c.Profile); err != nil {
-		c.ProfileSource, c.Reason = "unknown", "profile_unknown"
-		return c
-	}
-	c.Ready = s.Config.configured(c.Profile)
-	if !c.Ready {
-		c.Reason = "credentials_missing"
-	}
-	if c.Ready {
-		if _, err := exec.LookPath(c.Protocol); err != nil {
-			c.Ready = false
-			c.Reason = "transport_unavailable"
-		}
-	}
-	if d.Status != "active" {
-		c.Ready, c.Reason = false, "device_unavailable"
-	}
-	return c
 }

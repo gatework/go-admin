@@ -4,13 +4,11 @@ import (
 	"context"
 	"os"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/gatework/motor/common/secret"
 
 	"github.com/gatework/go-net-connector/vendors"
 	"github.com/gatework/motor-core/sdk/contract/actions"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	network "github.com/gatework/motor/app/net/service/inventory"
 	"github.com/gatework/motor/common/errkind"
@@ -49,46 +47,24 @@ const MaxScriptBytes = 64 << 10
 // MaxTotalBytes bounds the permitted total bytes.
 const MaxTotalBytes = 4 << 20
 
-// MaxOutputBytes bounds the permitted output bytes.
-const MaxOutputBytes = 4 << 20
+// MaxOutputBytes bounds what one target may read back from its device.
+const MaxOutputBytes = deviceaccess.MaxOutputBytes
 
-// Credentials sign in to a device. The passwords are secret.Secret, so a
-// Config logged or printed by mistake shows "[redacted]".
-type Credentials struct {
-	Username       string
-	Password       secret.Secret
-	EnablePassword secret.Secret
-}
-
-// Config holds server-owned credentials and limits for device operations.
+// Config holds delivery's switches and the device access it runs with.
 type Config struct {
-	Enabled bool
-	// Shared credentials apply to every profile without its own.
-	Shared Credentials
-	// Profiles override Credentials per connector profile (NC_<PROFILE>_*).
-	Profiles                  map[string]Credentials
-	HostKeyPolicy, KnownHosts string
-	Grace                     time.Duration
-	Concurrency               int
+	Enabled     bool
+	Access      deviceaccess.Config
+	Grace       time.Duration
+	Concurrency int
 }
 
-// FromEnvironment loads the server-owned device transport configuration.
+// FromEnvironment loads delivery's configuration.
 func FromEnvironment() Config {
 	c := Config{
-		Enabled: os.Getenv("NETWORK_DELIVERY_ENABLED") == "true",
-		Shared: Credentials{
-			Username:       os.Getenv("NC_DEVICE_USERNAME"),
-			Password:       secret.Secret(os.Getenv("NC_DEVICE_PASSWORD")),
-			EnablePassword: secret.Secret(os.Getenv("NC_DEVICE_ENABLE_PASSWORD")),
-		},
-		Profiles:      profileCredentials(),
-		HostKeyPolicy: os.Getenv("NC_HOST_KEY_POLICY"),
-		KnownHosts:    os.Getenv("NC_KNOWN_HOSTS"),
-		Grace:         600 * time.Second,
-		Concurrency:   5,
-	}
-	if c.HostKeyPolicy == "" {
-		c.HostKeyPolicy = "strict"
+		Enabled:     os.Getenv("NETWORK_DELIVERY_ENABLED") == "true",
+		Access:      deviceaccess.FromEnvironment(),
+		Grace:       600 * time.Second,
+		Concurrency: 5,
 	}
 	if n, e := strconv.Atoi(os.Getenv("NETWORK_DELIVERY_CONCURRENCY")); e == nil && n >= 1 && n <= 20 {
 		c.Concurrency = n
@@ -100,7 +76,7 @@ func FromEnvironment() Config {
 func (c Config) Options() Options {
 	o := Options{Enabled: c.Enabled, Concurrency: c.Concurrency, GraceSeconds: int(c.Grace.Seconds()), MaxTargets: MaxTargets, MaxScriptBytes: MaxScriptBytes, Profiles: vendors.NewBuiltinRegistry().Names(), InventoryGroups: []InventoryGroup{}}
 	for _, p := range o.Profiles {
-		if c.configured(p) {
+		if c.Access.Configured(p) {
 			o.Configured = true
 		}
 	}
@@ -110,44 +86,6 @@ func (c Config) Options() Options {
 		o.Reason = "credentials_missing"
 	}
 	return o
-}
-
-// credentials are the profile's own, field by field, falling back to the
-// shared ones.
-func (c Config) credentials(profile string) Credentials {
-	own, ok := c.Profiles[strings.ToLower(profile)]
-	if !ok {
-		return c.Shared
-	}
-	merged := c.Shared
-	if own.Username != "" {
-		merged.Username = own.Username
-	}
-	if own.Password.IsSet() {
-		merged.Password = own.Password
-	}
-	if own.EnablePassword.IsSet() {
-		merged.EnablePassword = own.EnablePassword
-	}
-	return merged
-}
-
-// profileCredentials reads the per-profile overrides once, for every profile
-// the connector knows.
-func profileCredentials() map[string]Credentials {
-	profiles := map[string]Credentials{}
-	for _, profile := range vendors.NewBuiltinRegistry().Names() {
-		prefix := "NC_" + strings.ToUpper(profile) + "_"
-		own := Credentials{
-			Username:       os.Getenv(prefix + "USERNAME"),
-			Password:       secret.Secret(os.Getenv(prefix + "PASSWORD")),
-			EnablePassword: secret.Secret(os.Getenv(prefix + "ENABLE_PASSWORD")),
-		}
-		if own != (Credentials{}) {
-			profiles[strings.ToLower(profile)] = own
-		}
-	}
-	return profiles
 }
 
 // Options describes options for delivery operations.
@@ -183,9 +121,4 @@ func (s *Workflow) Options(ctx context.Context, p *actions.DataPermission) (Opti
 	groups := network.DeviceGroup{Service: s.Service}
 	o.DeviceGroups, err = groups.Tree(ctx, p)
 	return o, err
-}
-
-func (c Config) configured(profile string) bool {
-	creds := c.credentials(profile)
-	return creds.Username != "" && creds.Password.IsSet() && (c.HostKeyPolicy == "" || c.HostKeyPolicy == "strict" || c.HostKeyPolicy == "accept_new")
 }

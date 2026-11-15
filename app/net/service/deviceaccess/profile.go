@@ -1,4 +1,4 @@
-package delivery
+package deviceaccess
 
 import (
 	"regexp"
@@ -26,10 +26,11 @@ var platformOS = []struct {
 	{regexp.MustCompile(`(?i)\bstoneos\b`), "hillstone"},
 }
 
-// inferProfile reuses the connector inventory rules, adding local classification
-// and fail-closed guards for unsupported or contradictory platform evidence.
-// No connection or discovery is performed by the resolver.
-func inferProfile(d inventory.Device) string {
+// InferProfile resolves a device's connector profile from its inventory
+// facts, or "" when they are unsupported, ambiguous or contradictory. It uses
+// the connector's own inventory rules plus local fail-closed guards, and never
+// contacts the device.
+func InferProfile(d inventory.Device) string {
 	if unsupportedPlatform.MatchString(d.OS + " " + d.HardwareModel) {
 		return ""
 	}
@@ -67,7 +68,8 @@ func inferProfile(d inventory.Device) string {
 	return profile
 }
 
-func connectorProfile(name string) (connector.Profile, error) {
+// ConnectorProfile is the connector profile registered under name.
+func ConnectorProfile(name string) (connector.Profile, error) {
 	platform, err := vendors.NewBuiltinRegistry().Lookup(name)
 	if err != nil {
 		return connector.Profile{}, err

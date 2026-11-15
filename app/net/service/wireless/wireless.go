@@ -19,7 +19,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	models "github.com/gatework/motor/app/net/models/wireless"
-	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/errkind"
@@ -107,9 +107,6 @@ func (s *Wireless) controller(ctx context.Context, id int, p *actions.DataPermis
 	}
 	return d, e
 }
-func deviceSnapshot(d network.Device) delivery.DeviceSnapshot {
-	return delivery.DeviceSnapshot{ID: d.ID, IP: d.IP, Name: d.Name, Hostname: d.Hostname, Vendor: d.Vendor, Model: d.HardwareModel}
-}
 func source(d network.Device, c delivery.Connection) string {
 	return hash([]any{d.ID, d.IP, d.Name, d.Hostname, d.Vendor, d.HardwareModel, d.OS, d.DeviceType, d.Status, d.Version, c.Profile, c.Protocol, c.Port, c.Version})
 }
@@ -122,8 +119,7 @@ func platform(c delivery.Connection) string {
 	}
 }
 func (s *Wireless) connection(ctx context.Context, d network.Device) (delivery.Connection, error) {
-	w := ds.Workflow{Service: s.Service, Config: ds.FromEnvironment()}
-	return w.ConnectionForDevice(ctx, d)
+	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d)
 }
 func validManagement(r dto.ManagementReq) bool {
 	return r.Version > 0 && utf8.ValidString(r.LocalAlias+r.InstallationLocation+r.Owner+r.Notes) && utf8.RuneCountInString(r.LocalAlias) <= 255 && utf8.RuneCountInString(r.InstallationLocation) <= 255 && utf8.RuneCountInString(r.Owner) <= 255 && utf8.RuneCountInString(r.Notes) <= 4000

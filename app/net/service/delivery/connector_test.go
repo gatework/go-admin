@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 func TestConnectorAdapterRetainsCommandReceiptWithoutApplicationLogging(t *testing.T) {
@@ -23,7 +24,7 @@ func TestConnectorAdapterRetainsCommandReceiptWithoutApplicationLogging(t *testi
 			io.WriteString(server, scanner.Text()+"\r\nconfigured\r\n<fixture>")
 		}
 	}()
-	profile, e := connectorProfile("h3c")
+	profile, e := deviceaccess.ConnectorProfile("h3c")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -62,7 +63,7 @@ func TestConnectorPreservesH3CRuleScopeAndPersistsEachReceipt(t *testing.T) {
 			io.WriteString(server, line+"\r\n"+body+"\r\n<fixture>")
 		}
 	}()
-	profile, _ := connectorProfile("h3c")
+	profile, _ := deviceaccess.ConnectorProfile("h3c")
 	session, e := newDeviceSession(profile, connector.ConnectionConfig{Host: "192.0.2.1", Username: "fixture", Password: "secret"}, connector.WithTransportFactory(func(context.Context, connector.ConnectionConfig) (io.ReadWriteCloser, error) { return client, nil }))
 	if e != nil {
 		t.Fatal(e)
@@ -106,7 +107,7 @@ func TestConnectorChecksCancellationBeforeNestedHookCommand(t *testing.T) {
 	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	profile, _ := connectorProfile("h3c")
+	profile, _ := deviceaccess.ConnectorProfile("h3c")
 	profile.AfterCommand = func(c context.Context, _ connector.Command, _ connector.StepResult, x connector.Executor) error {
 		cancel()
 		_, e := x.Execute(c, connector.Command{Text: "must-not-send"})

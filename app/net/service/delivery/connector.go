@@ -7,6 +7,7 @@ import (
 
 	"github.com/gatework/go-net-connector/connector"
 	models "github.com/gatework/motor/app/net/models/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 // capture is an in-memory bounded receipt sink, never an application log.
@@ -121,11 +122,11 @@ func (d *deviceSession) before(ctx context.Context) error {
 // ConnectorFactory constructs device sessions from the configured connector profiles.
 func ConnectorFactory(c Config) Factory {
 	return func(t models.Target) (Session, error) {
-		p, e := connectorProfile(t.Connection.Profile)
+		p, e := deviceaccess.ConnectorProfile(t.Connection.Profile)
 		if e != nil {
 			return nil, e
 		}
-		config, e := c.ConnectionConfig(t.Device, t.Connection)
+		config, e := c.Access.ConnectionConfig(t.Device.IP, t.Connection)
 		if e != nil {
 			return nil, e
 		}

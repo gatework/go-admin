@@ -21,10 +21,9 @@ import (
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
 	"github.com/gatework/go-net-connector/connector"
-	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
-	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
@@ -41,7 +40,7 @@ func openFirewallReader(ctx context.Context, source CollectionSource) (native.Re
 		if id != storage.DeviceKey(source.Instance.ID) || source.reason() != "" {
 			return adapter.Target{}, collectionSourceErr
 		}
-		c, err := ds.FromEnvironment().ConnectionConfig(delivery.DeviceSnapshot{ID: source.Device.ID, IP: source.Device.IP}, source.Connection.Settings)
+		c, err := deviceaccess.FromEnvironment().ConnectionConfig(source.Device.IP, source.Connection.Settings)
 		if err != nil {
 			return adapter.Target{}, err
 		}

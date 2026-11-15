@@ -15,6 +15,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/delivery"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/delivery"
 	"github.com/gatework/motor/internal/testconfig"
 )
@@ -41,7 +42,7 @@ func fixture(t *testing.T) *Workflow {
 	if e = db.Create(&models.Connection{DeviceID: d.ID, Version: 1, Profile: "h3c", Protocol: "ssh", Port: 22}).Error; e != nil {
 		t.Fatal(e)
 	}
-	return &Workflow{DB: db, Config: Config{Enabled: true, Shared: Credentials{Username: "test", Password: "test"}, Grace: time.Minute, Concurrency: 5}}
+	return &Workflow{DB: db, Config: Config{Enabled: true, Access: deviceaccess.Config{Shared: deviceaccess.Credentials{Username: "test", Password: "test"}}, Grace: time.Minute, Concurrency: 5}}
 }
 func scope() *actions.DataPermission { return &actions.DataPermission{DataScope: actions.DataScopeAll} }
 func request() dto.Create {

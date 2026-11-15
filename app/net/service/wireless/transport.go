@@ -12,7 +12,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	models "github.com/gatework/motor/app/net/models/wireless"
-	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 // Collector describes collector for wireless operations.
@@ -23,7 +23,7 @@ type nativeCollector struct{}
 
 // Collect provides the collect operation within the caller's authorized wireless scope.
 func (nativeCollector) Collect(ctx context.Context, d network.Device, c delivery.Connection, j models.Collection) (snapshot wireless.Snapshot, closed bool, err error) {
-	cfg, e := ds.FromEnvironment().ConnectionConfig(deviceSnapshot(d), c)
+	cfg, e := deviceaccess.FromEnvironment().ConnectionConfig(d.IP, c)
 	if e != nil {
 		return snapshot, true, e
 	}
