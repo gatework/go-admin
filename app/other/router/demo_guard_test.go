@@ -40,7 +40,7 @@ func registeredRoutes(t *testing.T, mode string) map[string]bool {
 	defer restore()
 	r := gin.New()
 	v1 := r.Group("/api/v1")
-	sysNoCheckRoleRouter(v1, &jwt.GinJWTMiddleware{})
+	registerGeneratorRouter(v1, &jwt.GinJWTMiddleware{})
 	registerDBRouter(v1, &jwt.GinJWTMiddleware{})
 
 	out := map[string]bool{}

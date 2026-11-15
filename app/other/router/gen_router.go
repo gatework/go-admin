@@ -6,7 +6,6 @@ import (
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/sdk/config"
 
-	"github.com/gatework/motor/app/admin/handler"
 	"github.com/gatework/motor/app/other/handler/tools"
 	"github.com/gatework/motor/common/middleware"
 )
@@ -45,16 +44,10 @@ func GenWriteRoutesEnabled() bool {
 
 //nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
-	routerCheckRole = append(routerCheckRole, sysNoCheckRoleRouter, registerDBRouter, registerSysTableRouter)
+	routerCheckRole = append(routerCheckRole, registerGeneratorRouter, registerDBRouter, registerSysTableRouter)
 }
 
-func sysNoCheckRoleRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
-	r1 := v1.Group("")
-	{
-		sys := handler.Captcha{}
-		r1.GET("/captcha", sys.Generate)
-	}
-
+func registerGeneratorRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddleware) {
 	// AuthCheckRole on every generator route: a role reaches them through the
 	// code generator's menus, which the 1786700011000 migration binds them to.
 	// They used to be in CasbinExclude, which let any account that could log

@@ -3,7 +3,6 @@ package router
 import (
 	"encoding/json"
 	"io"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -84,7 +83,7 @@ func genAuthzEngine(t *testing.T, host string, grant func(add func(role, path, m
 	// past the check, which is all these tests ask.
 	r.Use(gin.RecoveryWithWriter(io.Discard))
 	v1 := r.Group("/api/v1")
-	sysNoCheckRoleRouter(v1, mw)
+	registerGeneratorRouter(v1, mw)
 	registerDBRouter(v1, mw)
 	registerSysTableRouter(v1, mw)
 	return r, mw
@@ -129,16 +128,5 @@ func TestGeneratorRoutesRequireARoleThatHoldsThem(t *testing.T) {
 		if deniedByRole(t, r, mw, host, "admin", route.method, route.path) {
 			t.Errorf("%s: admin was refused", name)
 		}
-	}
-}
-
-// The captcha shares a registration function with the generator's routes and
-// has to stay reachable before anyone has logged in.
-func TestCaptchaStaysPublic(t *testing.T) {
-	r, _ := genAuthzEngine(t, "gen-authz-captcha.test", func(func(string, string, string)) {})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/captcha", nil))
-	if w.Code == http.StatusUnauthorized || strings.Contains(w.Body.String(), "没有该接口访问权限") {
-		t.Errorf("captcha answered %d %s", w.Code, w.Body.String())
 	}
 }

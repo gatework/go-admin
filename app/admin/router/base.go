@@ -64,6 +64,8 @@ func sysCheckRoleRouterInit(r *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddle
 
 	v1 := r.Group("/api/v1")
 	{
+		// The login form needs a captcha before anyone is signed in.
+		v1.GET("/captcha", handler.Captcha{}.Generate)
 		v1.POST("/login", authMiddleware.LoginHandler)
 		// GET /api/v1/refresh_token 已移除，原因见 issue #820：
 		// 该接口用业务 token 即可换取新 token，而续期上限 MaxRefresh 依据的

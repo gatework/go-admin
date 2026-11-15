@@ -167,7 +167,7 @@ func TestGeneratorWritingRoutesArePost(t *testing.T) {
 	})
 	defer restore()
 	r := gin.New()
-	sysNoCheckRoleRouter(r.Group("/api/v1"), &jwt.GinJWTMiddleware{})
+	registerGeneratorRouter(r.Group("/api/v1"), &jwt.GinJWTMiddleware{})
 	methods := map[string]string{}
 	for _, route := range r.Routes() {
 		methods[route.Path] = route.Method
