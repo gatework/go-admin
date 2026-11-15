@@ -302,6 +302,10 @@ func summarize(tx *gorm.DB, id int) error {
 	if e := tx.Model(&models.Order{}).Where("id = ?", id).Update("version", gorm.Expr("version + 1")).Error; e != nil {
 		return e
 	}
+	var before models.Order
+	if e := tx.Select("status").First(&before, id).Error; e != nil {
+		return e
+	}
 	var rows []models.Target
 	if e := tx.Select("status").Where("order_id = ?", id).Find(&rows).Error; e != nil {
 		return e
@@ -325,6 +329,12 @@ func summarize(tx *gorm.DB, id int) error {
 		}
 		values["status"] = status
 		values["finished_at"] = time.Now().UTC()
+		if !finished(before.Status) {
+			// The worker ended it, so there is no actor.
+			if e := tx.Create(&models.Audit{OrderID: id, Action: "finish", Result: status}).Error; e != nil {
+				return e
+			}
+		}
 	}
 	return tx.Model(&models.Order{}).Where("id = ?", id).Updates(values).Error
 }

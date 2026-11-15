@@ -125,7 +125,7 @@ func (s *Workflow) Edit(ctx context.Context, id int, r dto.Edit, actor int, p *a
 		if e := tx.Create(&targets).Error; e != nil {
 			return e
 		}
-		return tx.Create(&models.Audit{OrderID: id, ActorID: actor, Action: "edit"}).Error
+		return tx.Create(&models.Audit{OrderID: id, ActorID: actor, Action: "edit", ScriptsSHA256: scriptsDigest(targets)}).Error
 	})
 	if e != nil {
 		return o, e
@@ -174,39 +174,49 @@ func (s *Workflow) Action(ctx context.Context, id int, version int64, action str
 	if action != "execute" && action != "cancel" {
 		return o, InvalidErr
 	}
-	e = s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		values := map[string]any{"version": gorm.Expr("version + 1")}
-		if action == "execute" {
-			values["status"] = "queued"
-		} else {
-			values["cancel_requested"] = true
-			if o.Status != "running" {
-				values["status"] = "cancelled"
-				values["finished_at"] = time.Now().UTC()
-			}
-		}
-		q := tx.Model(&models.Order{}).Where("id = ? AND version = ? AND status = ?", id, version, o.Status).Updates(values)
-		if q.Error != nil {
-			return q.Error
-		}
-		if q.RowsAffected != 1 {
-			return ConflictErr
-		}
-		if action == "cancel" {
-			q = tx.Model(&models.Target{}).Where("order_id = ? AND status = ?", id, "pending").Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC()})
-			if q.Error != nil {
-				return q.Error
-			}
-			if e := tx.Model(&models.Order{}).Where("id = ?", id).Update("cancelled_count", gorm.Expr("cancelled_count + ?", q.RowsAffected)).Error; e != nil {
-				return e
-			}
-		}
-		return tx.Create(&models.Audit{OrderID: id, ActorID: actor, Action: action}).Error
-	})
+	e = s.db(ctx).Transaction(func(tx *gorm.DB) error { return applyAction(tx, o, action, actor) })
 	if e != nil {
 		return o, e
 	}
 	return s.Get(ctx, id, p)
+}
+
+// applyAction moves order o, as read at its current version, to queued
+// (execute) or to cancelled / cancel-requested (cancel), and audits it.
+func applyAction(tx *gorm.DB, o models.Order, action string, actor int) error {
+	values := map[string]any{"version": gorm.Expr("version + 1")}
+	if action == "execute" {
+		values["status"] = "queued"
+	} else {
+		values["cancel_requested"] = true
+		if o.Status != "running" {
+			values["status"] = "cancelled"
+			values["finished_at"] = time.Now().UTC()
+		}
+	}
+	q := tx.Model(&models.Order{}).Where("id = ? AND version = ? AND status = ?", o.ID, o.Version, o.Status).Updates(values)
+	if q.Error != nil {
+		return q.Error
+	}
+	if q.RowsAffected != 1 {
+		return ConflictErr
+	}
+	if action == "cancel" {
+		q = tx.Model(&models.Target{}).Where("order_id = ? AND status = ?", o.ID, "pending").Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC()})
+		if q.Error != nil {
+			return q.Error
+		}
+		if e := tx.Model(&models.Order{}).Where("id = ?", o.ID).Update("cancelled_count", gorm.Expr("cancelled_count + ?", q.RowsAffected)).Error; e != nil {
+			return e
+		}
+	}
+	if e := tx.Create(&models.Audit{OrderID: o.ID, ActorID: actor, Action: action}).Error; e != nil {
+		return e
+	}
+	if values["status"] == "cancelled" {
+		return tx.Create(&models.Audit{OrderID: o.ID, ActorID: actor, Action: "finish", Result: "cancelled"}).Error
+	}
+	return nil
 }
 
 // Retry provides the retry operation within the caller's authorized delivery scope.
@@ -355,7 +365,7 @@ func (s *Workflow) create(ctx context.Context, r dto.Create, actor int, name str
 		if e := tx.Create(&o).Error; e != nil {
 			return e
 		}
-		return tx.Create(&models.Audit{OrderID: o.ID, ActorID: actor, Action: "create"}).Error
+		return tx.Create(&models.Audit{OrderID: o.ID, ActorID: actor, Action: "create", ScriptsSHA256: scriptsDigest(targets)}).Error
 	})
 	if e != nil {
 		var existing models.Order

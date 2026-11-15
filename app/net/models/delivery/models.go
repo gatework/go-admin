@@ -102,11 +102,16 @@ func (Receipt) TableName() string { return "sys_delivery_receipt" }
 
 // Audit records audit state for delivery persistence.
 type Audit struct {
-	ID        int `gorm:"primaryKey"`
-	OrderID   int `gorm:"index"`
-	DeviceID  int
-	ActorID   int
-	Action    string `gorm:"size:40"`
+	ID       int `gorm:"primaryKey"`
+	OrderID  int `gorm:"index"`
+	DeviceID int
+	ActorID  int
+	Action   string `gorm:"size:40"`
+	// ScriptsSHA256 digests every target's device and script hash, on create
+	// and edit: which scripts this action approved.
+	ScriptsSHA256 string `gorm:"column:scripts_sha256;size:64"`
+	// Result is the order's terminal status, on the "finish" row.
+	Result    string `gorm:"size:40"`
 	CreatedAt time.Time
 }
 

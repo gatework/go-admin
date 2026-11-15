@@ -395,3 +395,54 @@ func TestCheckDoesNotDisguiseDatabaseFailures(t *testing.T) {
 		})
 	}
 }
+
+// The audit trail says which scripts were approved and how the order ended:
+// create and edit carry a digest of every target's script, and the order's
+// first terminal status is recorded once.
+func TestAuditRecordsScriptsAndTheFinalResult(t *testing.T) {
+	s := fixture(t)
+	ctx := context.Background()
+	o := queued(t, s)
+	w := NewWorker(s, func(models.Target) (Session, error) { return &fakeSession{}, nil })
+	target, e := w.Claim(ctx)
+	if e != nil || target == nil {
+		t.Fatal(e)
+	}
+	w.RunTarget(ctx, *target)
+	if e := w.Recover(ctx); e != nil {
+		t.Fatal(e)
+	}
+	var audits []models.Audit
+	if e := s.DB.Where("order_id = ?", o.ID).Order("id").Find(&audits).Error; e != nil {
+		t.Fatal(e)
+	}
+	var targets []models.Target
+	s.DB.Where("order_id = ?", o.ID).Find(&targets)
+	byAction := map[string][]models.Audit{}
+	for _, a := range audits {
+		byAction[a.Action] = append(byAction[a.Action], a)
+	}
+	if c := byAction["create"]; len(c) != 1 || c[0].ScriptsSHA256 == "" || c[0].ScriptsSHA256 != scriptsDigest(targets) {
+		t.Errorf("create audit %+v; want the scripts digest %s", c, scriptsDigest(targets))
+	}
+	if f := byAction["finish"]; len(f) != 1 || f[0].Result != "succeeded" {
+		t.Errorf("finish audits %+v; want one with result succeeded", f)
+	}
+}
+
+func TestCancellingAnOrderBeforeItRunsRecordsItsResult(t *testing.T) {
+	s := fixture(t)
+	ctx := context.Background()
+	o, e := s.Create(ctx, request(), 7, "tester", scope())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Action(ctx, o.ID, o.Version, "cancel", 7, scope()); e != nil {
+		t.Fatal(e)
+	}
+	var finish []models.Audit
+	s.DB.Where("order_id = ? AND action = ?", o.ID, "finish").Find(&finish)
+	if len(finish) != 1 || finish[0].Result != "cancelled" {
+		t.Fatalf("finish audits %+v; want one with result cancelled", finish)
+	}
+}
