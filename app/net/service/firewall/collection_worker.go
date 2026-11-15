@@ -35,16 +35,12 @@ func NewCollectionWorker(s *Firewall, dial CollectionDialer) *CollectionWorker {
 	if dial == nil {
 		dial = openFirewallReader
 	}
-	return &CollectionWorker{s: s, dial: dial}
+	return &CollectionWorker{s: s, dial: dial, loop: worker.Loop{Name: "firewall collection worker", Logger: s.Logger}}
 }
 
 // Run provides run for this module.
 func (w *CollectionWorker) Run(ctx context.Context) error {
-	return w.loop.Run(ctx, CollectionConcurrency, func(ctx context.Context) {
-		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
-			w.s.Logger.Errorf("firewall collection worker failed: %v", err)
-		}
-	})
+	return w.loop.Run(ctx, CollectionConcurrency, w.Tick)
 }
 
 func publicationID(t models.CollectionTarget) string {
@@ -217,7 +213,7 @@ func (w *CollectionWorker) run(parent context.Context, t models.CollectionTarget
 		}
 		result, opErr = collector.Collect(ctx, operations.CollectRequest{Device: storage.DeviceKey(t.InstanceID), Expected: t.ExpectedRevision, PublicationID: publicationID(t)})
 	}
-	finishCtx, finish := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	finishCtx, finish := worker.Cleanup(ctx, 15*time.Second)
 	defer finish()
 	if batch.Kind == "capture" && result.Revision == "" && opErr != nil {
 		// A filesystem publication can commit before its surrounding SQL commit

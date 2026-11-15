@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/gatework/motor/common/worker"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -126,7 +128,7 @@ func (s *Device) acquire(ctx context.Context) (string, error) {
 func (s *Device) fail(ctx context.Context, token string, cause error) {
 	// A disconnected request must not leave a live run forever. The conditional
 	// token prevents an expired writer from clearing its successor's lease.
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	cleanup, cancel := worker.Cleanup(ctx, 3*time.Second)
 	defer cancel()
 	message := inventory.PersistenceErr.Message
 	if safe, ok := errors.AsType[*inventory.Error](cause); ok {

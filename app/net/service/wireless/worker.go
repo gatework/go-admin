@@ -32,7 +32,7 @@ func NewWorker(s *Wireless, c Collector) *Worker {
 	if c == nil {
 		c = nativeCollector{}
 	}
-	return &Worker{s: s, collector: c}
+	return &Worker{s: s, collector: c, loop: worker.Loop{Name: "wireless worker", Logger: s.Logger}}
 }
 
 // collectionTimeout bounds one controller collection; its device lease adds lease.Margin.
@@ -50,11 +50,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 
 // Run owns the worker lifecycle until cancellation and waits for its pollers.
 func (w *Worker) Run(ctx context.Context) error {
-	return w.loop.Run(ctx, 1, func(ctx context.Context) {
-		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
-			w.s.Logger.Errorf("wireless worker failed: %v", err)
-		}
-	})
+	return w.loop.Run(ctx, 1, w.Tick)
 }
 
 // Tick advances due work while preserving lease ownership and durable outcomes.
@@ -88,7 +84,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 }
 
 func (w *Worker) release(ctx context.Context, held lease.Lease, closed bool) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	ctx, cancel := worker.Cleanup(ctx, 5*time.Second)
 	defer cancel()
 	outcome := lease.Closed
 	if !closed {
@@ -142,7 +138,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, held lease.Leas
 			code = "session_close_unconfirmed"
 		}
 	}
-	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	finishCtx, cancel := worker.Cleanup(ctx, 10*time.Second)
 	defer cancel()
 	return w.finishCollection(ctx, finishCtx, job, held, snap, code, started)
 }

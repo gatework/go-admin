@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/gatework/motor/common/worker"
+
 	"gorm.io/gorm"
 
 	vxlan "github.com/gatework/go-vxlan"
@@ -275,7 +277,7 @@ func leaseFailure(e error, busyCode string) string {
 func (w *Worker) release(ctx context.Context, held lease.Lease, closed bool) error {
 	// Shutdown cancellation must not strand a confirmed-closed transport lease.
 	// Unknown closure still quarantines the device, within a bounded budget.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	ctx, cancel := worker.Cleanup(ctx, 5*time.Second)
 	defer cancel()
 	outcome := lease.Closed
 	if !closed {

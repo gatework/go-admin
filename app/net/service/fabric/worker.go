@@ -39,16 +39,12 @@ func NewWorker(s *Fabric, t Transport) *Worker {
 	if s.Logger == nil {
 		s.Logger = logger.NewHelper(logger.Default())
 	}
-	return &Worker{s: s, transport: t}
+	return &Worker{s: s, transport: t, loop: worker.Loop{Name: "fabric worker", Logger: s.Logger}}
 }
 
 // Run owns the worker lifecycle until cancellation and waits for its pollers.
 func (w *Worker) Run(ctx context.Context) error {
-	return w.loop.Run(ctx, 1, func(ctx context.Context) {
-		if err := w.Tick(ctx); err != nil && ctx.Err() == nil {
-			w.s.Logger.Errorf("fabric worker failed: %v", err)
-		}
-	})
+	return w.loop.Run(ctx, 1, w.Tick)
 }
 
 // Tick advances due work while preserving lease ownership and durable outcomes.
@@ -163,7 +159,7 @@ func (w *Worker) schedule(ctx context.Context, now time.Time) error {
 // unlock releases a fabric lock. It guards no session, and a lost lock was
 // already dropped by a sweep.
 func (w *Worker) unlock(ctx context.Context, lock lease.Lease) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	ctx, cancel := worker.Cleanup(ctx, 5*time.Second)
 	defer cancel()
 	if e := lease.Release(opsDB(ctx, w.s), lock, lease.NoSession); e != nil && !errors.Is(e, lease.LostErr) {
 		return e
@@ -535,7 +531,9 @@ func (w *Worker) runChangeTargets(ctx context.Context, c *models.Change, plan *v
 			if t.ErrorCode == "" {
 				t.ErrorCode = "execution_failed"
 			}
-			return w.stopChange(context.WithoutCancel(ctx), c, t.ErrorCode)
+			stop, cancel := worker.Cleanup(ctx, 10*time.Second)
+			defer cancel()
+			return w.stopChange(stop, c, t.ErrorCode)
 		}
 		t.Status = "succeeded"
 		if e := w.persistChange(ctx, c); e != nil {

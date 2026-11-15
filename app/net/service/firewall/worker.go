@@ -33,15 +33,13 @@ type Worker struct {
 }
 
 // NewWorker provides new worker for this module.
-func NewWorker(s *Firewall) *Worker { return &Worker{s: s} }
+func NewWorker(s *Firewall) *Worker {
+	return &Worker{s: s, loop: worker.Loop{Name: "firewall offline worker", Logger: s.Logger}}
+}
 
 // Run provides run for this module.
 func (w *Worker) Run(ctx context.Context) error {
-	return w.loop.Run(ctx, 2, func(ctx context.Context) {
-		if err := w.Tick(ctx); err != nil && ctx.Err() == nil && w.s.Logger != nil {
-			w.s.Logger.Errorf("firewall offline worker failed: %v", err)
-		}
-	})
+	return w.loop.Run(ctx, 2, w.Tick)
 }
 
 func runnable(db *gorm.DB) *gorm.DB {
@@ -188,7 +186,7 @@ func (w *Worker) importJob(parent context.Context, job models.Import, token stri
 	if e := run(); e != nil {
 		code = errorCode(e)
 	}
-	finish, finishCancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
+	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
 	q := owned(w.s.db(finish).Model(&models.Import{}), job.ID, token).Updates(map[string]any{"status": status, "revision": revision, "error_code": code, "finished_at": time.Now().UTC(), "lease_token": ""})
 	return q.Error
@@ -248,7 +246,7 @@ func (w *Worker) analysisJob(parent context.Context, job models.Analysis, token 
 		status = "failed"
 		result = types.AnalysisResult{Items: []types.AnalysisItem{}, Issues: []types.Notice{{Code: errorCode(e)}}}
 	}
-	finish, finishCancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
+	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
 	return w.s.db(finish).Transaction(func(tx *gorm.DB) error {
 		out := models.Analysis{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), LeaseToken: ""}
@@ -295,7 +293,7 @@ func (w *Worker) draftJob(parent context.Context, job models.Draft, token string
 	if e != nil {
 		status = "failed"
 	}
-	finish, finishCancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
+	finish, finishCancel := worker.Cleanup(parent, 10*time.Second)
 	defer finishCancel()
 	out := models.Draft{Status: status, Result: result, ErrorCode: errorCode(e), FinishedAt: time.Now().UTC(), LeaseToken: ""}
 	return owned(w.s.db(finish).Model(&models.Draft{}), job.ID, token).Select("status", "result", "error_code", "finished_at", "lease_token", "updated_at").Updates(&out).Error

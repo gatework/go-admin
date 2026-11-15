@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -58,7 +59,7 @@ func NewWorker(s *Workflow, f Factory) *Worker {
 	if s.Logger == nil {
 		s.Logger = logger.NewHelper(logger.Default())
 	}
-	return &Worker{s: s, factory: f}
+	return &Worker{s: s, factory: f, loop: worker.Loop{Name: "delivery worker", Logger: s.Logger}}
 }
 
 // Run owns the worker lifecycle until cancellation and waits for its pollers.
@@ -67,26 +68,24 @@ func (w *Worker) Run(ctx context.Context) error {
 	if concurrency < 1 {
 		concurrency = 5
 	}
-	return w.loop.Run(ctx, concurrency, func(ctx context.Context) {
+	return w.loop.Run(ctx, concurrency, func(ctx context.Context) error {
 		if !w.s.Config.Enabled {
-			return
+			return nil
 		}
 		if err := w.Recover(ctx); err != nil {
-			if ctx.Err() == nil {
-				w.s.Logger.Errorf("delivery recovery failed: %v", err)
-			}
-			return
+			return fmt.Errorf("recovery: %w", err)
 		}
 		target, err := w.Claim(ctx)
+		if errors.Is(err, NoWorkErr) {
+			return nil
+		}
 		if err != nil {
-			if !errors.Is(err, NoWorkErr) && ctx.Err() == nil {
-				w.s.Logger.Errorf("delivery claim failed: %v", err)
-			}
-			return
+			return fmt.Errorf("claim: %w", err)
 		}
 		if target != nil {
 			w.RunTarget(ctx, *target)
 		}
+		return nil
 	})
 }
 
@@ -167,7 +166,7 @@ func (w *Worker) RunTarget(parent context.Context, t models.Target) {
 		return w.beforeCommand(commandCtx, t, &code, &attempted)
 	}
 	receipt := func(part string) error {
-		return w.recordReceipt(t, part, &output, &code, &steps)
+		return w.recordReceipt(ctx, t, part, &output, &code, &steps)
 	}
 	tail, executeErr := session.Execute(ctx, parsed, ExecutionHooks{Before: before, Receipt: receipt})
 	if len(output)+len(tail) > MaxOutputBytes {
@@ -315,7 +314,7 @@ func summarize(tx *gorm.DB, id int) error {
 // record persists a target's outcome with its own short deadline, because the
 // execution context is usually already cancelled or expired by this point.
 func (w *Worker) record(parent context.Context, t models.Target, status, code, output string, steps int, attempted, closed bool) {
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+	cleanup, cancel := worker.Cleanup(parent, 5*time.Second)
 	defer cancel()
 	if e := w.finish(cleanup, t, status, code, output, steps, attempted, closed); e != nil {
 		// The outcome is now unknown to the database: the target stays running and
@@ -425,7 +424,7 @@ func (w *Worker) beforeCommand(commandCtx context.Context, t models.Target, code
 	return w.check(commandCtx, t)
 }
 
-func (w *Worker) recordReceipt(t models.Target, part string, output, code *string, steps *int) error {
+func (w *Worker) recordReceipt(ctx context.Context, t models.Target, part string, output, code *string, steps *int) error {
 	if len(*output)+len(part) > MaxOutputBytes {
 		*output += part[:max(0, MaxOutputBytes-len(*output))]
 		*code = "output_limit"
@@ -435,7 +434,7 @@ func (w *Worker) recordReceipt(t models.Target, part string, output, code *strin
 	next := *steps + 1
 	// An acknowledged remote command is evidence even if cancellation arrived
 	// in the same instant. Persist it under its own bounded cleanup context.
-	persist, done := context.WithTimeout(context.Background(), 5*time.Second)
+	persist, done := worker.Cleanup(ctx, 5*time.Second)
 	defer done()
 	err := w.s.db(persist).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&models.Receipt{TargetID: t.ID, Step: next, Output: part}).Error; err != nil {

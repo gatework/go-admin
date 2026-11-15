@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gatework/motor/common/worker"
+
 	"github.com/gatework/motor/app/net/models/lease"
 
 	"gorm.io/gorm"
@@ -123,7 +125,9 @@ func (r *collectionReader) Close() error {
 		// A durable closure acknowledgement allows recovery to release the lease
 		// after a filesystem publication whose final SQL acknowledgement was lost.
 		if r.session.closed {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// io.Closer gives Close no context; the acknowledgement still gets a
+			// bounded deadline of its own.
+			ctx, cancel := worker.Cleanup(context.Background(), 5*time.Second)
 			defer cancel()
 			q := collectionOwned(r.session.worker.s.db(ctx), r.session.target).Update("session_closed", true)
 			if q.Error != nil {
