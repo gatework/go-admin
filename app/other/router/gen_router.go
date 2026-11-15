@@ -24,7 +24,7 @@ import (
 //
 // dev is the shipped default and is where the generator is meant to be used.
 // demo keeps them because demo mode already has a better answer than a 404:
-// DemoEvn refuses these three by name and explains itself, which is the thing
+// DemoEnv refuses these three by name and explains itself, which is the thing
 // the demo exists to show. test and prod get nothing.
 //
 // The mode is read once, while the routes are being built. Changing

@@ -30,7 +30,7 @@ var genReadingRoutes = []string{
 //
 // They are in CasbinExclude, so Enforce never runs for them and any account
 // that can log in may call them. dev is the shipped default and is where the
-// generator is meant to be used; demo keeps them because DemoEvn refuses these
+// generator is meant to be used; demo keeps them because DemoEnv refuses these
 // three by name and saying so is the thing the demo is for. Everything else,
 // including the empty mode a process gets when nothing set one, is refused by
 // not existing.

@@ -21,7 +21,7 @@ func TestFirewallConfigAndInputAreExcludedFromOperationLog(t *testing.T) {
 		body := &deliveryReadProbe{Reader: strings.NewReader(`{"text":"synthetic-secret"}`)}
 		marshals := 0
 		r := gin.New()
-		r.Use(LoggerToFile())
+		r.Use(AccessLog())
 		r.POST(path, func(c *gin.Context) {
 			c.Set("result", deliveryResultProbe{marshals: &marshals})
 			c.Status(http.StatusNotFound)

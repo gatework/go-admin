@@ -25,8 +25,8 @@ import (
 	"github.com/gatework/motor/common/global"
 )
 
-// LoggerToFile 日志记录到文件
-func LoggerToFile() gin.HandlerFunc {
+// AccessLog 日志记录到文件
+func AccessLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := api.GetRequestLogger(c)
 		// 开始时间

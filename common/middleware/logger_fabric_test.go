@@ -21,7 +21,7 @@ func TestFabricEvidenceNeverEntersOperationLog(t *testing.T) {
 		probe := &deliveryReadProbe{Reader: strings.NewReader(`{"evidence":"private"}`)}
 		marshals := 0
 		r := gin.New()
-		r.Use(LoggerToFile())
+		r.Use(AccessLog())
 		r.POST(path, func(c *gin.Context) {
 			c.Set("result", deliveryResultProbe{marshals: &marshals})
 			c.Status(http.StatusNotFound)

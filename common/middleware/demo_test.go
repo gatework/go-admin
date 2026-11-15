@@ -79,7 +79,7 @@ func TestOutsideDemoModeNothingIsRefused(t *testing.T) {
 	for _, route := range append(DemoWriteRoutes(), "/api/v1/dept") {
 		t.Run(route, func(t *testing.T) {
 			r := gin.New()
-			r.Use(DemoEvn())
+			r.Use(DemoEnv())
 			r.GET(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
 
 			w := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestDemoRefusalCarriesTheConfiguredMessage(t *testing.T) {
 			demoMode(t, "demo", tc.configured)
 
 			r := gin.New()
-			r.Use(DemoEvn())
+			r.Use(DemoEnv())
 			r.GET(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
 
 			w := httptest.NewRecorder()

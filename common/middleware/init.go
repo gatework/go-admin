@@ -23,7 +23,7 @@ const (
 // InitMiddlewareWithDatabase lets the host exempt process-level probes from
 // tenant database selection without coupling common to application routes.
 func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) error {
-	r.Use(DemoEvn())
+	r.Use(DemoEnv())
 	// CORS preflight is answered before the tenant database is resolved: a
 	// preflight carries no credentials and needs no database, and answering it
 	// after the lookup turned every preflight to an unknown host into a 503.
@@ -31,7 +31,7 @@ func InitMiddlewareWithDatabase(r *gin.Engine, database gin.HandlerFunc) error {
 	// 数据库链接
 	r.Use(database)
 	// 日志处理
-	r.Use(LoggerToFile())
+	r.Use(AccessLog())
 	// NoCache is a middleware function that appends headers
 	r.Use(NoCache)
 	// Secure is a middleware function that appends security

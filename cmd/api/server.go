@@ -375,7 +375,7 @@ func newHTTPServer(app config.Application, handler http.Handler) *http.Server {
 // and the one least likely to go looking. Silence there would leave the gate
 // technically correct and practically useless.
 //
-// Nothing is said in demo mode. The routes are registered, but DemoEvn refuses
+// Nothing is said in demo mode. The routes are registered, but DemoEnv refuses
 // all three by name, so a warning would describe an exposure that is not there.
 func reportGeneratorWriteRoutes() {
 	if !generatorWriteRoutesNeedWarning() {

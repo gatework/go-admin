@@ -85,8 +85,8 @@ func demoMessage() string {
 	return defaultDemoMsg
 }
 
-// DemoEvn refuses anything that would change state while mode is demo.
-func DemoEvn() gin.HandlerFunc {
+// DemoEnv refuses anything that would change state while mode is demo.
+func DemoEnv() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if config.Current().Settings.Application.Mode != "demo" {
 			c.Next()

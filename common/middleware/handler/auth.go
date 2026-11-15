@@ -37,12 +37,6 @@ func AuthCallbacks(secret string) (func(any) jwt.MapClaims, func(any, *gin.Conte
 		func(data any, c *gin.Context) bool { return authorize(data, c, key) }
 }
 
-// PayloadFunc remains available for callers constructing their own middleware.
-// Host middleware uses AuthCallbacks to pin signing and stamp keys together.
-func PayloadFunc(data any) jwt.MapClaims {
-	return payloadFunc(data, []byte(config.Current().Settings.JWT.Secret))
-}
-
 func payloadFunc(data any, key []byte) jwt.MapClaims {
 	if v, ok := data.(map[string]any); ok {
 		u, _ := v["user"].(SysUser)
@@ -243,12 +237,6 @@ func credentialStamp(u SysUser, r SysRole, key []byte) string {
 	mac := hmac.New(sha256.New, key)
 	mac.Write(state)
 	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// Authorizator verifies tenant binding and current account state on every request.
-// A signed token alone does not prove that the account is still enabled.
-func Authorizator(data any, c *gin.Context) bool {
-	return authorize(data, c, []byte(config.Current().Settings.JWT.Secret))
 }
 
 func authorize(data any, c *gin.Context, key []byte) bool {

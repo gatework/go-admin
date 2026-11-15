@@ -42,7 +42,8 @@ func TestJWTIsIssuedOnlyAfterMFAAndRevokedOnChanges(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-password-123"), bcrypt.MinCost)
 	db.Create(&SysRole{RoleID: 1, RoleKey: "admin", Status: "2"})
 	db.Create(&SysUser{UserID: 1, Username: "admin", Password: string(hash), RoleID: 1, Status: "2"})
-	auth, err := jwt.New(&jwt.GinJWTMiddleware{Realm: "test", Key: []byte(config.Current().Settings.JWT.Secret), Timeout: time.Hour, PayloadFunc: PayloadFunc, IdentityHandler: IdentityHandler, Authenticator: Authenticator, Authorizator: Authorizator, Unauthorized: Unauthorized, TokenLookup: "header: Authorization", TokenHeadName: "Bearer"})
+	payload, authorize := AuthCallbacks(config.Current().Settings.JWT.Secret)
+	auth, err := jwt.New(&jwt.GinJWTMiddleware{Realm: "test", Key: []byte(config.Current().Settings.JWT.Secret), Timeout: time.Hour, PayloadFunc: payload, IdentityHandler: IdentityHandler, Authenticator: Authenticator, Authorizator: authorize, Unauthorized: Unauthorized, TokenLookup: "header: Authorization", TokenHeadName: "Bearer"})
 	if err != nil {
 		t.Fatal(err)
 	}

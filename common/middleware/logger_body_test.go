@@ -25,7 +25,7 @@ func serveWithLogger(tb testing.TB, enabledDB bool, method, body string) string 
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(LoggerToFile())
+	r.Use(AccessLog())
 
 	var seen string
 	handler := func(c *gin.Context) {
@@ -91,7 +91,7 @@ func TestBodyIsNotCopiedWhenTheOperationLogIsOff(t *testing.T) {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(LoggerToFile())
+	r.Use(AccessLog())
 	r.POST("/probe", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	payload := []byte(body)
