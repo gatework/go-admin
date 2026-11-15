@@ -1,4 +1,4 @@
-package handler
+package service
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ const (
 // generating code that silently does nothing.
 var expressionMarkers = []string{"(", ")", "{", "}", "`", ";", "=>"}
 
-// validateAndSanitizeColumns enforces PRD 010 F10 on the columns carried by
+// ValidateAndSanitizeColumns enforces PRD 010 F10 on the columns carried by
 // a table update (sys_tables.go:357's Update handler, the one bind-and-save
 // path with no field-level validation at all - see API契约.md §1.2/§2.1,
 // decision D6).
@@ -61,7 +61,7 @@ var expressionMarkers = []string{"(", ")", "{", "}", "`", ";", "=>"}
 // An out-of-range colWidth does not reject - §2.1 says it "falls back to
 // the inferred value", so this resets it to the 0 sentinel in place and lets
 // R2's inference take over, the same as if the field had never been set.
-func validateAndSanitizeColumns(columns []models.SysColumns) error {
+func ValidateAndSanitizeColumns(columns []models.SysColumns) error {
 	seen := make(map[string]bool, len(columns))
 	for i := range columns {
 		col := &columns[i]
@@ -90,7 +90,7 @@ func validateAndSanitizeColumns(columns []models.SysColumns) error {
 	return nil
 }
 
-// validateBusinessNameUnique enforces PRD 010 F10's other half: two tables
+// ValidateBusinessNameUnique enforces PRD 010 F10's other half: two tables
 // sharing (packageName, businessName) write the same generated language
 // pack path, gen/{PackageName}/{BusinessName}.ts (see gen.go's
 // NOActionsGen), so the second one silently overwrites the first's
@@ -100,7 +100,7 @@ func validateAndSanitizeColumns(columns []models.SysColumns) error {
 // G10's other concern - colliding with the built-in admin/* i18n namespace -
 // does not apply here anymore: D9 moved generated keys to their own gen/
 // namespace, so this only has to guard generated tables against each other.
-func validateBusinessNameUnique(db *gorm.DB, packageName, businessName string, tableID int) error {
+func ValidateBusinessNameUnique(db *gorm.DB, packageName, businessName string, tableID int) error {
 	var count int64
 	err := db.Table("sys_tables").
 		Where("package_name = ? AND business_name = ? AND table_id != ?", packageName, businessName, tableID).
@@ -138,11 +138,11 @@ var (
 	businessNamePattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 )
 
-// validateGenPathFields checks the fields gen.go builds file paths from. It
+// ValidateGenPathFields checks the fields gen.go builds file paths from. It
 // runs where a configuration is saved and again before files are written, so
 // a row saved before this check existed is refused at generation rather than
 // trusted because it is already in the database.
-func validateGenPathFields(tab models.SysTables) error {
+func ValidateGenPathFields(tab models.SysTables) error {
 	if !packageNamePattern.MatchString(tab.PackageName) {
 		return fmt.Errorf("packageName=%q 不合法：只能包含小写字母和数字，且以字母开头", tab.PackageName)
 	}

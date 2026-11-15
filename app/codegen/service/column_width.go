@@ -1,4 +1,4 @@
-package handler
+package service
 
 import (
 	"regexp"
@@ -113,11 +113,11 @@ func columnLength(columnType string) int {
 	return n
 }
 
-// applyInferredColumnWidths fills in InferColumnWidth's result for every
+// ApplyInferredColumnWidths fills in InferColumnWidth's result for every
 // column still at the 0 "unconfigured" sentinel, in place, before the
 // template that reads .ColWidth runs. A column the user (or F6's config
 // page) already gave an explicit width is left untouched.
-func applyInferredColumnWidths(columns []models.SysColumns) {
+func ApplyInferredColumnWidths(columns []models.SysColumns) {
 	for i := range columns {
 		if columns[i].ColWidth == 0 {
 			columns[i].ColWidth = inferColumnWidth(columns[i].ColumnType)

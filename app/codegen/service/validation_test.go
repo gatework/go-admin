@@ -1,4 +1,4 @@
-package handler
+package service
 
 import (
 	"testing"
@@ -33,7 +33,7 @@ func TestValidateAndSanitizeColumns_JsonFieldFormat(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateAndSanitizeColumns([]models.SysColumns{{JSONField: tc.jsonField}})
+			err := ValidateAndSanitizeColumns([]models.SysColumns{{JSONField: tc.jsonField}})
 			if tc.wantErr && err == nil {
 				t.Errorf("jsonField %q: want error, got nil", tc.jsonField)
 			}
@@ -45,7 +45,7 @@ func TestValidateAndSanitizeColumns_JsonFieldFormat(t *testing.T) {
 }
 
 func TestValidateAndSanitizeColumns_JsonFieldUniqueWithinTable(t *testing.T) {
-	err := validateAndSanitizeColumns([]models.SysColumns{
+	err := ValidateAndSanitizeColumns([]models.SysColumns{
 		{JSONField: "name"},
 		{JSONField: "name"},
 	})
@@ -70,7 +70,7 @@ func TestValidateAndSanitizeColumns_ColWidthOutOfRangeIsSanitizedNotRejected(t *
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cols := []models.SysColumns{{JSONField: "name", ColWidth: tc.width}}
-			if err := validateAndSanitizeColumns(cols); err != nil {
+			if err := ValidateAndSanitizeColumns(cols); err != nil {
 				t.Fatalf("colWidth %d: want no error (out-of-range sanitizes, it does not reject), got %v", tc.width, err)
 			}
 			if cols[0].ColWidth != tc.want {
@@ -96,7 +96,7 @@ func TestValidateAndSanitizeColumns_DefaultValueExpressionRejected(t *testing.T)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateAndSanitizeColumns([]models.SysColumns{{JSONField: "name", DefaultValue: tc.defaultValue}})
+			err := ValidateAndSanitizeColumns([]models.SysColumns{{JSONField: "name", DefaultValue: tc.defaultValue}})
 			if tc.wantErr && err == nil {
 				t.Errorf("defaultValue %q: want error, got nil", tc.defaultValue)
 			}
@@ -138,19 +138,19 @@ func TestValidateBusinessNameUnique(t *testing.T) {
 		// (SysTables.BatchDelete) hard-deletes for the same reason.
 		defer db.Table("sys_tables").Unscoped().Delete(&other)
 
-		if err := validateBusinessNameUnique(db, "biz", "widget", other.TableID); err == nil {
+		if err := ValidateBusinessNameUnique(db, "biz", "widget", other.TableID); err == nil {
 			t.Error("want error for a businessName already used by another table in the same package, got nil")
 		}
 	})
 
 	t.Run("different package, same businessName: allowed", func(t *testing.T) {
-		if err := validateBusinessNameUnique(db, "other-pkg", "widget", 0); err != nil {
+		if err := ValidateBusinessNameUnique(db, "other-pkg", "widget", 0); err != nil {
 			t.Errorf("want no error across different packages, got %v", err)
 		}
 	})
 
 	t.Run("a table checking against its own current name: allowed", func(t *testing.T) {
-		if err := validateBusinessNameUnique(db, "biz", "widget", existing.TableID); err != nil {
+		if err := ValidateBusinessNameUnique(db, "biz", "widget", existing.TableID); err != nil {
 			t.Errorf("want no error when the only match is the row being saved itself, got %v", err)
 		}
 	})

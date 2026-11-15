@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	codegenservice "github.com/gatework/motor/app/codegen/service"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/gatework/motor/app/codegen/models"
@@ -182,7 +184,7 @@ func TestValidateGenPathFieldsAcceptsWhatTheConfigPageAccepts(t *testing.T) {
 		{PackageName: "shop2", TBName: "order2", BusinessName: "order2"},
 		{PackageName: "x", TBName: "T_Mixed_1", BusinessName: "tMixed1"},
 	} {
-		if err := validateGenPathFields(tab); err != nil {
+		if err := codegenservice.ValidateGenPathFields(tab); err != nil {
 			t.Errorf("%+v refused: %v", tab, err)
 		}
 	}

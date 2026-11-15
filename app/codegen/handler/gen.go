@@ -10,6 +10,8 @@ import (
 	"text/template"
 	"time"
 
+	codegenservice "github.com/gatework/motor/app/codegen/service"
+
 	"github.com/gatework/motor-core/jwtauth/user"
 
 	"github.com/gatework/motor/app/admin/service"
@@ -96,7 +98,7 @@ func (e Generator) Preview(c *gin.Context) {
 	}
 	// R2: infer a width for any column the config page left at colWidth's 0
 	// sentinel, before vue.go.template reads .ColWidth - see column_width.go.
-	applyInferredColumnWidths(tab.Columns)
+	codegenservice.ApplyInferredColumnWidths(tab.Columns)
 	out, err := renderAll(tab, templates...)
 	if err != nil {
 		log.Error(err)
@@ -402,12 +404,12 @@ func (e Generator) writeFiles(c *gin.Context, tab models.SysTables) bool {
 	}
 	// Checked again here, not only on save: a configuration saved before the
 	// save-time check existed is still in sys_tables.
-	if err := validateGenPathFields(tab); err != nil {
+	if err := codegenservice.ValidateGenPathFields(tab); err != nil {
 		e.Error(500, err, err.Error())
 		return false
 	}
 	// R2: see the matching call and comment in Preview above.
-	applyInferredColumnWidths(tab.Columns)
+	codegenservice.ApplyInferredColumnWidths(tab.Columns)
 
 	basePath := "template/v4/"
 	routerFile := basePath + "no_actions/router_check_role.go.template"

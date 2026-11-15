@@ -9,6 +9,7 @@ declared:
   - ./app/codegen/handler
   - ./app/codegen/models
   - ./app/codegen/router
+  - ./app/codegen/service
   - ./app/demo/models
   - ./app/demo/router
   - ./app/demo/service/dto

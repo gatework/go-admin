@@ -1,4 +1,4 @@
-package handler
+package service
 
 import (
 	"testing"
@@ -66,7 +66,7 @@ func TestApplyInferredColumnWidths(t *testing.T) {
 		{JSONField: "price", ColumnType: "decimal(10,2)", ColWidth: 300}, // already configured
 	}
 
-	applyInferredColumnWidths(columns)
+	ApplyInferredColumnWidths(columns)
 
 	if columns[0].ColWidth == 0 {
 		t.Error("unconfigured column: want an inferred non-zero width, still 0")
