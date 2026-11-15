@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
-
-	"github.com/gatework/motor-core/sdk/config"
 )
 
 // Metadata belongs to the request's connection, not the process-wide default
-// driver. PostgreSQL uses current_schema(), matching generated unqualified
-// table names and the connection's search_path. Gen.DBName remains MySQL-only.
+// driver or configuration. PostgreSQL uses current_schema(), matching generated
+// unqualified table names and the connection's search_path; MySQL uses the
+// connection's own database. It used to read gen.dbname, one name for the whole
+// process, so with several tenants the generator listed another tenant's tables.
 func metadataTables(tx *gorm.DB) (*gorm.DB, error) {
 	driver, err := metadataDriver(tx)
 	if err != nil {
@@ -20,7 +20,11 @@ func metadataTables(tx *gorm.DB) (*gorm.DB, error) {
 	if driver == "postgres" {
 		return tx.Table("(?) AS generator_tables", tx.Raw(postgresTablesSQL)), nil
 	}
-	return tx.Table("information_schema.tables").Where("table_schema = ?", config.Current().Settings.Gen.DBName), nil
+	schema, err := connectionSchema(tx)
+	if err != nil {
+		return nil, err
+	}
+	return tx.Table("information_schema.tables").Where("table_schema = ?", schema), nil
 }
 
 func metadataColumns(tx *gorm.DB) (*gorm.DB, error) {
@@ -31,7 +35,31 @@ func metadataColumns(tx *gorm.DB) (*gorm.DB, error) {
 	if driver == "postgres" {
 		return tx.Table("(?) AS generator_columns", tx.Raw(postgresColumnsSQL)), nil
 	}
-	return tx.Table("information_schema.columns").Where("table_schema = ?", config.Current().Settings.Gen.DBName), nil
+	schema, err := connectionSchema(tx)
+	if err != nil {
+		return nil, err
+	}
+	return tx.Table("information_schema.columns").Where("table_schema = ?", schema), nil
+}
+
+// schemaNamer lets a dialector name its connection's schema itself.
+type schemaNamer interface {
+	CurrentSchema(tx *gorm.DB) (string, error)
+}
+
+// connectionSchema is the MySQL database this connection is using.
+func connectionSchema(tx *gorm.DB) (string, error) {
+	if namer, ok := tx.Dialector.(schemaNamer); ok {
+		return namer.CurrentSchema(tx)
+	}
+	var schema string
+	if err := tx.Raw("SELECT DATABASE()").Scan(&schema).Error; err != nil {
+		return "", fmt.Errorf("reading the connection's database: %w", err)
+	}
+	if schema == "" {
+		return "", errors.New("the connection has no database selected")
+	}
+	return schema, nil
 }
 
 func metadataDriver(tx *gorm.DB) (string, error) {

@@ -120,3 +120,19 @@ func TestGetPageOffersTablesWhoseEntryWasDeleted(t *testing.T) {
 type mysqlMetadataFixture struct{ gorm.Dialector }
 
 func (mysqlMetadataFixture) Name() string { return "mysql" }
+
+// CurrentSchema stands in for MySQL's DATABASE(), which sqlite lacks.
+func (mysqlMetadataFixture) CurrentSchema(*gorm.DB) (string, error) { return generatorSchema, nil }
+
+// The schema comes from the request's connection, so a process-wide gen.dbname
+// naming another tenant's database changes nothing.
+func TestGetPageIgnoresTheConfiguredGeneratorSchema(t *testing.T) {
+	db := newCandidateDB(t, "sys_user")
+	testconfig.Apply(t, func(settings *config2.Config) {
+		settings.
+			Gen.DBName = "another_tenant"
+	})
+	if names := candidateNames(t, db); !contains(names, "sys_user") {
+		t.Fatalf("tables of the request's database not listed: %v", names)
+	}
+}
