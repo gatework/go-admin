@@ -168,6 +168,7 @@ func persistDimension(tx *gorm.DB, id int, sourceHash string, name wireless.Dime
 	if state.ID != 0 && !o.CompletedAt().After(state.ObservedAt) {
 		return ConflictErr
 	}
+	isNew, stored := state.ID == 0, state.Version
 	state.ControllerID = id
 	state.Name = string(name)
 	state.Version++
@@ -181,7 +182,7 @@ func persistDimension(tx *gorm.DB, id int, sourceHash string, name wireless.Dime
 		state.CompleteAt = o.CompletedAt()
 		state.CompleteSourceHash = sourceHash
 	}
-	if e := tx.Save(&state).Error; e != nil {
+	if e := writeState(tx, &state, isNew, stored); e != nil {
 		return e
 	}
 	if name == wireless.LLDP {
@@ -201,8 +202,25 @@ func persistDimension(tx *gorm.DB, id int, sourceHash string, name wireless.Dime
 			return err
 		}
 	}
-	if e := tx.Save(&state).Error; e != nil {
-		return e
+	// Projection issues collected above belong to the version written earlier
+	// in this transaction, so the row is matched on that version unchanged.
+	return writeState(tx, &state, false, state.Version)
+}
+
+// writeState inserts a state row or updates the one read earlier in the same
+// transaction. It replaces GORM Save, which upserts: a row deleted by another
+// transaction after it was read would be silently written back. A guarded
+// update reports that, and a stale version, as ConflictErr instead.
+func writeState(tx *gorm.DB, state any, isNew bool, storedVersion int64) error {
+	if isNew {
+		return tx.Create(state).Error
+	}
+	result := tx.Model(state).Where("version = ?", storedVersion).Select("*").Omit("id").Updates(state)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ConflictErr
 	}
 	return nil
 }

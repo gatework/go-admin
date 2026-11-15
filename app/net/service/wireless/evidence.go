@@ -252,11 +252,12 @@ func persistNeighbor(tx *gorm.DB, ap models.Resource, src string, o wireless.Obs
 	if e != nil && !errors.Is(e, gorm.ErrRecordNotFound) {
 		return e
 	}
+	isNew, stored := state.ID == 0, state.Version
 	state.ControllerID, state.APResourceID, state.APName = ap.ControllerID, ap.ID, text(ap.Facts["name"])
 	state.SourceHash, state.Version, state.Status, state.ObservedAt = src, version, status, *o.CompletedAt()
 	if status == "complete" {
 		state.Records = append([]wireless.Record{}, records...)
 		state.CompleteAt, state.CompleteSourceHash = o.CompletedAt(), src
 	}
-	return tx.Save(&state).Error
+	return writeState(tx, &state, isNew, stored)
 }
