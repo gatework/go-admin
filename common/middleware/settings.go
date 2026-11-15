@@ -26,12 +26,10 @@ var CasbinExclude = []URLInfo{
 	{URL: "/api/v1/logout", Method: "POST"},
 	{URL: "/api/v1/user/avatar", Method: "POST"},
 	{URL: "/api/v1/user/pwd", Method: "PUT"},
-	{URL: "/api/v1/metrics", Method: "GET"},
 	{URL: "/api/v1/health", Method: "GET"},
 	{URL: "/api/v1/ready", Method: "GET"},
 	{URL: "/", Method: "GET"},
 	{URL: "/api/v1/server-monitor", Method: "GET"},
-	{URL: "/api/v1/public/uploadFile", Method: "POST"},
 	{URL: "/api/v1/user/pwd/set", Method: "PUT"},
 	{URL: "/api/v1/sys-user", Method: "PUT"},
 }

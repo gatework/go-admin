@@ -66,6 +66,11 @@ settings:
     # 会被负载均衡、监控和压测统计成成功）。
     rateLimit:
       inboundQPS: 200
+    # metrics: Prometheus 抓取令牌。不配置时 /api/v1/metrics 不对外提供；
+    # 配置后抓取方以 Authorization: Bearer <token> 访问。令牌不要提交进仓库，
+    # 用 ${MOTOR_METRICS_TOKEN} 这类环境变量占位符注入。
+    # metrics:
+    #   token: ${MOTOR_METRICS_TOKEN}
     # shutdown budgets, in seconds. The three are spent one after the other,
     # and their sum has to stay inside the stop grace period the orchestrator
     # allows - once it is up, SIGKILL arrives part-way through the cleanup

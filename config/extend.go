@@ -37,6 +37,20 @@ type Extend struct {
 	FileStore FileStore
 	RateLimit RateLimit
 	Shutdown  Shutdown
+	Metrics   Metrics
+}
+
+// Metrics 控制 Prometheus 指标接口。
+//
+//	extend:
+//	  metrics:
+//	    token: <random string>   # 抓取方以 Authorization: Bearer <token> 访问
+//
+// /api/v1/metrics lists process internals, route names and request counts, and
+// used to answer anybody who could reach the port. With no token configured it
+// is not served at all; a scraper presents the configured bearer token.
+type Metrics struct {
+	Token string
 }
 
 // DefaultInboundQPS is the limit applied when nothing is configured. It is the

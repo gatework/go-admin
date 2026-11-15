@@ -29,3 +29,5 @@ Backend-only changes that alter what a client sees. Each entry names what the fr
 | Change | Endpoint | Frontend follow-up |
 | --- | --- | --- |
 | Configuration keys not marked frontend (`is_frontend <> '1'`) are returned only to roles allowed `GET /api/v1/config`; otherwise the answer is `404`, the same as a missing key. A missing key used to answer `500`. | `GET /api/v1/configKey/:configKey` | The user page reads `sys_user_initPassword` through this route. Non-admin user managers need the configuration read grant, or the page should stop pre-filling the initial password. |
+| Served only to a scraper presenting `Authorization: Bearer <extend.metrics.token>`; `404` when no token is configured, `401` for a wrong one. It used to answer anyone. | `GET /api/v1/metrics` | None in the UI. Configure the scrape job with the token. |
+| Requires a Casbin grant (route check) in addition to sign-in; it was excluded from the check. | `POST /api/v1/public/uploadFile` | Used by the system settings page (logo upload); non-admin roles that edit settings need this API granted. |

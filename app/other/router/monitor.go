@@ -2,7 +2,9 @@ package router
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +13,26 @@ import (
 	"github.com/gatework/motor-core/tools/transfer"
 
 	"github.com/gatework/motor/common/health"
+	"github.com/gatework/motor/config"
 )
+
+// metricsAccess serves the metrics only to a scraper presenting the configured
+// bearer token. Without one the endpoint does not exist, so a deployment that
+// never set it up exposes nothing.
+func metricsAccess(c *gin.Context) {
+	token := config.Ext().Metrics.Token
+	if token == "" {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	presented, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if !ok || subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
+		c.Header("WWW-Authenticate", `Bearer realm="metrics"`)
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	c.Next()
+}
 
 //nolint:gochecknoinits // Host startup collects router registrations before serving requests.
 func init() {
@@ -43,7 +64,7 @@ const (
 //
 // 无需认证的路由代码
 func RegisterMonitorRouter(v1 *gin.RouterGroup) {
-	v1.GET("/metrics", transfer.Handler(promhttp.Handler()))
+	v1.GET("/metrics", metricsAccess, transfer.Handler(promhttp.Handler()))
 
 	// 健康检查（存活）
 	//
