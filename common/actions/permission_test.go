@@ -136,3 +136,21 @@ func TestUnscopedRoutesSeeEveryRowWithDataPermissionOn(t *testing.T) {
 		t.Fatalf("route without a data permission saw rows: %s", body)
 	}
 }
+
+func TestFullScope(t *testing.T) {
+	all := &actions.DataPermission{DataScope: actions.DataScopeAll}
+	self := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7}
+	for _, tc := range []struct {
+		enabled bool
+		p       *actions.DataPermission
+		want    bool
+	}{
+		{false, nil, true}, {false, self, true},
+		{true, all, true}, {true, self, false}, {true, nil, false},
+	} {
+		testconfig.Apply(t, func(s *config.Config) { s.Application.EnableDP = tc.enabled })
+		if got := actions.FullScope(tc.p); got != tc.want {
+			t.Errorf("EnableDP=%v actions.FullScope(%+v) = %v, want %v", tc.enabled, tc.p, got, tc.want)
+		}
+	}
+}

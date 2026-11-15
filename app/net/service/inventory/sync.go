@@ -12,10 +12,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/gatework/motor-core/sdk/config"
-	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/errkind"
 )
 
@@ -63,7 +62,7 @@ func (s *Device) RequestSync(ctx context.Context, actor int, p *actions.DataPerm
 	if actor <= 0 {
 		return SyncStatus{}, inventory.InvalidErr
 	}
-	if config.Current().Settings.Application.EnableDP && !admin && (p == nil || p.DataScope != actions.DataScopeAll) {
+	if !admin && !actions.FullScope(p) {
 		return SyncStatus{}, inventory.SyncScopeErr
 	}
 	if !s.source().Configured() {

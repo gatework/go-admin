@@ -8,7 +8,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/gatework/motor-core/sdk/config"
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
@@ -53,7 +52,7 @@ func (s *Circuit) Page(ctx context.Context, r *dto.CircuitPageReq, p *actions.Da
 	return rows, count, nil
 }
 func circuitScopeAllowed(p *actions.DataPermission) bool {
-	return p != nil && (!config.Current().Settings.Application.EnableDP || (actions.IsValidDataScope(p.DataScope) && (p.DataScope != actions.DataScopeSelf || p.UserID > 0)))
+	return p != nil && (!actions.Enabled() || (actions.IsValidDataScope(p.DataScope) && (p.DataScope != actions.DataScopeSelf || p.UserID > 0)))
 }
 func circuitPermission(table string, p *actions.DataPermission) func(*gorm.DB) *gorm.DB {
 	if !circuitScopeAllowed(p) {

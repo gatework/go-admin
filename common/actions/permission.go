@@ -60,3 +60,14 @@ func Unscoped(c *gin.Context) {
 	c.Set(PermissionKey, &DataPermission{DataScope: DataScopeAll})
 	c.Next()
 }
+
+// Enabled reports whether data permission is switched on for this deployment
+// (settings.application.enabledp). Services ask here rather than read the
+// setting themselves.
+func Enabled() bool { return dataPermissionEnabled() }
+
+// FullScope reports whether p sees every row: data permission is off, or p's
+// scope is all data.
+func FullScope(p *DataPermission) bool {
+	return !dataPermissionEnabled() || p != nil && p.DataScope == DataScopeAll
+}

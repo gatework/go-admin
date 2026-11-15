@@ -5,9 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/gatework/motor-core/sdk/config"
-	"github.com/gatework/motor-core/sdk/contract/actions"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
+	"github.com/gatework/motor/common/actions"
 )
 
 // Historical operation scopes are immutable target snapshots, so today's Fabric
@@ -25,7 +24,7 @@ func historicalPage[T any](ctx context.Context, s *Fabric, fabric int, req *dto.
 		}
 		return query
 	}
-	if !config.Current().Settings.Application.EnableDP || permission != nil && permission.DataScope == actions.DataScopeAll {
+	if actions.FullScope(permission) {
 		var count int64
 		if err := queryForTasks().Count(&count).Error; err != nil {
 			return nil, 0, err
