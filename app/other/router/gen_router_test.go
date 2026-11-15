@@ -1,7 +1,12 @@
 package router
 
 import (
+	"net/http"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	jwt "github.com/gatework/motor-core/jwtauth"
 
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor/internal/testconfig"
@@ -28,12 +33,11 @@ var genReadingRoutes = []string{
 // The endpoints that write are registered where the mode says development and
 // nowhere else.
 //
-// They are in CasbinExclude, so Enforce never runs for them and any account
-// that can log in may call them. dev is the shipped default and is where the
-// generator is meant to be used; demo keeps them because DemoEnv refuses these
-// three by name and saying so is the thing the demo is for. Everything else,
-// including the empty mode a process gets when nothing set one, is refused by
-// not existing.
+// They write source files onto the serving host, whoever holds the grant. dev
+// is the shipped default and is where the generator is meant to be used; demo
+// keeps them because DemoEnv refuses them as writes and saying so is the thing
+// the demo is for. Everything else, including the empty mode a process gets
+// when nothing set one, is refused by not existing.
 func TestGeneratorWritingRoutesExistOnlyWhereTheModeAllowsIt(t *testing.T) {
 	for _, tc := range []struct {
 		mode     string
@@ -41,7 +45,7 @@ func TestGeneratorWritingRoutesExistOnlyWhereTheModeAllowsIt(t *testing.T) {
 		why      string
 	}{
 		{"dev", true, "the shipped default, and where the generator is used"},
-		{"demo", true, "registered so demo mode can refuse them by name"},
+		{"demo", true, "registered so demo mode can refuse them"},
 		{"test", false, "a deployment, however much it is called a test"},
 		{"prod", false, "a deployment"},
 		{"", false, "no mode configured is not a reason to trust the caller"},
@@ -152,5 +156,25 @@ func TestChangingTheModeDoesNotUnregisterWhatWasAlreadyBuilt(t *testing.T) {
 	if !built["/api/v1/gen/todb/:tableId"] {
 		t.Error("the route left the engine when the mode changed - registration has become " +
 			"dynamic, and the start-up warning's advice to restart is now wrong")
+	}
+}
+
+// The writing routes are POST, so demo mode and caches treat them as writes.
+func TestGeneratorWritingRoutesArePost(t *testing.T) {
+	restore := testconfig.Swap(t, func(settings *config.Config) {
+		settings.
+			Application.Mode = "dev"
+	})
+	defer restore()
+	r := gin.New()
+	sysNoCheckRoleRouter(r.Group("/api/v1"), &jwt.GinJWTMiddleware{})
+	methods := map[string]string{}
+	for _, route := range r.Routes() {
+		methods[route.Path] = route.Method
+	}
+	for _, writing := range genWritingRoutes {
+		if methods[writing] != http.MethodPost {
+			t.Errorf("%s is %q, want POST", writing, methods[writing])
+		}
 	}
 }

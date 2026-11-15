@@ -24,9 +24,9 @@ import (
 // that grants it.
 var genRoutes = []struct{ method, path, policy string }{
 	{"GET", "/api/v1/gen/preview/1", "/api/v1/gen/preview/:tableId"},
-	{"GET", "/api/v1/gen/toproject/1", "/api/v1/gen/toproject/:tableId"},
-	{"GET", "/api/v1/gen/apitofile/1", "/api/v1/gen/apitofile/:tableId"},
-	{"GET", "/api/v1/gen/todb/1", "/api/v1/gen/todb/:tableId"},
+	{"POST", "/api/v1/gen/toproject/1", "/api/v1/gen/toproject/:tableId"},
+	{"POST", "/api/v1/gen/apitofile/1", "/api/v1/gen/apitofile/:tableId"},
+	{"POST", "/api/v1/gen/todb/1", "/api/v1/gen/todb/:tableId"},
 	{"GET", "/api/v1/gen/tabletree", "/api/v1/gen/tabletree"},
 	{"GET", "/api/v1/db/tables/page", "/api/v1/db/tables/page"},
 	{"GET", "/api/v1/db/columns/page", "/api/v1/db/columns/page"},

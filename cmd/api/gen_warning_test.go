@@ -12,7 +12,7 @@ import (
 //
 // dev is the case the warning exists for: it is the shipped default, so it is
 // the mode a deployment that changed nothing is running in. demo serves the
-// routes too, but DemoEnv refuses all three by name, so warning there would
+// routes too, but DemoEnv refuses all three as writes, so warning there would
 // describe an exposure that is not there.
 func TestGeneratorWriteRoutesWarningFiresWhereTheExposureIs(t *testing.T) {
 	for _, tc := range []struct {

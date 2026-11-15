@@ -18,7 +18,7 @@ import (
 // technically correct and practically useless.
 //
 // Nothing is said in demo mode. The routes are registered, but DemoEnv refuses
-// all three by name, so a warning would describe an exposure that is not there.
+// all three as writes, so a warning would describe an exposure that is not there.
 func reportGeneratorWriteRoutes() {
 	if !generatorWriteRoutesNeedWarning() {
 		return

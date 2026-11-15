@@ -24,7 +24,7 @@ import (
 //
 // dev is the shipped default and is where the generator is meant to be used.
 // demo keeps them because demo mode already has a better answer than a 404:
-// DemoEnv refuses these three by name and explains itself, which is the thing
+// DemoEnv refuses these three as writes and explains itself, which is the thing
 // the demo exists to show. test and prod get nothing.
 //
 // The mode is read once, while the routes are being built. Changing
@@ -65,9 +65,10 @@ func sysNoCheckRoleRouter(v1 *gin.RouterGroup, authMiddleware *jwt.GinJWTMiddlew
 		gen := tools.Generator{}
 		r.GET("/gen/preview/:tableId", gen.Preview)
 		if GenWriteRoutesEnabled() {
-			r.GET("/gen/toproject/:tableId", gen.Generate)
-			r.GET("/gen/apitofile/:tableId", gen.GenerateMigration)
-			r.GET("/gen/todb/:tableId", gen.CreateMenu)
+			// POST: they write source files, a migration and menu rows.
+			r.POST("/gen/toproject/:tableId", gen.Generate)
+			r.POST("/gen/apitofile/:tableId", gen.GenerateMigration)
+			r.POST("/gen/todb/:tableId", gen.CreateMenu)
 		}
 		sysTable := tools.Table{}
 		r.GET("/gen/tabletree", sysTable.Tree)

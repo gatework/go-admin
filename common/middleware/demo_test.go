@@ -19,11 +19,9 @@ func demoMode(t *testing.T, mode, msg string) {
 	testconfig.Apply(t, func(s *config.Config) { s.Application.Mode, s.Application.DemoMsg = mode, msg })
 }
 
-// The method is not enough on its own. Three of the generator's routes are
-// registered as GET and write anyway - two of them onto the server's
-// filesystem, one into the database - so a guard that reads only the method
-// serves them to anybody who can log in, which on a demo host is everybody.
-func TestDemoRefusesTheWritesThatAreServedOverGET(t *testing.T) {
+// Demo mode refuses every write by its method. The generator's three writing
+// routes used to be GET and needed a list of their own; they are POST now.
+func TestDemoRefusesWritesByMethod(t *testing.T) {
 	const login = "/api/v1/login"
 	for _, tc := range []struct {
 		name        string
@@ -41,12 +39,11 @@ func TestDemoRefusesTheWritesThatAreServedOverGET(t *testing.T) {
 		// that does not exist looks like from in here.
 		{"a write to nothing at all", http.MethodPost, "", "/api/v1/__probe__", false},
 
-		// The three this change is about.
-		{"generator writes the database", http.MethodGet,
+		{"generator writes the database", http.MethodPost,
 			"/api/v1/gen/todb/:tableId", "/api/v1/gen/todb/3", false},
-		{"generator writes source files", http.MethodGet,
+		{"generator writes source files", http.MethodPost,
 			"/api/v1/gen/toproject/:tableId", "/api/v1/gen/toproject/3", false},
-		{"generator writes an api file", http.MethodGet,
+		{"generator writes an api file", http.MethodPost,
 			"/api/v1/gen/apitofile/:tableId", "/api/v1/gen/apitofile/3", false},
 
 		// The read-only half of the generator has to keep working, or the demo
@@ -76,14 +73,14 @@ func TestOutsideDemoModeNothingIsRefused(t *testing.T) {
 	demoMode(t, "prod", "")
 	gin.SetMode(gin.TestMode)
 
-	for _, route := range append(DemoWriteRoutes(), "/api/v1/dept") {
+	for _, route := range []string{"/api/v1/gen/todb/:tableId", "/api/v1/dept"} {
 		t.Run(route, func(t *testing.T) {
 			r := gin.New()
 			r.Use(DemoEnv())
-			r.GET(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
+			r.POST(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
 
 			w := httptest.NewRecorder()
-			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, requestFor(route), nil))
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, requestFor(route), nil))
 			if w.Body.String() != "served" {
 				t.Errorf("answered %q; outside demo mode the handler must run", w.Body.String())
 			}
@@ -111,10 +108,10 @@ func TestDemoRefusalCarriesTheConfiguredMessage(t *testing.T) {
 
 			r := gin.New()
 			r.Use(DemoEnv())
-			r.GET(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
+			r.POST(route, func(c *gin.Context) { c.String(http.StatusOK, "served") })
 
 			w := httptest.NewRecorder()
-			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, requestFor(route), nil))
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, requestFor(route), nil))
 
 			if w.Code != http.StatusOK {
 				t.Errorf("answered %d, want 200 so the front end reads the body", w.Code)
