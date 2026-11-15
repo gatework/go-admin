@@ -143,6 +143,10 @@ func (s *supervisor) stopScheduling() {
 	s.stopLocked()
 }
 
+// leaseReleaseTimeout bounds the lease release at shutdown. It is one UPDATE
+// and must finish well inside a container's stop grace period.
+const leaseReleaseTimeout = 3 * time.Second
+
 func (s *supervisor) shutdown(ctx context.Context) {
 	s.stopOnce.Do(func() { close(s.stop); s.executionCancel() })
 	s.mu.Lock()
@@ -157,7 +161,12 @@ func (s *supervisor) shutdown(ctx context.Context) {
 	case <-ctx.Done():
 	}
 	s.control.waitStopped(ctx)
-	if err := s.lease.releaseContext(ctx); err != nil {
+	// The release must not share the caller's budget: once the waits above have
+	// spent it, a release on the same context fails at once and the successor
+	// waits out the whole TTL. It gets its own short, independent deadline.
+	release, cancel := context.WithTimeout(context.WithoutCancel(ctx), leaseReleaseTimeout)
+	defer cancel()
+	if err := s.lease.releaseContext(release); err != nil {
 		log.NewHelper(log.Default()).Errorf("[Job] releasing lease for %s: %v", s.key, err)
 	}
 	supervisors.CompareAndDelete(s.key, s)
