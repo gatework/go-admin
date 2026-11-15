@@ -3,6 +3,7 @@ package tools
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/gatework/motor-core/logger"
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/pkg"
 
@@ -26,6 +27,7 @@ const emptyTableNameMsg = "table name cannot be empty！"
 // @Router /api/v1/db/columns/page [get]
 func (e Generator) GetDBColumnList(c *gin.Context) {
 	e.Context = c
+	e.Logger = logger.NewHelper(logger.Default())
 	log := e.Logger
 	var data tools.DBColumns
 	var err error

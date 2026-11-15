@@ -592,6 +592,8 @@ func initRouter() {
 		log.NewHelper(log.Default()).Fatal("not support other engine")
 		//os.Exit(-1)
 	}
+	// First, so that a panic anywhere below still produces a logged 500.
+	r.Use(common.Recover)
 	if config.Current().Settings.SSL.Enable {
 		r.Use(handler.TLSHandler())
 	}

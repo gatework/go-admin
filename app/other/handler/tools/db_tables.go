@@ -3,6 +3,7 @@ package tools
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/gatework/motor-core/logger"
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor-core/sdk/pkg"
 
@@ -25,6 +26,7 @@ func (e Generator) GetDBTableList(c *gin.Context) {
 	var pageSize = 10
 	var pageIndex = 1
 	e.Context = c
+	e.Logger = logger.NewHelper(logger.Default())
 	log := e.Logger
 
 	if size := c.Request.FormValue("pageSize"); size != "" {
