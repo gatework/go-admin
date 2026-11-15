@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,12 +22,9 @@ import (
 
 // Byte units used by the monitor response.
 const (
-	// B bounds b processing.
-	B = 1
-	// KB describes the kb used by this module.
-	KB = 1024 * B
-	MB = 1024 * KB
-	GB = 1024 * MB
+	kib = 1024
+	mib = 1024 * kib
+	gib = 1024 * mib
 )
 
 var excludeNetInterfaces = []string{
@@ -39,46 +36,42 @@ type ServerMonitor struct {
 	api.API
 }
 
-// GetHourDiffer 获取相差时间
-func GetHourDiffer(startTime, endTime string) int64 {
-	t1, err1 := time.ParseInLocation("2006-01-02 15:04:05", startTime, time.Local)
-	t2, err2 := time.ParseInLocation("2006-01-02 15:04:05", endTime, time.Local)
-	if err1 != nil || err2 != nil || !t1.Before(t2) {
-		return 0
-	}
-	return (t2.Unix() - t1.Unix()) / 3600
-}
-
-// ServerInfo 获取系统信息
+// ServerInfo reports the host's resource use. Each probe that fails leaves its
+// fields at zero rather than failing the whole answer; the failures are logged
+// once. Probes used to ignore their errors and then dereference the result,
+// which panicked on hosts (and containers) where one of them is unavailable.
 func (e ServerMonitor) ServerInfo(c *gin.Context) {
 	e.Context = c
-
-	osInfo := getOSInfo()
-	memInfo := getMemoryInfo()
-	swapInfo := getSwapInfo()
-	cpuInfo := getCPUInfo()
-	diskInfo := getDiskInfo()
-	netInfo := getNetworkInfo()
-
-	bootTime, _ := host.BootTime()
-	cachedBootTime := time.Unix(int64(bootTime), 0)
-
-	e.Custom(gin.H{
+	var failed []error
+	report := func(err error) {
+		if err != nil {
+			failed = append(failed, err)
+		}
+	}
+	var uptime int64
+	if boot, err := host.BootTime(); err == nil {
+		uptime = int64(time.Since(time.Unix(int64(boot), 0)).Hours())
+	} else {
+		report(fmt.Errorf("boot time: %w", err))
+	}
+	payload := gin.H{
 		"code":     200,
-		"os":       osInfo,
-		"mem":      memInfo,
-		"cpu":      cpuInfo,
-		"disk":     diskInfo,
-		"net":      netInfo,
-		"swap":     swapInfo,
-		"location": "Aliyun",
-		"bootTime": GetHourDiffer(cachedBootTime.Format("2006-01-02 15:04:05"), time.Now().Format("2006-01-02 15:04:05")),
-	})
+		"os":       osInfo(report),
+		"mem":      memoryInfo(report),
+		"cpu":      cpuInfo(report),
+		"disk":     diskInfo(report),
+		"net":      getNetworkInfo(),
+		"swap":     swapInfo(report),
+		"bootTime": uptime,
+	}
+	if len(failed) > 0 {
+		api.GetRequestLogger(c).Warnf("server monitor: %v", errors.Join(failed...))
+	}
+	e.Custom(payload)
 }
 
-func getOSInfo() map[string]any {
-	sysInfo, _ := host.Info()
-	return map[string]any{
+func osInfo(report func(error)) map[string]any {
+	info := map[string]any{
 		"goOs":         runtime.GOOS,
 		"arch":         runtime.GOARCH,
 		"mem":          runtime.MemProfileRate,
@@ -87,59 +80,80 @@ func getOSInfo() map[string]any {
 		"numGoroutine": runtime.NumGoroutine(),
 		"ip":           pkg.GetLocalHost(),
 		"projectDir":   pkg.GetCurrentPath(),
-		"hostName":     sysInfo.Hostname,
-		"time":         time.Now().Format("2006-01-02 15:04:05"),
+		"hostName":     "",
+		"time":         time.Now().Format(time.DateTime),
 	}
+	if sysInfo, err := host.Info(); err == nil && sysInfo != nil {
+		info["hostName"] = sysInfo.Hostname
+	} else {
+		report(fmt.Errorf("host: %w", err))
+	}
+	return info
 }
 
-func getMemoryInfo() map[string]any {
-	memory, _ := mem.VirtualMemory()
+func memoryInfo(report func(error)) map[string]any {
+	memory, err := mem.VirtualMemory()
+	if err != nil || memory == nil {
+		report(fmt.Errorf("memory: %w", err))
+		return map[string]any{"used": 0, "total": 0, "percent": 0}
+	}
 	return map[string]any{
-		"used":    memory.Used / MB,
-		"total":   memory.Total / MB,
+		"used":    memory.Used / mib,
+		"total":   memory.Total / mib,
 		"percent": pkg.Round(memory.UsedPercent, 2),
 	}
 }
 
-func getSwapInfo() map[string]any {
-	memory, _ := mem.VirtualMemory()
+// swapInfo is in bytes; the UI scales it.
+func swapInfo(report func(error)) map[string]any {
+	swap, err := mem.SwapMemory()
+	if err != nil || swap == nil {
+		report(fmt.Errorf("swap: %w", err))
+		return map[string]any{"used": 0, "total": 0}
+	}
+	return map[string]any{"used": swap.Used, "total": swap.Total}
+}
+
+func cpuInfo(report func(error)) map[string]any {
+	info, err := cpu.Info()
+	report(wrapProbe("cpu info", err))
+	var usage float64
+	percent, err := cpu.Percent(0, false)
+	if err == nil && len(percent) > 0 {
+		usage = pkg.Round(percent[0], 2)
+	} else {
+		report(fmt.Errorf("cpu usage: %w", err))
+	}
+	cores, err := cpu.Counts(false)
+	report(wrapProbe("cpu count", err))
+	return map[string]any{"cpuInfo": info, "percent": usage, "cpuNum": cores}
+}
+
+func diskInfo(report func(error)) map[string]any {
+	usage, err := disk.Usage("/")
+	if err != nil || usage == nil {
+		report(fmt.Errorf("disk: %w", err))
+		return map[string]any{"total": 0.0, "used": 0.0, "percent": 0.0}
+	}
 	return map[string]any{
-		"used":  memory.SwapTotal - memory.SwapFree,
-		"total": memory.SwapTotal,
+		"total":   float64(usage.Total / gib),
+		"used":    float64(usage.Used / gib),
+		"percent": pkg.Round(usage.UsedPercent, 2),
 	}
 }
 
-func getCPUInfo() map[string]any {
-	cpuInfo, _ := cpu.Info()
-	percent, _ := cpu.Percent(0, false)
-	cpuNum, _ := cpu.Counts(false)
-	return map[string]any{
-		"cpuInfo": cpuInfo,
-		"percent": pkg.Round(percent[0], 2),
-		"cpuNum":  cpuNum,
+func wrapProbe(name string, err error) error {
+	if err == nil {
+		return nil
 	}
-}
-
-func getDiskInfo() map[string]any {
-	var diskTotal, diskUsed, diskUsedPercent float64
-
-	d, _ := disk.Usage("/")
-	diskTotal = float64(d.Total / GB)
-	diskUsed = float64(d.Used / GB)
-	diskUsedPercent, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", d.UsedPercent), 64)
-
-	return map[string]any{
-		"total":   diskTotal,
-		"used":    diskUsed,
-		"percent": diskUsedPercent,
-	}
+	return fmt.Errorf("%s: %w", name, err)
 }
 
 func getNetworkInfo() map[string]any {
 	netInSpeed, netOutSpeed := trackNetworkSpeed()
 	return map[string]any{
-		"in":  pkg.Round(float64(netInSpeed/KB), 2),
-		"out": pkg.Round(float64(netOutSpeed/KB), 2),
+		"in":  pkg.Round(float64(netInSpeed/kib), 2),
+		"out": pkg.Round(float64(netOutSpeed/kib), 2),
 	}
 }
 
