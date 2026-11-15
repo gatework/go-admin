@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -186,38 +185,37 @@ func (e *Menu) Labels(ctx context.Context) (m []dto.MenuLabel, err error) {
 	}), nil
 }
 
-func menuDistinct(menuList []models.SysMenu) (result []models.SysMenu) {
-	distinctMap := make(map[int]struct{}, len(menuList))
-	for _, menu := range menuList {
-		if _, ok := distinctMap[menu.MenuID]; !ok {
-			distinctMap[menu.MenuID] = struct{}{}
-			result = append(result, menu)
+// withAncestors returns the granted menus and every menu above them, buttons
+// excepted, from one query: a role is granted leaf menus, and the sidebar needs
+// the directories that lead to them. It used to issue one query per level.
+func withAncestors(db *gorm.DB, granted []int) ([]models.SysMenu, error) {
+	if len(granted) == 0 {
+		return nil, nil
+	}
+	var all []models.SysMenu
+	if err := db.Where("menu_type IN ?", []string{cModels.Directory, cModels.Menu, cModels.Button}).Find(&all).Error; err != nil {
+		return nil, err
+	}
+	byID := make(map[int]models.SysMenu, len(all))
+	for _, menu := range all {
+		byID[menu.MenuID] = menu
+	}
+	seen := make(map[int]bool, len(all))
+	out := make([]models.SysMenu, 0, len(granted))
+	for _, id := range granted {
+		for id != 0 && !seen[id] {
+			menu, ok := byID[id]
+			if !ok {
+				break
+			}
+			seen[id] = true
+			if menu.MenuType != cModels.Button {
+				out = append(out, menu)
+			}
+			id = menu.ParentID
 		}
 	}
-	return result
-}
-
-func recursiveSetMenu(orm *gorm.DB, mIDs []int, menus *[]models.SysMenu) error {
-	if len(mIDs) == 0 || menus == nil {
-		return nil
-	}
-	var subMenus []models.SysMenu
-	err := orm.Where(fmt.Sprintf(" menu_type in ('%s', '%s', '%s') and menu_id in ?",
-		cModels.Directory, cModels.Menu, cModels.Button), mIDs).Order("sort").Find(&subMenus).Error
-	if err != nil {
-		return err
-	}
-
-	subIDs := make([]int, 0)
-	for _, menu := range subMenus {
-		if menu.ParentID != 0 {
-			subIDs = append(subIDs, menu.ParentID)
-		}
-		if menu.MenuType != cModels.Button {
-			*menus = append(*menus, menu)
-		}
-	}
-	return recursiveSetMenu(orm, subIDs, menus)
+	return out, nil
 }
 
 // ForRole 获取左侧菜单树使用
@@ -297,11 +295,9 @@ func (e *Menu) getByRoleName(ctx context.Context, roleName string) ([]models.Sys
 			for _, menu := range *role.SysMenu {
 				mIDs = append(mIDs, menu.MenuID)
 			}
-			if err := recursiveSetMenu(e.DB.WithContext(ctx), mIDs, &data); err != nil {
+			if data, err = withAncestors(e.DB.WithContext(ctx), mIDs); err != nil {
 				return nil, err
 			}
-
-			data = menuDistinct(data)
 		}
 	}
 

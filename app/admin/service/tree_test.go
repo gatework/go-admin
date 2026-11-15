@@ -107,3 +107,32 @@ func TestMenuAndDepartmentTreesFromTheDatabase(t *testing.T) {
 		t.Fatalf("department tree %+v", tree)
 	}
 }
+
+// A role is granted leaf menus; its sidebar needs every directory above them,
+// once, and no buttons.
+func TestRoleSidebarIncludesAncestorsOnce(t *testing.T) {
+	db := integrityDB(t)
+	for _, m := range []models.SysMenu{
+		{MenuID: 1, Title: "Network", MenuType: "M", Sort: 1},
+		{MenuID: 2, Title: "Devices", MenuType: "C", ParentID: 1, Sort: 1},
+		{MenuID: 3, Title: "Circuits", MenuType: "C", ParentID: 1, Sort: 2},
+		{MenuID: 4, Title: "Export", MenuType: "F", ParentID: 2, Sort: 1},
+		{MenuID: 5, Title: "System", MenuType: "M", Sort: 2},
+	} {
+		if err := db.Create(&m).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := withAncestors(db, []int{4, 3, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := make([]string, 0, len(got))
+	for _, m := range got {
+		titles = append(titles, m.Title)
+	}
+	slices.Sort(titles)
+	if !slices.Equal(titles, []string{"Circuits", "Devices", "Network"}) {
+		t.Fatalf("sidebar menus %v", titles)
+	}
+}
