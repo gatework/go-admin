@@ -3,6 +3,7 @@ package actions_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -107,5 +108,31 @@ func TestIsValidDataScope(t *testing.T) {
 	}
 	if actions.IsValidDataScope("6") {
 		t.Error(`IsValidDataScope("6") = true, want false`)
+	}
+}
+
+// A reference table is not data-scoped: with data permission switched on, an
+// Unscoped route still lists every row, where a route with no permission at
+// all lists none.
+func TestUnscopedRoutesSeeEveryRowWithDataPermissionOn(t *testing.T) {
+	testconfig.Apply(t, func(settings *config.Config) {
+		settings.
+			Application.EnableDP = true
+	})
+	db := probeDB(t, t.Name(), nil)
+	other := probeRow{Name: "someone else's"}
+	other.SetCreateBy(99)
+	if err := db.Create(&other).Error; err != nil {
+		t.Fatal(err)
+	}
+	r := probeEngine(db, func(r gin.IRoutes) {
+		r.GET("/unscoped", actions.Unscoped, actions.Index[probeRow, probeSearch]())
+		r.GET("/unmarked", actions.Index[probeRow, probeSearch]())
+	})
+	if _, body := serve(r, "GET", "/unscoped?pageIndex=1&pageSize=10", ""); !strings.Contains(body, `"count":1`) {
+		t.Fatalf("unscoped route hid rows: %s", body)
+	}
+	if _, body := serve(r, "GET", "/unmarked?pageIndex=1&pageSize=10", ""); !strings.Contains(body, `"count":0`) {
+		t.Fatalf("route without a data permission saw rows: %s", body)
 	}
 }

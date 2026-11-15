@@ -49,3 +49,14 @@ func IsValidDataScope(s string) bool {
 }
 
 func dataPermissionEnabled() bool { return config.Current().Settings.Application.EnableDP }
+
+// Unscoped marks a route whose table is not subject to data permission, such
+// as system-wide reference data (posts, dictionaries, configuration). The
+// generic actions apply a data permission to every query and treat a missing
+// one as permission to see nothing, so a route over such a table states its
+// exemption here instead of being silently empty while data permission is on.
+// Route permission (Casbin) still applies.
+func Unscoped(c *gin.Context) {
+	c.Set(PermissionKey, &DataPermission{DataScope: DataScopeAll})
+	c.Next()
+}
