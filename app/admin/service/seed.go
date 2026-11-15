@@ -491,7 +491,7 @@ func recordGrant(tx *gorm.DB, appCode, roleKey, path, action string) error {
 // what was just matched.
 var specMenuFields = []string{
 	"MenuName", "Title", "Icon", "Path", "MenuType",
-	"Permission", "ParentId", "Component", "Sort",
+	"Permission", "ParentID", "Component", "Sort",
 }
 
 // menuRowFor is the row a MenuSpec describes. One definition, so the insert
