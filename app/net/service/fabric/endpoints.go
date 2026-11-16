@@ -320,7 +320,7 @@ func (s *Fabric) deviceEndpoints(ctx context.Context, f models.Fabric, d network
 		return nil, nil, err
 	}
 	connection, connectionErr := s.deviceConnection(ctx, d, deviceaccess.Read)
-	currentSource := sourceHash(opsDevice(d), connection)
+	currentSource := sourceHash(deviceSnapshot(d), connection)
 
 	localRows := []dto.Endpoint{}
 	sourceEvidence := map[int]models.Observation{}

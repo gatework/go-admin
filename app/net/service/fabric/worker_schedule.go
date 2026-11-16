@@ -15,14 +15,14 @@ import (
 
 func (w *Worker) schedule(ctx context.Context, now time.Time) error {
 	var identities []network.Device
-	if e := opsDB(ctx, w.s).Select("id", "name", "device_role").Find(&identities).Error; e != nil {
+	if e := w.s.db(ctx).Select("id", "name", "device_role").Find(&identities).Error; e != nil {
 		return e
 	}
 	if e := w.s.reconcile(ctx, identities); e != nil {
 		return e
 	}
 	var fabrics []models.Fabric
-	if e := opsDB(ctx, w.s).Where("collection_enabled = ?", true).Find(&fabrics).Error; e != nil {
+	if e := w.s.db(ctx).Where("collection_enabled = ?", true).Find(&fabrics).Error; e != nil {
 		return e
 	}
 	for _, f := range fabrics {
@@ -35,15 +35,15 @@ func (w *Worker) schedule(ctx context.Context, now time.Time) error {
 
 func (w *Worker) scheduleFabric(ctx context.Context, f models.Fabric, now time.Time) error {
 	var pending int64
-	if e := opsDB(ctx, w.s).Model(&models.Collection{}).Where("fabric_id = ? AND status IN ?", f.ID, []string{"queued", "running"}).Count(&pending).Error; e != nil {
+	if e := w.s.db(ctx).Model(&models.Collection{}).Where("fabric_id = ? AND status IN ?", f.ID, []string{"queued", "running"}).Count(&pending).Error; e != nil {
 		return e
 	}
 	if pending > 0 {
 		return nil
 	}
 	var devices []network.Device
-	ids := opsDB(ctx, w.s).Model(&models.Membership{}).Select("device_id").Where("fabric_id = ? AND status = ?", f.ID, "assigned")
-	if e := opsDB(ctx, w.s).Where("id IN (?) AND status IN ?", ids, []string{"pending", "active"}).Order("id").Find(&devices).Error; e != nil {
+	ids := w.s.db(ctx).Model(&models.Membership{}).Select("device_id").Where("fabric_id = ? AND status = ?", f.ID, "assigned")
+	if e := w.s.db(ctx).Where("id IN (?) AND status IN ?", ids, []string{"pending", "active"}).Order("id").Find(&devices).Error; e != nil {
 		return e
 	}
 	if len(devices) == 0 {
@@ -71,7 +71,7 @@ func (w *Worker) scheduleMode(ctx context.Context, f models.Fabric, devices []ne
 		}
 	}
 	var recent models.Collection
-	e := opsDB(ctx, w.s).Where("fabric_id = ? AND mode IN ?", f.ID, []string{mode, "all"}).Order("created_at DESC").First(&recent).Error
+	e := w.s.db(ctx).Where("fabric_id = ? AND mode IN ?", f.ID, []string{mode, "all"}).Order("created_at DESC").First(&recent).Error
 	if e == nil && now.Sub(recent.CreatedAt) < time.Duration(minutes)*time.Minute {
 		return nil
 	}

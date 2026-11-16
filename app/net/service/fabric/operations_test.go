@@ -131,7 +131,7 @@ func seedConfig(t *testing.T, s *Fabric, id int, body string) {
 	}
 	now := time.Now().UTC()
 	o.CompletedAt = &now
-	row := models.Observation{FabricID: 1, DeviceID: id, Dimension: "configuration", Status: o.Status, Data: o, ObservedAt: now, Version: 1, ConfigHash: opsHash(o.Records), SourceHash: sourceHash(opsDevice(d), c), MembershipVersion: 1, RuleVersion: 1}
+	row := models.Observation{FabricID: 1, DeviceID: id, Dimension: "configuration", Status: o.Status, Data: o, ObservedAt: now, Version: 1, ConfigHash: hash(o.Records), SourceHash: sourceHash(deviceSnapshot(d), c), MembershipVersion: 1, RuleVersion: 1}
 	if e := s.DB.Create(&row).Error; e != nil {
 		t.Fatal(e)
 	}
@@ -308,7 +308,7 @@ func TestRecoverInterruptedChangeDoesNotRequeueAndKeepsLease(t *testing.T) {
 	c.Targets[0].Status = "running"
 	c.Targets[0].Attempted = true
 	past := time.Now().UTC().Add(-time.Minute)
-	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Updates(map[string]any{"status": "running", "targets": opsJSON(c.Targets), "claim_until": past}).Error; e != nil {
+	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Updates(map[string]any{"status": "running", "targets": jsonText(c.Targets), "claim_until": past}).Error; e != nil {
 		t.Fatal(e)
 	}
 	s.DB.Create(&delivery.DeviceLease{DeviceID: 2, HolderID: c.Targets[0].DeliveryTargetID, Token: "dead", ExpiresAt: past})
@@ -427,7 +427,7 @@ func TestPublicReadbackDoesNotLeakConfigurationButStorageRetainsIt(t *testing.T)
 	secret := "private-secret-example"
 	snapshot := vxlan.Snapshot{Dimensions: map[string]vxlan.Observation{"configuration": {Name: "configuration", Status: "complete", Records: []vxlan.Record{{"secret": secret}}, Evidence: []vxlan.Record{{"sha256": "abc", "command": "show running-config", "raw": secret}}}}}
 	c.Targets[0].PreEvidence = snapshot
-	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Update("targets", opsJSON(c.Targets)).Error; e != nil {
+	if e := s.DB.Model(&models.Change{}).Where("id = ?", c.ID).Update("targets", jsonText(c.Targets)).Error; e != nil {
 		t.Fatal(e)
 	}
 	var loaded models.Change

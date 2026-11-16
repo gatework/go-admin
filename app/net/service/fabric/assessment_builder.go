@@ -29,7 +29,7 @@ func (a *assessmentBuilder) assessNode(ctx context.Context, s *Fabric, d network
 		return err
 	}
 	connection, connectionErr := s.deviceConnection(ctx, d, deviceaccess.Read)
-	currentSourceHash := sourceHash(opsDevice(d), connection)
+	currentSourceHash := sourceHash(deviceSnapshot(d), connection)
 	n := dto.Node{DeviceID: d.ID, Name: d.Name, IP: d.IP, Role: d.DeviceRole, Version: d.Version, MembershipVersion: m.Version, State: "unknown", Model: d.HardwareModel, Platform: d.OS, Supported: connectionErr == nil && connection.Profile == "cisco_nxos", Dimensions: map[string]dto.Evidence{}, Features: []string{}}
 	a.nodeEvidence(&n, d.ID, m.Version, currentSourceHash, connectionErr, observations)
 

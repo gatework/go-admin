@@ -52,11 +52,11 @@ func (w *Worker) Tick(ctx context.Context) error {
 		w.lastSchedule = time.Now().UTC()
 	}
 	var jobs []models.Collection
-	if e := opsDB(ctx, w.s).Where("status = ?", "queued").Order("id").Limit(20).Find(&jobs).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ?", "queued").Order("id").Limit(20).Find(&jobs).Error; e != nil {
 		return e
 	}
 	for _, job := range jobs {
-		lock, e := lease.LockFabric(opsDB(ctx, w.s), job.FabricID, lease.Holder{Kind: lease.FabricCollection, ID: job.ID}, runTimeout)
+		lock, e := lease.LockFabric(w.s.db(ctx), job.FabricID, lease.Holder{Kind: lease.FabricCollection, ID: job.ID}, runTimeout)
 		if errors.Is(e, lease.BusyErr) {
 			continue
 		} else if e != nil {
@@ -76,11 +76,11 @@ func (w *Worker) Tick(ctx context.Context) error {
 		return nil
 	}
 	var changes []models.Change
-	if e := opsDB(ctx, w.s).Where("status = ?", "queued").Order("id").Limit(20).Find(&changes).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ?", "queued").Order("id").Limit(20).Find(&changes).Error; e != nil {
 		return e
 	}
 	for _, c := range changes {
-		lock, e := lease.LockFabric(opsDB(ctx, w.s), c.FabricID, lease.Holder{Kind: lease.FabricChange, ID: c.ID}, runTimeout)
+		lock, e := lease.LockFabric(w.s.db(ctx), c.FabricID, lease.Holder{Kind: lease.FabricChange, ID: c.ID}, runTimeout)
 		if errors.Is(e, lease.BusyErr) {
 			continue
 		} else if e != nil {

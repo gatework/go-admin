@@ -15,12 +15,12 @@ import (
 func (w *Worker) Recover(ctx context.Context) error {
 	// The sweep quarantines expired device leases and drops expired fabric locks,
 	// this module's and every other module's.
-	if e := lease.Sweep(opsDB(ctx, w.s)); e != nil {
+	if e := lease.Sweep(w.s.db(ctx)); e != nil {
 		return e
 	}
 	now := time.Now().UTC()
 	var collects []models.Collection
-	if e := opsDB(ctx, w.s).Where("status = ? AND claim_until < ?", "running", now).Find(&collects).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ? AND claim_until < ?", "running", now).Find(&collects).Error; e != nil {
 		return e
 	}
 	for _, c := range collects {
@@ -29,7 +29,7 @@ func (w *Worker) Recover(ctx context.Context) error {
 		}
 	}
 	var changes []models.Change
-	if e := opsDB(ctx, w.s).Where("status = ? AND claim_until < ?", "running", now).Find(&changes).Error; e != nil {
+	if e := w.s.db(ctx).Where("status = ? AND claim_until < ?", "running", now).Find(&changes).Error; e != nil {
 		return e
 	}
 	for _, c := range changes {
@@ -50,7 +50,7 @@ func (w *Worker) recoverCollection(ctx context.Context, c models.Collection, now
 			}
 		}
 	}
-	if e := opsDB(ctx, w.s).Model(&models.Collection{}).Where("id = ? AND status = ?", c.ID, "running").Updates(map[string]any{"status": "interrupted", "targets": opsJSON(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")}).Error; e != nil {
+	if e := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", c.ID, "running").Updates(map[string]any{"status": "interrupted", "targets": jsonText(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")}).Error; e != nil {
 		return e
 	}
 	return nil

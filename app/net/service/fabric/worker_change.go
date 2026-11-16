@@ -29,14 +29,14 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 	}
 	// The change runs long after it was approved: re-read the approver's
 	// grant, so a user disabled or a role that lost the permission stops it.
-	grant, ok, e := account.CurrentGrant(ctx, opsDB(ctx, w.s), actor)
+	grant, ok, e := account.CurrentGrant(ctx, w.s.db(ctx), actor)
 	if e != nil {
 		return e
 	}
 	if !ok {
 		return ScopeErr
 	}
-	if held, e := grant.Holds(ctx, opsDB(ctx, w.s), executePermission); e != nil {
+	if held, e := grant.Holds(ctx, w.s.db(ctx), executePermission); e != nil {
 		return e
 	} else if !held {
 		return ScopeErr
@@ -49,7 +49,7 @@ func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) erro
 	for _, d := range devices {
 		ids = append(ids, d.ID)
 	}
-	if opsHash(ids) != opsHash(c.Authorization) {
+	if hash(ids) != hash(c.Authorization) {
 		return ScopeErr
 	}
 	return nil
@@ -61,7 +61,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	now := time.Now().UTC()
 	c.StartedAt = &now
 	until := now.Add(15 * time.Minute)
-	q := opsDB(ctx, w.s).Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
+	q := w.s.db(ctx).Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error
 	}
@@ -77,15 +77,15 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	}
 	var source models.CollectionTarget
 	var sd network.Device
-	if e := opsDB(ctx, w.s).First(&sd, c.SourceDeviceID).Error; e != nil {
+	if e := w.s.db(ctx).First(&sd, c.SourceDeviceID).Error; e != nil {
 		return e
 	}
 	sc, e := w.s.deviceConnection(ctx, sd, deviceaccess.Read)
 	if e != nil {
 		return e
 	}
-	source = models.CollectionTarget{DeviceID: sd.ID, Device: opsDevice(sd), Connection: sc, SourceHash: c.SourceHash}
-	sourceLease, e := lease.Acquire(opsDB(ctx, w.s), sd.ID, lease.Holder{Kind: lease.FabricChangeSource, ID: c.ID}, runTimeout)
+	source = models.CollectionTarget{DeviceID: sd.ID, Device: deviceSnapshot(sd), Connection: sc, SourceHash: c.SourceHash}
+	sourceLease, e := lease.Acquire(w.s.db(ctx), sd.ID, lease.Holder{Kind: lease.FabricChangeSource, ID: c.ID}, runTimeout)
 	if code := leaseFailure(e, "source_busy"); code != "" {
 		return w.stopChange(ctx, &c, code)
 	} else if e != nil {
@@ -101,7 +101,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 		return err
 	})
 	sourceClosed = transportClosed(e)
-	if e != nil || !sourceSnapshot.Complete() || len(sourceSnapshot.Dimensions["configuration"].Records) != 1 || opsHash(sourceSnapshot.Dimensions["configuration"].Records[0]) != c.SourceConfigHash {
+	if e != nil || !sourceSnapshot.Complete() || len(sourceSnapshot.Dimensions["configuration"].Records) != 1 || hash(sourceSnapshot.Dimensions["configuration"].Records[0]) != c.SourceConfigHash {
 		return w.stopChange(ctx, &c, "source_configuration_drift")
 	}
 	if e := w.persistSnapshot(ctx, snapshotWrite{FabricID: c.FabricID, Target: source, Snapshot: sourceSnapshot, Started: started, Finished: time.Now().UTC()}); e != nil {
@@ -125,7 +125,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 		}
 		beforeObs := t.PreEvidence.Dimensions["configuration"]
 		_, sourceConfig, sourceErr := w.s.changeConfig(ctx, c.FabricID, c.SourceDeviceID)
-		if sourceErr != nil || !t.PreEvidence.Complete() || len(beforeObs.Records) != 1 || opsHash(beforeObs.Records[0]) != t.ConfigHash || !plan.Eligible(beforeObs.Records[0]) || !aclServiceContextMatches(sourceConfig, beforeObs.Records[0], plan.Change()) {
+		if sourceErr != nil || !t.PreEvidence.Complete() || len(beforeObs.Records) != 1 || hash(beforeObs.Records[0]) != t.ConfigHash || !plan.Eligible(beforeObs.Records[0]) || !aclServiceContextMatches(sourceConfig, beforeObs.Records[0], plan.Change()) {
 			t.ErrorCode = "configuration_drift"
 			return ConflictErr
 		}
@@ -160,8 +160,8 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 }
 
 func (w *Worker) persistChange(ctx context.Context, c *models.Change) error {
-	return opsDB(ctx, w.s).Transaction(func(tx *gorm.DB) error {
-		q := tx.Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "running").Update("targets", opsJSON(c.Targets))
+	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		q := tx.Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "running").Update("targets", jsonText(c.Targets))
 		if q.Error != nil {
 			return q.Error
 		}
@@ -210,8 +210,8 @@ func (w *Worker) stopChange(ctx context.Context, c *models.Change, code string) 
 
 func (w *Worker) finishChange(ctx context.Context, c *models.Change, status string) error {
 	now := time.Now().UTC()
-	return opsDB(ctx, w.s).Transaction(func(tx *gorm.DB) error {
-		if e := tx.Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "running").Updates(map[string]any{"status": status, "targets": opsJSON(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")}).Error; e != nil {
+	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		if e := tx.Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "running").Updates(map[string]any{"status": status, "targets": jsonText(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")}).Error; e != nil {
 			return e
 		}
 		counts := map[string]int{}
@@ -255,7 +255,7 @@ func postRuntimeState(snapshot vxlan.Snapshot, configuration vxlan.Record) strin
 }
 
 func (w *Worker) checkLease(ctx context.Context, held lease.Lease) error {
-	if e := lease.Check(opsDB(ctx, w.s), held); errors.Is(e, lease.LostErr) {
+	if e := lease.Check(w.s.db(ctx), held); errors.Is(e, lease.LostErr) {
 		return ConflictErr
 	} else if e != nil {
 		return e
@@ -272,7 +272,7 @@ func (w *Worker) runChangeTargets(ctx context.Context, c *models.Change, plan *v
 		if e := w.s.validateChange(ctx, *c); e != nil {
 			return w.stopChange(ctx, c, "evidence_or_grouping_changed")
 		}
-		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, lease.Holder{Kind: lease.DeliveryTarget, ID: t.DeliveryTargetID}, runTimeout)
+		held, e := lease.Acquire(w.s.db(ctx), t.DeviceID, lease.Holder{Kind: lease.DeliveryTarget, ID: t.DeliveryTargetID}, runTimeout)
 		if code := leaseFailure(e, "device_busy"); code != "" {
 			return w.stopChange(ctx, c, code)
 		} else if e != nil {
@@ -359,7 +359,7 @@ func (w *Worker) authorizeChangeCommand(ctx context.Context, c *models.Change, t
 func (w *Worker) unlock(ctx context.Context, lock lease.Lease) error {
 	ctx, cancel := worker.Cleanup(ctx, 5*time.Second)
 	defer cancel()
-	if e := lease.Release(opsDB(ctx, w.s), lock, lease.NoSession); e != nil && !errors.Is(e, lease.LostErr) {
+	if e := lease.Release(w.s.db(ctx), lock, lease.NoSession); e != nil && !errors.Is(e, lease.LostErr) {
 		return e
 	}
 	return nil

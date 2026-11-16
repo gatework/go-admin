@@ -31,7 +31,7 @@ func collectionDimensions(mode string) []string {
 	}
 	return d
 }
-func opsDevice(d network.Device) delivery.DeviceSnapshot {
+func deviceSnapshot(d network.Device) delivery.DeviceSnapshot {
 	return delivery.DeviceSnapshot{ID: d.ID, Name: d.Name, Hostname: d.Hostname, IP: d.IP, Vendor: d.Vendor, Model: d.HardwareModel}
 }
 
@@ -68,10 +68,10 @@ func (s *Fabric) Collections(ctx context.Context, id int, r *dto.PageReq, p *act
 	return historicalPage(ctx, s, id, r, p, func(row models.Collection) int { return row.ID }, collectionDeviceIDs)
 }
 
-// GetCollection loads the scoped collection and reports missing records.
-func (s *Fabric) GetCollection(ctx context.Context, id int, p *actions.DataPermission) (models.Collection, error) {
+// Collection loads the scoped collection and reports missing records.
+func (s *Fabric) Collection(ctx context.Context, id int, p *actions.DataPermission) (models.Collection, error) {
 	var row models.Collection
-	if e := opsDB(ctx, s).First(&row, id).Error; e != nil {
+	if e := s.db(ctx).First(&row, id).Error; e != nil {
 		return row, e
 	}
 	_, e := s.RequireFullScope(ctx, row.FabricID, p)
@@ -83,11 +83,11 @@ func (s *Fabric) GetCollection(ctx context.Context, id int, p *actions.DataPermi
 	}
 	return row, nil
 }
-func (s *Fabric) opsTargets(ctx context.Context, devices []network.Device) ([]models.CollectionTarget, error) {
+func (s *Fabric) collectionTargets(ctx context.Context, devices []network.Device) ([]models.CollectionTarget, error) {
 	out := make([]models.CollectionTarget, 0, len(devices))
 	for _, d := range devices {
 		c, err := s.deviceConnection(ctx, d, deviceaccess.Read)
-		snapshot := opsDevice(d)
+		snapshot := deviceSnapshot(d)
 		t := models.CollectionTarget{DeviceID: d.ID, Device: snapshot, Connection: c, SourceHash: sourceHash(snapshot, c), Status: "pending"}
 		switch {
 		case err != nil:
@@ -109,11 +109,11 @@ func (s *Fabric) opsTargets(ctx context.Context, devices []network.Device) ([]mo
 }
 func (s *Fabric) groupingHash(ctx context.Context, id int) (string, error) {
 	var f models.Fabric
-	if e := opsDB(ctx, s).First(&f, id).Error; e != nil {
+	if e := s.db(ctx).First(&f, id).Error; e != nil {
 		return "", e
 	}
 	var m []models.Membership
-	if e := opsDB(ctx, s).Where("fabric_id = ?", id).Order("device_id").Find(&m).Error; e != nil {
+	if e := s.db(ctx).Where("fabric_id = ?", id).Order("device_id").Find(&m).Error; e != nil {
 		return "", e
 	}
 	var devices []network.Device
@@ -122,23 +122,23 @@ func (s *Fabric) groupingHash(ctx context.Context, id int) (string, error) {
 		ids = append(ids, x.DeviceID)
 	}
 	if len(ids) > 0 {
-		if e := opsDB(ctx, s).Where("id IN ?", ids).Order("id").Find(&devices).Error; e != nil {
+		if e := s.db(ctx).Where("id IN ?", ids).Order("id").Find(&devices).Error; e != nil {
 			return "", e
 		}
 	}
-	return opsHash(struct {
+	return hash(struct {
 		Rules   int64
 		Members []models.Membership
 		Devices []network.Device
 	}{f.RulesVersion, m, devices}), nil
 }
 func (s *Fabric) createCollection(ctx context.Context, id int, r *dto.CollectionCreateReq, actor int, devices []network.Device) (models.Collection, error) {
-	hash := opsHash(struct {
+	hash := hash(struct {
 		ID   int
 		Mode string
 	}{id, r.Mode})
 	var existing models.Collection
-	e := opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error
+	e := s.db(ctx).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error
 	if e == nil {
 		if existing.PayloadHash != hash {
 			return existing, ConflictErr
@@ -148,7 +148,7 @@ func (s *Fabric) createCollection(ctx context.Context, id int, r *dto.Collection
 	if !errors.Is(e, gorm.ErrRecordNotFound) {
 		return existing, e
 	}
-	targets, e := s.opsTargets(ctx, devices)
+	targets, e := s.collectionTargets(ctx, devices)
 	if e != nil {
 		return existing, e
 	}
@@ -160,9 +160,9 @@ func (s *Fabric) createCollection(ctx context.Context, id int, r *dto.Collection
 		return existing, e
 	}
 	job := models.Collection{FabricID: id, RequestKey: r.RequestKey, PayloadHash: hash, CreateBy: actor, Mode: r.Mode, Status: "queued", Version: 1, GroupingHash: group, Targets: targets}
-	e = opsDB(ctx, s).Create(&job).Error
+	e = s.db(ctx).Create(&job).Error
 	if e != nil {
-		if q := opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error; q == nil && existing.PayloadHash == hash {
+		if q := s.db(ctx).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error; q == nil && existing.PayloadHash == hash {
 			return existing, nil
 		}
 	}
@@ -173,7 +173,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 	defer cancel()
 	now := time.Now().UTC()
 	until := now.Add(15 * time.Minute)
-	q := opsDB(ctx, w.s).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
+	q := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error
 	}
@@ -195,7 +195,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 			}
 			continue
 		}
-		held, e := lease.Acquire(opsDB(ctx, w.s), t.DeviceID, lease.Holder{Kind: lease.FabricCollectionNode, ID: job.ID}, runTimeout)
+		held, e := lease.Acquire(w.s.db(ctx), t.DeviceID, lease.Holder{Kind: lease.FabricCollectionNode, ID: job.ID}, runTimeout)
 		if code := leaseFailure(e, "device_busy"); code != "" {
 			t.Status = "failed"
 			t.ErrorCode = code
@@ -210,7 +210,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 		if e := w.release(ctx, held, closed); e != nil {
 			return e
 		}
-		if e := opsDB(ctx, w.s).Model(&models.Collection{}).Where("id = ?", job.ID).Update("targets", opsJSON(job.Targets)).Error; e != nil {
+		if e := w.s.db(ctx).Model(&models.Collection{}).Where("id = ?", job.ID).Update("targets", jsonText(job.Targets)).Error; e != nil {
 			return e
 		}
 	}
@@ -231,7 +231,7 @@ func (w *Worker) finishCollection(ctx context.Context, job *models.Collection) e
 		status = "failed"
 	}
 	now := time.Now().UTC()
-	return opsDB(ctx, w.s).Model(job).Updates(map[string]any{"targets": opsJSON(job.Targets), "status": status, "finished_at": now, "version": gorm.Expr("version + 1")}).Error
+	return w.s.db(ctx).Model(job).Updates(map[string]any{"targets": jsonText(job.Targets), "status": status, "finished_at": now, "version": gorm.Expr("version + 1")}).Error
 }
 
 // snapshotWrite is one device snapshot to store as observations: the fabric
@@ -247,14 +247,14 @@ type snapshotWrite struct {
 
 func (w *Worker) persistSnapshot(ctx context.Context, s snapshotWrite) error {
 	snapshot, t := s.Snapshot, s.Target
-	if opsHash(snapshot.Target) != opsHash(targetRecord(t.Device)) || fmt.Sprint(snapshot.FabricKey) != fmt.Sprint(s.FabricID) || snapshot.ObservedAt == nil || snapshot.ObservedAt.Before(s.Started.Add(-time.Second)) || snapshot.ObservedAt.After(s.Finished.Add(time.Second)) {
+	if hash(snapshot.Target) != hash(targetRecord(t.Device)) || fmt.Sprint(snapshot.FabricKey) != fmt.Sprint(s.FabricID) || snapshot.ObservedAt == nil || snapshot.ObservedAt.Before(s.Started.Add(-time.Second)) || snapshot.ObservedAt.After(s.Finished.Add(time.Second)) {
 		return InvalidErr
 	}
 	var member models.Membership
-	if e := opsDB(ctx, w.s).First(&member, "device_id = ? AND fabric_id = ? AND status = ?", t.DeviceID, s.FabricID, "assigned").Error; e != nil {
+	if e := w.s.db(ctx).First(&member, "device_id = ? AND fabric_id = ? AND status = ?", t.DeviceID, s.FabricID, "assigned").Error; e != nil {
 		return e
 	}
-	return opsDB(ctx, w.s).Transaction(func(tx *gorm.DB) error {
+	return w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		for dimension, o := range snapshot.Dimensions {
 			if e := persistFabricDimension(tx, s, member, dimension, o); e != nil {
 				return e
@@ -289,21 +289,21 @@ func (w *Worker) release(ctx context.Context, held lease.Lease, closed bool) err
 		outcome = lease.Unconfirmed
 	}
 	// A lost lease was quarantined meanwhile; that quarantine stays.
-	if e := lease.Release(opsDB(ctx, w.s), held, outcome); e != nil && !errors.Is(e, lease.LostErr) {
+	if e := lease.Release(w.s.db(ctx), held, outcome); e != nil && !errors.Is(e, lease.LostErr) {
 		return e
 	}
 	return nil
 }
 func (w *Worker) checkSource(ctx context.Context, d delivery.DeviceSnapshot, c delivery.Connection, hash string) error {
 	var current network.Device
-	if e := opsDB(ctx, w.s).First(&current, d.ID).Error; e != nil {
+	if e := w.s.db(ctx).First(&current, d.ID).Error; e != nil {
 		return e
 	}
 	connection, e := w.s.deviceConnection(ctx, current, deviceaccess.Read)
 	if e != nil {
 		return e
 	}
-	if !deviceaccess.Read.Allows(current.Status) || sourceHash(opsDevice(current), connection) != hash {
+	if !deviceaccess.Read.Allows(current.Status) || sourceHash(deviceSnapshot(current), connection) != hash {
 		return ConflictErr
 	}
 	return nil
@@ -416,7 +416,7 @@ func persistFabricDimension(tx *gorm.DB, s snapshotWrite, member models.Membersh
 	}
 	row := models.Observation{FabricID: s.FabricID, DeviceID: t.DeviceID, CollectionID: s.CollectionID, Dimension: dimension, Status: o.Status, Data: o, ObservedAt: *o.CompletedAt, Version: latest.Version + 1, SourceHash: t.SourceHash, MembershipVersion: member.Version, RuleVersion: member.RuleVersion}
 	if dimension == "configuration" && o.Complete() {
-		row.ConfigHash = opsHash(o.Records)
+		row.ConfigHash = hash(o.Records)
 	}
 	if e := tx.Create(&row).Error; e != nil {
 		return e

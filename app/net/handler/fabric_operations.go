@@ -84,7 +84,7 @@ func (e Fabric) Collection(c *gin.Context) {
 	if !ok {
 		return
 	}
-	row, err := s.GetCollection(c.Request.Context(), id, actions.GetPermissionFromContext(c))
+	row, err := s.Collection(c.Request.Context(), id, actions.GetPermissionFromContext(c))
 	if err != nil {
 		e.respond(err)
 		return
@@ -167,7 +167,7 @@ func (e Fabric) Change(c *gin.Context) {
 	if !ok {
 		return
 	}
-	row, err := s.GetChange(c.Request.Context(), id, actions.GetPermissionFromContext(c))
+	row, err := s.Change(c.Request.Context(), id, actions.GetPermissionFromContext(c))
 	if err != nil {
 		e.respond(err)
 		return

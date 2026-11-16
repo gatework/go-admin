@@ -42,7 +42,7 @@ func TestRecoveryTerminalizesHistoricalTasksAfterMembershipChanges(t *testing.T)
 					change = previewGateway(t, s)
 					change.Targets[0].Status = "running"
 					change.Targets[0].Attempted = true
-					if err := s.DB.Model(&change).Updates(map[string]any{"status": "running", "targets": opsJSON(change.Targets), "claim_until": past}).Error; err != nil {
+					if err := s.DB.Model(&change).Updates(map[string]any{"status": "running", "targets": jsonText(change.Targets), "claim_until": past}).Error; err != nil {
 						t.Fatal(err)
 					}
 				}

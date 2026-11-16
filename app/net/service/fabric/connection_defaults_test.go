@@ -22,7 +22,7 @@ func TestFabricEffectiveConnectionSupportsAutomaticNXOSAndRejectsChangedDriver(t
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	targets, err := s.opsTargets(ctx, []network.Device{d})
+	targets, err := s.collectionTargets(ctx, []network.Device{d})
 	if err != nil || len(targets) != 1 || targets[0].Status != "pending" || targets[0].Connection.Profile != "cisco_nxos" || targets[0].Connection.Version != 0 || targets[0].Connection.Port != 22 {
 		t.Fatalf("automatic fabric target: %+v %v", targets, err)
 	}

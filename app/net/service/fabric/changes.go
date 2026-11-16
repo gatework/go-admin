@@ -52,7 +52,7 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 	if e != nil {
 		return out, e
 	}
-	payload := opsHash(struct {
+	payload := hash(struct {
 		Fabric    int
 		Source    int
 		Targets   []int
@@ -60,7 +60,7 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 		VNI       int
 		Direction string
 	}{id, r.SourceDeviceID, ids, r.Kind, r.VNI, r.Direction})
-	e = opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&out).Error
+	e = s.db(ctx).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&out).Error
 	if e == nil {
 		if out.PayloadHash != payload {
 			return models.Change{}, ConflictErr
@@ -86,7 +86,7 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 	for _, device := range ids {
 		selected = append(selected, byID[device])
 	}
-	targets, e := s.opsTargets(ctx, selected)
+	targets, e := s.collectionTargets(ctx, selected)
 	if e != nil {
 		return out, e
 	}
@@ -94,13 +94,13 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 	if e != nil {
 		return out, e
 	}
-	out = models.Change{FabricID: id, RequestKey: r.RequestKey, PayloadHash: payload, CreateBy: actor, SourceDeviceID: r.SourceDeviceID, Kind: r.Kind, VNI: r.VNI, Direction: r.Direction, Status: "preview", Version: 1, GroupingHash: group, PlanHash: opsHash(plan.Change()), Plan: plan.Change(), SourceObservationID: so.ID, SourceHash: so.SourceHash, SourceConfigHash: opsHash(config), Targets: ct}
+	out = models.Change{FabricID: id, RequestKey: r.RequestKey, PayloadHash: payload, CreateBy: actor, SourceDeviceID: r.SourceDeviceID, Kind: r.Kind, VNI: r.VNI, Direction: r.Direction, Status: "preview", Version: 1, GroupingHash: group, PlanHash: hash(plan.Change()), Plan: plan.Change(), SourceObservationID: so.ID, SourceHash: so.SourceHash, SourceConfigHash: hash(config), Targets: ct}
 	for _, d := range devices {
 		out.Authorization = append(out.Authorization, d.ID)
 	}
 	sort.Ints(out.Authorization)
-	e = opsDB(ctx, s).Transaction(func(tx *gorm.DB) error {
-		order := delivery.Order{Kind: "fabric", FabricID: id, RequestNo: "FB-" + uuid.NewString(), RequestKey: "fabric:" + opsHash(r.RequestKey), PayloadHash: payload, Title: fmt.Sprintf("Fabric %d %s VNI %d", id, r.Kind, r.VNI), Status: "preview", Version: 1, DeviceCount: len(dt), CreateBy: actor, Targets: dt}
+	e = s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		order := delivery.Order{Kind: "fabric", FabricID: id, RequestNo: "FB-" + uuid.NewString(), RequestKey: "fabric:" + hash(r.RequestKey), PayloadHash: payload, Title: fmt.Sprintf("Fabric %d %s VNI %d", id, r.Kind, r.VNI), Status: "preview", Version: 1, DeviceCount: len(dt), CreateBy: actor, Targets: dt}
 		if e := tx.Create(&order).Error; e != nil {
 			return e
 		}
@@ -115,7 +115,7 @@ func (s *Fabric) PreviewChange(ctx context.Context, id int, r *dto.ChangeCreateR
 	})
 	if e != nil {
 		var existing models.Change
-		if find := opsDB(ctx, s).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error; find == nil && existing.PayloadHash == payload {
+		if find := s.db(ctx).Where("create_by = ? AND request_key = ?", actor, r.RequestKey).First(&existing).Error; find == nil && existing.PayloadHash == payload {
 			return existing, nil
 		}
 	}
@@ -173,10 +173,10 @@ func controlledPlan(source vxlan.Record, r *dto.ChangeCreateReq) (*vxlan.ChangeP
 	return vxlan.NewChangePlan(change)
 }
 
-// GetChange loads the scoped change and reports missing records.
-func (s *Fabric) GetChange(ctx context.Context, id int, p *actions.DataPermission) (models.Change, error) {
+// Change loads the scoped change and reports missing records.
+func (s *Fabric) Change(ctx context.Context, id int, p *actions.DataPermission) (models.Change, error) {
 	var row models.Change
-	if e := opsDB(ctx, s).First(&row, id).Error; e != nil {
+	if e := s.db(ctx).First(&row, id).Error; e != nil {
 		return row, e
 	}
 	if _, e := s.RequireFullScope(ctx, row.FabricID, p); e != nil {
@@ -207,7 +207,7 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 	if actor <= 0 {
 		return models.Change{}, InvalidErr
 	}
-	c, e := s.GetChange(ctx, id, p)
+	c, e := s.Change(ctx, id, p)
 	if e != nil {
 		return c, e
 	}
@@ -220,7 +220,7 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 	if e = s.validateChange(ctx, c); e != nil {
 		return c, e
 	}
-	e = opsDB(ctx, s).Transaction(func(tx *gorm.DB) error {
+	e = s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		q := tx.Model(&models.Change{}).Where("id = ? AND version = ? AND status = ?", id, r.Version, "preview").Updates(map[string]any{"status": "queued", "execute_by": actor, "version": gorm.Expr("version + 1")})
 		if q.Error != nil {
 			return q.Error
@@ -236,7 +236,7 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 	if e != nil {
 		return c, e
 	}
-	return s.GetChange(ctx, id, p)
+	return s.Change(ctx, id, p)
 }
 
 // CancelChange provides the cancel change operation within the caller's authorized fabric scope.
@@ -244,7 +244,7 @@ func (s *Fabric) CancelChange(ctx context.Context, id int, r *dto.VersionReq, ac
 	if actor <= 0 {
 		return models.Change{}, InvalidErr
 	}
-	c, e := s.GetChange(ctx, id, p)
+	c, e := s.Change(ctx, id, p)
 	if e != nil {
 		return c, e
 	}
@@ -255,8 +255,8 @@ func (s *Fabric) CancelChange(ctx context.Context, id int, r *dto.VersionReq, ac
 		c.Targets[i].Status = "cancelled"
 	}
 	now := time.Now().UTC()
-	e = opsDB(ctx, s).Transaction(func(tx *gorm.DB) error {
-		q := tx.Model(&models.Change{}).Where("id = ? AND version = ? AND status IN ?", id, r.Version, []string{"preview", "queued"}).Updates(map[string]any{"status": "cancelled", "targets": opsJSON(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")})
+	e = s.db(ctx).Transaction(func(tx *gorm.DB) error {
+		q := tx.Model(&models.Change{}).Where("id = ? AND version = ? AND status IN ?", id, r.Version, []string{"preview", "queued"}).Updates(map[string]any{"status": "cancelled", "targets": jsonText(c.Targets), "finished_at": now, "version": gorm.Expr("version + 1")})
 		if q.Error != nil {
 			return q.Error
 		}
@@ -274,16 +274,16 @@ func (s *Fabric) CancelChange(ctx context.Context, id int, r *dto.VersionReq, ac
 	if e != nil {
 		return c, e
 	}
-	return s.GetChange(ctx, id, p)
+	return s.Change(ctx, id, p)
 }
 func (s *Fabric) changeConfig(ctx context.Context, fabric, device int) (models.Observation, vxlan.Record, error) {
 	var o models.Observation
-	e := opsDB(ctx, s).Where("fabric_id = ? AND device_id = ? AND dimension = ?", fabric, device, "configuration").Order("observed_at DESC,id DESC").First(&o).Error
+	e := s.db(ctx).Where("fabric_id = ? AND device_id = ? AND dimension = ?", fabric, device, "configuration").Order("observed_at DESC,id DESC").First(&o).Error
 	if e != nil {
 		return o, nil, e
 	}
 	var f models.Fabric
-	if e = opsDB(ctx, s).First(&f, fabric).Error; e != nil {
+	if e = s.db(ctx).First(&f, fabric).Error; e != nil {
 		return o, nil, e
 	}
 	minutes := f.ConfigMinutes
@@ -295,17 +295,17 @@ func (s *Fabric) changeConfig(ctx context.Context, fabric, device int) (models.O
 	}
 	var d network.Device
 	var m models.Membership
-	if e = opsDB(ctx, s).First(&d, device).Error; e != nil {
+	if e = s.db(ctx).First(&d, device).Error; e != nil {
 		return o, nil, e
 	}
 	c, e := s.deviceConnection(ctx, d, deviceaccess.Write)
 	if e != nil {
 		return o, nil, e
 	}
-	if e = opsDB(ctx, s).First(&m, "device_id = ? AND fabric_id = ?", device, fabric).Error; e != nil {
+	if e = s.db(ctx).First(&m, "device_id = ? AND fabric_id = ?", device, fabric).Error; e != nil {
 		return o, nil, e
 	}
-	if o.SourceHash != sourceHash(opsDevice(d), c) || o.MembershipVersion != m.Version || o.RuleVersion != m.RuleVersion || !deviceaccess.Write.Allows(d.Status) {
+	if o.SourceHash != sourceHash(deviceSnapshot(d), c) || o.MembershipVersion != m.Version || o.RuleVersion != m.RuleVersion || !deviceaccess.Write.Allows(d.Status) {
 		return o, nil, ConflictErr
 	}
 	return o, o.Data.Records[0], nil
@@ -315,18 +315,18 @@ func (s *Fabric) validateChange(ctx context.Context, c models.Change) error {
 	if e != nil {
 		return e
 	}
-	if group != c.GroupingHash || opsHash(c.Plan) != c.PlanHash {
+	if group != c.GroupingHash || hash(c.Plan) != c.PlanHash {
 		return ConflictErr
 	}
 	so, cfg, e := s.changeConfig(ctx, c.FabricID, c.SourceDeviceID)
 	if e != nil {
 		return e
 	}
-	if so.SourceHash != c.SourceHash || opsHash(cfg) != c.SourceConfigHash {
+	if so.SourceHash != c.SourceHash || hash(cfg) != c.SourceConfigHash {
 		return ConflictErr
 	}
 	expected, e := controlledPlan(cfg, &dto.ChangeCreateReq{Kind: c.Kind, VNI: c.VNI, Direction: c.Direction})
-	if e != nil || opsHash(expected.Change()) != c.PlanHash {
+	if e != nil || hash(expected.Change()) != c.PlanHash {
 		return ConflictErr
 	}
 	sourceConfig := cfg
@@ -338,7 +338,7 @@ func (s *Fabric) validateChange(ctx context.Context, c models.Change) error {
 		if e != nil {
 			return e
 		}
-		if o.SourceHash != t.SourceHash || opsHash(cfg) != t.ConfigHash || !aclServiceContextMatches(sourceConfig, cfg, expected.Change()) {
+		if o.SourceHash != t.SourceHash || hash(cfg) != t.ConfigHash || !aclServiceContextMatches(sourceConfig, cfg, expected.Change()) {
 			return ConflictErr
 		}
 	}
@@ -362,7 +362,7 @@ func aclServiceContextMatches(source, target, change vxlan.Record) bool {
 		return false
 	}
 	at, bt := vxlan.ServiceTenant(source, vrf), vxlan.ServiceTenant(target, vrf)
-	return at != nil && bt != nil && opsHash(at) == opsHash(bt)
+	return at != nil && bt != nil && hash(at) == hash(bt)
 }
 
 func changeDeviceIDs(c models.Change) []int {
@@ -413,8 +413,8 @@ func (s *Fabric) previewTargets(ctx context.Context, id int, targets []models.Co
 		}
 		commands := plan.Commands()
 		script := strings.Join(commands, "\n")
-		ct = append(ct, models.ChangeTarget{DeviceID: t.DeviceID, Status: "pending", Commands: commands, SourceHash: t.SourceHash, ConfigHash: opsHash(cfg), ObservationID: o.ID, Device: t.Device, Connection: t.Connection})
-		dt = append(dt, delivery.Target{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, ConnectionVersion: t.Connection.Version, Script: script, ScriptSHA256: opsHash(script), ScriptLineCount: len(commands), Status: "pending"})
+		ct = append(ct, models.ChangeTarget{DeviceID: t.DeviceID, Status: "pending", Commands: commands, SourceHash: t.SourceHash, ConfigHash: hash(cfg), ObservationID: o.ID, Device: t.Device, Connection: t.Connection})
+		dt = append(dt, delivery.Target{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, ConnectionVersion: t.Connection.Version, Script: script, ScriptSHA256: hash(script), ScriptLineCount: len(commands), Status: "pending"})
 	}
 	return ct, dt, nil
 }

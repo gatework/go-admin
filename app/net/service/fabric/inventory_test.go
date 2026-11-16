@@ -133,7 +133,7 @@ func TestIdentityChangeInvalidatesDimensionEvidence(t *testing.T) {
 	s.DB.First(&m, "device_id = ?", d.ID)
 	conn := delivery.Connection{DeviceID: d.ID, Profile: "cisco_nxos", Protocol: "ssh", Port: 22, Version: 1}
 	s.DB.Create(&conn)
-	o := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: "configuration", Status: "complete", ObservedAt: time.Now().UTC(), MembershipVersion: m.Version, RuleVersion: m.RuleVersion, SourceHash: sourceHash(opsDevice(d), conn), Data: vxlan.Observation{Status: "complete", Records: []vxlan.Record{{"review_status": "complete"}}}}
+	o := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: "configuration", Status: "complete", ObservedAt: time.Now().UTC(), MembershipVersion: m.Version, RuleVersion: m.RuleVersion, SourceHash: sourceHash(deviceSnapshot(d), conn), Data: vxlan.Observation{Status: "complete", Records: []vxlan.Record{{"review_status": "complete"}}}}
 	s.DB.Create(&o)
 	before, err := s.Detail(ctx, 1, p)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestFailedConfigurationRetainsObservedMatrixAsUnknown(t *testing.T) {
 	if parsed.Status != "complete" {
 		t.Fatalf("fixture: %s", parsed)
 	}
-	base := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: "configuration", Status: "complete", ObservedAt: time.Now().Add(-time.Minute), MembershipVersion: m.Version, RuleVersion: m.RuleVersion, SourceHash: sourceHash(opsDevice(d), c), Data: parsed}
+	base := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: "configuration", Status: "complete", ObservedAt: time.Now().Add(-time.Minute), MembershipVersion: m.Version, RuleVersion: m.RuleVersion, SourceHash: sourceHash(deviceSnapshot(d), c), Data: parsed}
 	s.DB.Create(&base)
 	s.DB.Create(&models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: "configuration", Status: "failed", ObservedAt: time.Now(), MembershipVersion: m.Version, RuleVersion: m.RuleVersion, SourceHash: base.SourceHash, Data: vxlan.Observation{Status: "failed"}})
 	out, err := s.Detail(ctx, 1, p)

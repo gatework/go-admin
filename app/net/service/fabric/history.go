@@ -16,7 +16,7 @@ import (
 func historicalPage[T any](ctx context.Context, s *Fabric, fabric int, req *dto.PageReq, permission *actions.DataPermission, rowID func(T) int, scopeIDs func(T) []int) ([]T, int64, error) {
 	out := []T{}
 	queryForTasks := func() *gorm.DB {
-		query := opsDB(ctx, s).Model(new(T)).Where("fabric_id = ?", fabric)
+		query := s.db(ctx).Model(new(T)).Where("fabric_id = ?", fabric)
 		if req.Status == "active" {
 			return query.Where("status IN ?", []string{"queued", "running"})
 		}
@@ -34,7 +34,7 @@ func historicalPage[T any](ctx context.Context, s *Fabric, fabric int, req *dto.
 		return out, count, err
 	}
 	var deviceIDs []int
-	if err := deviceScope(opsDB(ctx, s), permission).Pluck("id", &deviceIDs).Error; err != nil {
+	if err := deviceScope(s.db(ctx), permission).Pluck("id", &deviceIDs).Error; err != nil {
 		return nil, 0, err
 	}
 	visible := make(map[int]bool, len(deviceIDs))

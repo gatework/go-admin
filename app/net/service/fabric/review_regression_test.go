@@ -44,7 +44,7 @@ func TestReviewMissingLeafMustAffectSummary(t *testing.T) {
 			if name == "nve_vnis" {
 				data.Records = []vxlan.Record{{"state": "up", "vni": 10010}}
 			}
-			row := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: name, Status: "complete", Data: data, ObservedAt: time.Now().UTC(), SourceHash: sourceHash(opsDevice(d), c), MembershipVersion: m.Version, RuleVersion: m.RuleVersion}
+			row := models.Observation{FabricID: 1, DeviceID: d.ID, Dimension: name, Status: "complete", Data: data, ObservedAt: time.Now().UTC(), SourceHash: sourceHash(deviceSnapshot(d), c), MembershipVersion: m.Version, RuleVersion: m.RuleVersion}
 			if err := s.DB.Create(&row).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -205,7 +205,7 @@ func TestReviewHistoricalChangeStillRequiresTargetScope(t *testing.T) {
 		t.Fatal(e)
 	}
 	p := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7, RoleID: 1}
-	got, err := s.GetChange(ctx, change.ID, p)
+	got, err := s.Change(ctx, change.ID, p)
 	if err == nil {
 		t.Fatalf("historical hidden target exposed via full scope of current Fabric: source=%d targets=%+v", got.SourceDeviceID, got.Targets)
 	}
@@ -228,7 +228,7 @@ func TestReviewACLValidationRejectsForgedCrossVRFPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Targets[0].ConfigHash = opsHash(target)
+	c.Targets[0].ConfigHash = hash(target)
 	// Even internally consistent persisted hashes cannot authorize another tenant.
 	if err := s.validateChange(ctx, c); err == nil {
 		t.Fatal("forged plan accepted another VRF")
@@ -277,7 +277,7 @@ func TestReviewHistoricalOperationListsAndCollectionRespectTargetScope(t *testin
 	s.DB.Model(&models.Membership{}).Where("device_id=2").Updates(map[string]any{"fabric_id": id, "mode": "manual"})
 	s.DB.Model(&network.Device{}).Where("id=2").Update("create_by", 8)
 	p := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7, RoleID: 1}
-	if _, err := s.GetCollection(ctx, job.ID, p); err == nil {
+	if _, err := s.Collection(ctx, job.ID, p); err == nil {
 		t.Fatal("collection exposes hidden historical target")
 	}
 	if _, err := s.CreateCollection(ctx, 1, &dto.CollectionCreateReq{RequestKey: "historical-scope-collection", Mode: "configuration"}, 7, p); err == nil {

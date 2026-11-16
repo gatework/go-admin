@@ -82,14 +82,16 @@ func transportClosed(err error) bool {
 	return errors.As(err, &receipt) && receipt.TransportClosed()
 }
 
-func opsDB(ctx context.Context, s *Fabric) *gorm.DB {
+// db is the tenant database for this request or job, with SQL logging
+// silenced: Fabric rows carry device configuration that must not reach logs.
+func (s *Fabric) db(ctx context.Context) *gorm.DB {
 	return s.DB.WithContext(ctx).Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
 }
 
 func (s *Fabric) deviceConnection(ctx context.Context, d network.Device, use deviceaccess.Use) (delivery.Connection, error) {
 	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d, use)
 }
-func opsJSON(v any) string {
+func jsonText(v any) string {
 	encoded, e := models.OperationsValue(v)
 	if e == nil {
 		if text, ok := encoded.(string); ok {
@@ -99,9 +101,9 @@ func opsJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
-func opsHash(v any) string { b, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(b)) }
+func hash(v any) string { b, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(b)) }
 func sourceHash(d delivery.DeviceSnapshot, c delivery.Connection) string {
-	return opsHash(struct {
+	return hash(struct {
 		Device            delivery.DeviceSnapshot
 		Version           int64
 		Profile, Protocol string
