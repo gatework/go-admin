@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	models "github.com/gatework/motor/app/net/models/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // Domains provides domains for this module.
@@ -17,7 +18,7 @@ func (s *Firewall) Domains(ctx context.Context) ([]models.Domain, error) {
 }
 
 // SaveDomain provides save domain for this module.
-func (s *Firewall) SaveDomain(ctx context.Context, id int, in DomainInput) (models.Domain, error) {
+func (s *Firewall) SaveDomain(ctx context.Context, id int, in dto.DomainInput) (models.Domain, error) {
 	var d models.Domain
 	if !validKey(in.Code) || len(in.Code) > 64 || !validTitle(in.Name) || utf8.RuneCountInString(in.Name) > 128 {
 		return d, InvalidErr
@@ -37,13 +38,6 @@ func (s *Firewall) SaveDomain(ctx context.Context, id int, in DomainInput) (mode
 		return d, ConflictErr
 	}
 	return d, s.db(ctx).First(&d, id).Error
-}
-
-// DomainInput carries domain input state for this module.
-type DomainInput struct {
-	Code    string `json:"code"`
-	Name    string `json:"name"`
-	Version int64  `json:"version"`
 }
 
 func (s *Firewall) domain(ctx context.Context, id int) error {

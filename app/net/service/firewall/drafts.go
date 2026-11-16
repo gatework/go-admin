@@ -11,25 +11,11 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/types"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
-// DraftInput carries draft input state for this module.
-type DraftInput struct {
-	RequestKey string   `json:"requestKey"`
-	AnalysisID int      `json:"analysisId"`
-	Title      string   `json:"title"`
-	RowKeys    []string `json:"rowKeys,omitempty"`
-}
-
-// DraftEdit carries draft edit state for this module.
-type DraftEdit struct {
-	Version int64  `json:"version"`
-	Title   string `json:"title"`
-	Notes   string `json:"notes"`
-}
-
 // EnqueueDraft provides enqueue draft for this module.
-func (s *Firewall) EnqueueDraft(ctx context.Context, in DraftInput, p *actions.DataPermission) (models.Draft, error) {
+func (s *Firewall) EnqueueDraft(ctx context.Context, in dto.DraftInput, p *actions.DataPermission) (models.Draft, error) {
 	var out models.Draft
 	if !validKey(in.RequestKey) || !validTitle(in.Title) {
 		return out, InvalidErr
@@ -62,7 +48,7 @@ func (s *Firewall) Draft(ctx context.Context, id int, p *actions.DataPermission)
 }
 
 // Drafts provides drafts for this module.
-func (s *Firewall) Drafts(ctx context.Context, page *Page, p *actions.DataPermission) ([]models.Draft, int64, error) {
+func (s *Firewall) Drafts(ctx context.Context, page *dto.Page, p *actions.DataPermission) ([]models.Draft, int64, error) {
 	out := []models.Draft{}
 	var count int64
 	if e := page.Validate(); e != nil {
@@ -87,7 +73,7 @@ func (s *Firewall) Drafts(ctx context.Context, page *Page, p *actions.DataPermis
 }
 
 // EditDraft provides edit draft for this module.
-func (s *Firewall) EditDraft(ctx context.Context, id int, in DraftEdit, p *actions.DataPermission) (models.Draft, error) {
+func (s *Firewall) EditDraft(ctx context.Context, id int, in dto.DraftEdit, p *actions.DataPermission) (models.Draft, error) {
 	out, e := s.Draft(ctx, id, p)
 	if e != nil {
 		return out, e
@@ -109,7 +95,7 @@ func (s *Firewall) EditDraft(ctx context.Context, id int, in DraftEdit, p *actio
 }
 
 // ReanalyzeDraft provides reanalyze draft for this module.
-func (s *Firewall) ReanalyzeDraft(ctx context.Context, id int, in JobInput, p *actions.DataPermission) (models.Draft, error) {
+func (s *Firewall) ReanalyzeDraft(ctx context.Context, id int, in dto.JobInput, p *actions.DataPermission) (models.Draft, error) {
 	d, e := s.Draft(ctx, id, p)
 	if e != nil {
 		return models.Draft{}, e
@@ -121,17 +107,17 @@ func (s *Firewall) ReanalyzeDraft(ctx context.Context, id int, in JobInput, p *a
 	if e != nil {
 		return models.Draft{}, e
 	}
-	a, e := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "draft-" + hash(struct {
+	a, e := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "draft-" + hash(struct {
 		ID  int
 		Key string
 	}{id, in.RequestKey}), Version: r.Version}, p)
 	if e != nil {
 		return models.Draft{}, e
 	}
-	return s.enqueueDraft(ctx, DraftInput{RequestKey: in.RequestKey, AnalysisID: a.ID, Title: d.Title, RowKeys: d.RowKeys}, a, true)
+	return s.enqueueDraft(ctx, dto.DraftInput{RequestKey: in.RequestKey, AnalysisID: a.ID, Title: d.Title, RowKeys: d.RowKeys}, a, true)
 }
 
-func (s *Firewall) enqueueDraft(ctx context.Context, in DraftInput, a models.Analysis, awaitAnalysis bool) (models.Draft, error) {
+func (s *Firewall) enqueueDraft(ctx context.Context, in dto.DraftInput, a models.Analysis, awaitAnalysis bool) (models.Draft, error) {
 	var out models.Draft
 	if len(in.RowKeys) == 0 {
 		for _, r := range a.Input.Rows {

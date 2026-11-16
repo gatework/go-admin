@@ -12,16 +12,9 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/firewall/types"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/app/net/service/firewall/engine"
 )
-
-// RequestInput carries request input state for this module.
-type RequestInput struct {
-	Version  int64       `json:"version"`
-	Title    string      `json:"title"`
-	DomainID int         `json:"domainId"`
-	Input    types.Input `json:"input"`
-}
 
 // Request provides request for this module.
 func (s *Firewall) Request(ctx context.Context, id int, p *actions.DataPermission) (models.Request, error) {
@@ -34,7 +27,7 @@ func (s *Firewall) Request(ctx context.Context, id int, p *actions.DataPermissio
 }
 
 // Requests provides requests for this module.
-func (s *Firewall) Requests(ctx context.Context, page *Page, p *actions.DataPermission) ([]models.Request, int64, error) {
+func (s *Firewall) Requests(ctx context.Context, page *dto.Page, p *actions.DataPermission) ([]models.Request, int64, error) {
 	out := []models.Request{}
 	var count int64
 	if e := page.Validate(); e != nil {
@@ -52,7 +45,7 @@ func (s *Firewall) Requests(ctx context.Context, page *Page, p *actions.DataPerm
 }
 
 // SaveRequest provides save request for this module.
-func (s *Firewall) SaveRequest(ctx context.Context, id int, in RequestInput, p *actions.DataPermission) (models.Request, error) {
+func (s *Firewall) SaveRequest(ctx context.Context, id int, in dto.RequestInput, p *actions.DataPermission) (models.Request, error) {
 	var out models.Request
 	if s.Actor <= 0 || !validTitle(in.Title) {
 		return out, InvalidErr
@@ -112,7 +105,7 @@ func (s *Firewall) SaveRequest(ctx context.Context, id int, in RequestInput, p *
 }
 
 // EnqueueAnalysis provides enqueue analysis for this module.
-func (s *Firewall) EnqueueAnalysis(ctx context.Context, id int, in JobInput, p *actions.DataPermission) (models.Analysis, error) {
+func (s *Firewall) EnqueueAnalysis(ctx context.Context, id int, in dto.JobInput, p *actions.DataPermission) (models.Analysis, error) {
 	var out models.Analysis
 	if !validKey(in.RequestKey) {
 		return out, InvalidErr
@@ -191,7 +184,7 @@ func (s *Firewall) Analysis(ctx context.Context, id int, p *actions.DataPermissi
 }
 
 // Analyses provides analyses for this module.
-func (s *Firewall) Analyses(ctx context.Context, id int, page *Page, p *actions.DataPermission) ([]models.Analysis, int64, error) {
+func (s *Firewall) Analyses(ctx context.Context, id int, page *dto.Page, p *actions.DataPermission) ([]models.Analysis, int64, error) {
 	out := []models.Analysis{}
 	var count int64
 	if e := page.Validate(); e != nil {
@@ -231,12 +224,6 @@ func (s *Firewall) CancelAnalysis(ctx context.Context, id int, p *actions.DataPe
 		return models.Analysis{}, ConflictErr
 	}
 	return s.Analysis(ctx, id, p)
-}
-
-// JobInput carries job input state for this module.
-type JobInput struct {
-	RequestKey string `json:"requestKey"`
-	Version    int64  `json:"version"`
 }
 
 func (s *Firewall) requests(ctx context.Context, p *actions.DataPermission) *gorm.DB {

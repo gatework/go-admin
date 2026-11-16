@@ -17,6 +17,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // Firewall adapts firewall HTTP routes. Its methods take a value receiver: gin
@@ -26,7 +27,7 @@ type Firewall struct{ api.API }
 type pageResult struct {
 	List  any
 	Count int64
-	Page  service.Page
+	Page  dto.Page
 }
 type operation func(*service.Firewall) (any, error)
 
@@ -73,8 +74,8 @@ func decodeFirewallRequest(c *gin.Context, v any) error {
 	}
 	return nil
 }
-func page(c *gin.Context) (service.Page, error) {
-	p := service.Page{}
+func page(c *gin.Context) (dto.Page, error) {
+	p := dto.Page{}
 	if c.ShouldBindQuery(&p) != nil {
 		return p, service.InvalidErr
 	}

@@ -42,6 +42,7 @@ declared:
   - ./app/net/service/dto/wireless
   - ./app/net/service/fabric
   - ./app/net/service/firewall
+  - ./app/net/service/firewall/dto
   - ./app/net/service/firewall/engine
   - ./app/net/service/inventory
   - ./app/net/service/inventory/provider/netdisco

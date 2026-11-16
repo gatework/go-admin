@@ -14,6 +14,7 @@ import (
 	native "github.com/gatework/firemon/device"
 	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 type uncertainCommitPool struct {
@@ -81,7 +82,7 @@ func TestCollectionReconcilesPublishErrorBeforeTerminalAcknowledgement(t *testin
 	if err = w.Tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	again, err := s.EnqueueCollection(ctx, CollectionInput{RequestKey: "uncertain-publish", Kind: "capture", InstanceIDs: []int{i.ID}}, all())
+	again, err := s.EnqueueCollection(ctx, dto.CollectionInput{RequestKey: "uncertain-publish", Kind: "capture", InstanceIDs: []int{i.ID}}, all())
 	if err != nil || opens != 1 || again.Targets[0].Revision != b.Targets[0].Revision {
 		t.Fatalf("retry did not retain publication: %+v %v opens=%d", again, err, opens)
 	}

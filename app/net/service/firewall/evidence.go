@@ -20,6 +20,7 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/app/net/service/firewall/engine"
 )
 
@@ -135,7 +136,7 @@ func (s *Firewall) Snapshot(ctx context.Context, id int, p *actions.DataPermissi
 }
 
 // Snapshots provides snapshots for this module.
-func (s *Firewall) Snapshots(ctx context.Context, id int, page *Page, p *actions.DataPermission) ([]models.Snapshot, int64, error) {
+func (s *Firewall) Snapshots(ctx context.Context, id int, page *dto.Page, p *actions.DataPermission) ([]models.Snapshot, int64, error) {
 	out := []models.Snapshot{}
 	var count int64
 	if e := page.Validate(); e != nil {
@@ -152,19 +153,8 @@ func (s *Firewall) Snapshots(ctx context.Context, id int, page *Page, p *actions
 	return out, count, e
 }
 
-// ObjectQuery filters a snapshot's objects. Address, protocol and port find
-// objects that match a flow; zone and state narrow by placement and status.
-type ObjectQuery struct {
-	Page
-	Address  string `form:"address"`
-	Protocol string `form:"protocol"`
-	Port     string `form:"port"`
-	Zone     string `form:"zone"`
-	State    string `form:"state"`
-}
-
 // Objects lists one kind of object in a snapshot the caller may view.
-func (s *Firewall) Objects(ctx context.Context, id int, kind string, q ObjectQuery, p *actions.DataPermission) (storage.Page, error) {
+func (s *Firewall) Objects(ctx context.Context, id int, kind string, q dto.ObjectQuery, p *actions.DataPermission) (storage.Page, error) {
 	if e := q.Validate(); e != nil {
 		return storage.Page{}, e
 	}
@@ -203,18 +193,8 @@ func (s *Firewall) References(ctx context.Context, id int, kind string, objectID
 	return st.References(ctx, id, kind, objectID)
 }
 
-// ImportInput carries import input state for this module.
-type ImportInput struct {
-	RequestKey       string     `json:"requestKey"`
-	ExpectedRevision string     `json:"expectedRevision"`
-	Text             string     `json:"text"`
-	Filename         string     `json:"filename"`
-	Complete         bool       `json:"complete"`
-	CapturedAt       *time.Time `json:"capturedAt,omitempty"`
-}
-
 // EnqueueImport provides enqueue import for this module.
-func (s *Firewall) EnqueueImport(ctx context.Context, id int, in ImportInput, p *actions.DataPermission) (models.Import, error) {
+func (s *Firewall) EnqueueImport(ctx context.Context, id int, in dto.ImportInput, p *actions.DataPermission) (models.Import, error) {
 	var out models.Import
 	if !validKey(in.RequestKey) || len(in.Text) == 0 || len(in.Text) > config.DefaultMaxBytes || !utf8.ValidString(in.Text) || strings.TrimSpace(in.Text) == "" || len(in.Filename) > 255 {
 		return out, InvalidErr
@@ -284,7 +264,7 @@ func (s *Firewall) Import(ctx context.Context, id int, p *actions.DataPermission
 }
 
 // Imports provides imports for this module.
-func (s *Firewall) Imports(ctx context.Context, id int, page *Page, p *actions.DataPermission) ([]models.Import, int64, error) {
+func (s *Firewall) Imports(ctx context.Context, id int, page *dto.Page, p *actions.DataPermission) ([]models.Import, int64, error) {
 	out := []models.Import{}
 	var count int64
 	if e := page.Validate(); e != nil {

@@ -17,6 +17,7 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 type captureReader struct {
@@ -40,7 +41,7 @@ func (r *captureReader) Read(ctx context.Context, v native.View) (native.Capture
 func (r *captureReader) Close() error { r.closed++; return r.closeErr }
 func enqueueCapture(t *testing.T, s *Firewall, i models.Instance, key string) models.CollectionBatch {
 	t.Helper()
-	b, e := s.EnqueueCollection(context.Background(), CollectionInput{RequestKey: key, Kind: "capture", InstanceIDs: []int{i.ID}}, all())
+	b, e := s.EnqueueCollection(context.Background(), dto.CollectionInput{RequestKey: key, Kind: "capture", InstanceIDs: []int{i.ID}}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -289,11 +290,11 @@ func TestLivePartialCaptureStalesSavedAnalysisAndDraft(t *testing.T) {
 	if _, err := s.SaveSettings(ctx, i.ID, types.Settings{Version: 1, Zones: []types.Binding{{Zone: "inside", Protected: true}}}, all()); err != nil {
 		t.Fatal(err)
 	}
-	r, err := s.SaveRequest(ctx, 0, RequestInput{Title: "pinned", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Key: "one", Source: "192.0.2.10", Destination: "198.51.100.10", Service: "443"}}}}, all())
+	r, err := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "pinned", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Key: "one", Source: "192.0.2.10", Destination: "198.51.100.10", Service: "443"}}}}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "analysis", Version: r.Version}, all())
+	a, err := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "analysis", Version: r.Version}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +302,7 @@ func TestLivePartialCaptureStalesSavedAnalysisAndDraft(t *testing.T) {
 	if err = offline.Tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	d, err := s.EnqueueDraft(ctx, DraftInput{RequestKey: "draft", AnalysisID: a.ID, Title: "pinned"}, all())
+	d, err := s.EnqueueDraft(ctx, dto.DraftInput{RequestKey: "draft", AnalysisID: a.ID, Title: "pinned"}, all())
 	if err != nil {
 		t.Fatal(err)
 	}

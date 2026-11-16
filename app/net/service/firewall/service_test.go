@@ -20,6 +20,7 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/txlock"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -96,10 +97,10 @@ func TestInstanceAccessIsAnchoredToInventory(t *testing.T) {
 	ctx := context.Background()
 	own, hidden := device(t, s, 7, "192.0.2.1"), device(t, s, 8, "192.0.2.2")
 	p := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7}
-	if _, e := s.CreateInstance(ctx, InstanceInput{DeviceID: hidden, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p); !errors.Is(e, NotFoundErr) {
+	if _, e := s.CreateInstance(ctx, dto.InstanceInput{DeviceID: hidden, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p); !errors.Is(e, NotFoundErr) {
 		t.Fatalf("hidden inventory allowed: %v", e)
 	}
-	i, e := s.CreateInstance(ctx, InstanceInput{DeviceID: own, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p)
+	i, e := s.CreateInstance(ctx, dto.InstanceInput{DeviceID: own, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -110,7 +111,7 @@ func TestInstanceAccessIsAnchoredToInventory(t *testing.T) {
 func TestRequestVersionAndOwnershipProtectOriginalInput(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	in := RequestInput{Title: "访问需求", DomainID: 1, Input: types.Input{DefaultProtocol: "tcp", Rows: []types.InputRow{{Key: "one", Source: "192.0.2.1", Destination: "198.51.100.2", Service: "443"}}}}
+	in := dto.RequestInput{Title: "访问需求", DomainID: 1, Input: types.Input{DefaultProtocol: "tcp", Rows: []types.InputRow{{Key: "one", Source: "192.0.2.1", Destination: "198.51.100.2", Service: "443"}}}}
 	r, e := s.SaveRequest(ctx, 0, in, all())
 	if e != nil {
 		t.Fatal(e)
@@ -132,16 +133,16 @@ func TestRequestVersionAndOwnershipProtectOriginalInput(t *testing.T) {
 func TestNewProtectedInventoryInvalidatesPreviouslyPinnedAnalysis(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	r, e := s.SaveRequest(ctx, 0, RequestInput{Title: "scope", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
+	r, e := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "scope", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
-	a, e := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "before", Version: r.Version}, all())
+	a, e := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "before", Version: r.Version}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
 	d := device(t, s, 7, "203.0.113.1")
-	if _, e = s.CreateInstance(ctx, InstanceInput{DeviceID: d, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all()); e != nil {
+	if _, e = s.CreateInstance(ctx, dto.InstanceInput{DeviceID: d, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all()); e != nil {
 		t.Fatal(e)
 	}
 	a, e = s.Analysis(ctx, a.ID, all())
@@ -161,14 +162,14 @@ func TestPermissionRevocationHidesSavedCrossDeviceInputAndLists(t *testing.T) {
 	ctx := context.Background()
 	p := &actions.DataPermission{DataScope: actions.DataScopeSelf, UserID: 7}
 	d := device(t, s, 7, "203.0.113.7")
-	if _, e := s.CreateInstance(ctx, InstanceInput{DeviceID: d, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p); e != nil {
+	if _, e := s.CreateInstance(ctx, dto.InstanceInput{DeviceID: d, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, p); e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.SaveRequest(ctx, 0, RequestInput{Title: "private query", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, p)
+	r, e := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "private query", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, p)
 	if e != nil {
 		t.Fatal(e)
 	}
-	a, e := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "private", Version: r.Version}, p)
+	a, e := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "private", Version: r.Version}, p)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -181,7 +182,7 @@ func TestPermissionRevocationHidesSavedCrossDeviceInputAndLists(t *testing.T) {
 	if _, e = s.Request(ctx, r.ID, p); !errors.Is(e, NotFoundErr) {
 		t.Fatalf("raw input visible: %v", e)
 	}
-	_, count, e := s.Requests(ctx, &Page{}, p)
+	_, count, e := s.Requests(ctx, &dto.Page{}, p)
 	if e != nil || count != 0 {
 		t.Fatalf("list leaked hidden record: count=%d err=%v", count, e)
 	}
@@ -192,16 +193,16 @@ func TestPermissionRevocationHidesSavedCrossDeviceInputAndLists(t *testing.T) {
 func TestSaveDomainCallsOnlyADuplicateAConflict(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-1", Name: "DC 1"}); err != nil {
+	if _, err := s.SaveDomain(ctx, 0, dto.DomainInput{Code: "dc-1", Name: "DC 1"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-1", Name: "again"}); !errors.Is(err, ConflictErr) {
+	if _, err := s.SaveDomain(ctx, 0, dto.DomainInput{Code: "dc-1", Name: "again"}); !errors.Is(err, ConflictErr) {
 		t.Fatalf("duplicate code: %v, want ConflictErr", err)
 	}
 	if err := s.DB.Exec("DROP TABLE " + (models.Domain{}).TableName()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-2", Name: "DC 2"}); err == nil || errors.Is(err, ConflictErr) {
+	if _, err := s.SaveDomain(ctx, 0, dto.DomainInput{Code: "dc-2", Name: "DC 2"}); err == nil || errors.Is(err, ConflictErr) {
 		t.Fatalf("missing table: %v, want the database error", err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // Domains handles an authorized firewall workbench operation.
@@ -35,7 +36,7 @@ func (e Firewall) SaveDomain(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.DomainInput
+		var in dto.DomainInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -70,7 +71,7 @@ func (e Firewall) Instances(c *gin.Context) {
 func (e Firewall) CreateInstance(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
-		var in service.InstanceInput
+		var in dto.InstanceInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}

@@ -16,6 +16,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // MaxCollectionTargets bounds collection targets processing.
@@ -26,13 +27,6 @@ const CollectionConcurrency = 2
 
 // CollectionTimeout bounds collection timeout processing.
 const CollectionTimeout = 5 * time.Minute
-
-// CollectionInput carries collection input state for this module.
-type CollectionInput struct {
-	RequestKey  string `json:"requestKey"`
-	Kind        string `json:"kind"`
-	InstanceIDs []int  `json:"instanceIds"`
-}
 
 // CollectionSource carries collection source state for this module.
 type CollectionSource struct {
@@ -130,7 +124,7 @@ func (s *Firewall) Collection(ctx context.Context, id int, p *actions.DataPermis
 }
 
 // Collections provides collections for this module.
-func (s *Firewall) Collections(ctx context.Context, page *Page, p *actions.DataPermission) ([]models.CollectionBatch, int64, error) {
+func (s *Firewall) Collections(ctx context.Context, page *dto.Page, p *actions.DataPermission) ([]models.CollectionBatch, int64, error) {
 	out := []models.CollectionBatch{}
 	var count int64
 	if err := page.Validate(); err != nil {
@@ -145,7 +139,7 @@ func (s *Firewall) Collections(ctx context.Context, page *Page, p *actions.DataP
 }
 
 // EnqueueCollection records an idempotent batch and its pinned collection targets.
-func (s *Firewall) EnqueueCollection(ctx context.Context, in CollectionInput, p *actions.DataPermission) (models.CollectionBatch, error) {
+func (s *Firewall) EnqueueCollection(ctx context.Context, in dto.CollectionInput, p *actions.DataPermission) (models.CollectionBatch, error) {
 	var b models.CollectionBatch
 	if s.Actor <= 0 || !validKey(in.RequestKey) || (in.Kind != "capture" && in.Kind != "connection_test") || len(in.InstanceIDs) == 0 || len(in.InstanceIDs) > MaxCollectionTargets {
 		return b, InvalidErr

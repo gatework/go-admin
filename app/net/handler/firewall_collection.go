@@ -6,6 +6,7 @@ import (
 	"github.com/gatework/motor/app/net/models/connection"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // Devices lists scoped firewall inventory with non-secret connection readiness.
@@ -24,7 +25,7 @@ func (e Firewall) Devices(c *gin.Context) {
 			return nil, service.InvalidErr
 		}
 		rows, count, err := s.Devices(c.Request.Context(), &p, permission(c))
-		return pageResult{rows, count, service.Page{PageIndex: p.GetPageIndex(), PageSize: p.GetPageSize()}}, err
+		return pageResult{rows, count, dto.Page{PageIndex: p.GetPageIndex(), PageSize: p.GetPageSize()}}, err
 	})
 }
 
@@ -72,7 +73,7 @@ func (e Firewall) SetConnection(c *gin.Context) {
 // @Security Bearer
 func (e Firewall) EnqueueCollection(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
-		var in service.CollectionInput
+		var in dto.CollectionInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}

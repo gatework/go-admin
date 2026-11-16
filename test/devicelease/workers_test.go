@@ -35,6 +35,7 @@ import (
 	wd "github.com/gatework/motor/app/net/service/dto/wireless"
 	fs "github.com/gatework/motor/app/net/service/fabric"
 	fw "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	ws "github.com/gatework/motor/app/net/service/wireless"
 )
 
@@ -226,11 +227,11 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 			t.Fatal(err)
 		}
 		s := &fw.Firewall{Service: base.Service{DB: b}, Actor: 7, Root: t.TempDir()}
-		instance, err := s.CreateInstance(context.Background(), fw.InstanceInput{DeviceID: d.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, permission)
+		instance, err := s.CreateInstance(context.Background(), dto.InstanceInput{DeviceID: d.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, permission)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = s.EnqueueCollection(context.Background(), fw.CollectionInput{RequestKey: "lease-firewall-request", Kind: "connection_test", InstanceIDs: []int{instance.ID}}, permission); err != nil {
+		if _, err = s.EnqueueCollection(context.Background(), dto.CollectionInput{RequestKey: "lease-firewall-request", Kind: "connection_test", InstanceIDs: []int{instance.ID}}, permission); err != nil {
 			t.Fatal(err)
 		}
 		return worker, fw.NewCollectionWorker(s, func(ctx context.Context, _ fw.CollectionSource) (native.Reader, error) {

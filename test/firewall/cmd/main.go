@@ -37,6 +37,7 @@ import (
 	network "github.com/gatework/motor/app/net/models/inventory"
 	firewallrouter "github.com/gatework/motor/app/net/router"
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // The same native Hillstone configuration is exercised by
@@ -129,7 +130,7 @@ func run(addr, origin, directory string) error {
 	}
 	root := service.RegisterRoot(db, "browser-fixture")
 	svc := &service.Firewall{DB: db, Actor: 7, Root: root}
-	instance, err := svc.CreateInstance(context.Background(), service.InstanceInput{DeviceID: device.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, &actions.DataPermission{UserID: 7, DataScope: actions.DataScopeAll})
+	instance, err := svc.CreateInstance(context.Background(), dto.InstanceInput{DeviceID: device.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, &actions.DataPermission{UserID: 7, DataScope: actions.DataScopeAll})
 	if err != nil {
 		return err
 	}

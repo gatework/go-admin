@@ -7,12 +7,13 @@ import (
 
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/types"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 func TestDraftCreationRetryReturnsAcceptedDraftAfterBasisBecomesStale(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	requestInput := RequestInput{
+	requestInput := dto.RequestInput{
 		Title: "existing intent", DomainID: 1,
 		Input: types.Input{Rows: []types.InputRow{{Key: "row-1", Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}},
 	}
@@ -20,14 +21,14 @@ func TestDraftCreationRetryReturnsAcceptedDraftAfterBasisBecomesStale(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "initial-analysis", Version: r.Version}, all())
+	a, err := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "initial-analysis", Version: r.Version}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = NewWorker(s).Tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	in := DraftInput{RequestKey: "lost-create-response", AnalysisID: a.ID, Title: "original draft"}
+	in := dto.DraftInput{RequestKey: "lost-create-response", AnalysisID: a.ID, Title: "original draft"}
 	draft, err := s.EnqueueDraft(ctx, in, all())
 	if err != nil {
 		t.Fatal(err)

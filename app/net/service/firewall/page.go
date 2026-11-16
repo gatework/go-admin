@@ -6,28 +6,11 @@ import (
 	"gorm.io/gorm"
 
 	coredto "github.com/gatework/motor-core/sdk/contract/dto"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/common/database"
-	"github.com/gatework/motor/common/paging"
 )
 
-// Page carries page state for this module.
-type Page struct {
-	PageIndex int    `form:"pageIndex"`
-	PageSize  int    `form:"pageSize"`
-	Keyword   string `form:"keyword"`
-	GroupID   *int   `form:"groupId"`
-	DomainID  int    `form:"domainId"`
-}
-
-// Validate provides validate for this module.
-func (p *Page) Validate() error {
-	if !paging.Normalize(&p.PageIndex, &p.PageSize) || len(p.Keyword) > 512 || p.DomainID < 0 || p.GroupID != nil && *p.GroupID < 0 {
-		return InvalidErr
-	}
-	return nil
-}
-
-func pageQuery(db *gorm.DB, p Page) *gorm.DB {
+func pageQuery(db *gorm.DB, p dto.Page) *gorm.DB {
 	return db.Scopes(coredto.Paginate(p.PageSize, p.PageIndex))
 }
 
@@ -38,4 +21,4 @@ func keyword(db *gorm.DB, column, value string) *gorm.DB {
 	return db
 }
 
-func pValue(p *Page) Page { return *p }
+func pValue(p *dto.Page) dto.Page { return *p }

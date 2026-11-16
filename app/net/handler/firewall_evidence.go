@@ -5,6 +5,7 @@ import (
 
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // EnqueueImport handles an authorized firewall workbench operation.
@@ -20,7 +21,7 @@ func (e Firewall) EnqueueImport(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.ImportInput
+		var in dto.ImportInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -119,7 +120,7 @@ func (e Firewall) Objects(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var q service.ObjectQuery
+		var q dto.ObjectQuery
 		if c.ShouldBindQuery(&q) != nil {
 			return nil, service.InvalidErr
 		}

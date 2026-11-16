@@ -11,6 +11,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/grouping"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/common/actions"
 )
 
@@ -25,7 +26,7 @@ func (s *Firewall) Instance(ctx context.Context, id int, p *actions.DataPermissi
 }
 
 // CreateInstance provides create instance for this module.
-func (s *Firewall) CreateInstance(ctx context.Context, in InstanceInput, p *actions.DataPermission) (models.Instance, error) {
+func (s *Firewall) CreateInstance(ctx context.Context, in dto.InstanceInput, p *actions.DataPermission) (models.Instance, error) {
 	var out models.Instance
 	if s.Actor <= 0 || in.DeviceID <= 0 || in.DomainID <= 0 || len(in.NativeContext) > 128 || (in.Mode != "routed" && in.Mode != "transparent") {
 		return out, InvalidErr
@@ -60,7 +61,7 @@ func (s *Firewall) CreateInstance(ctx context.Context, in InstanceInput, p *acti
 }
 
 // Instances provides instances for this module.
-func (s *Firewall) Instances(ctx context.Context, p *Page, permission *actions.DataPermission) ([]models.Instance, int64, error) {
+func (s *Firewall) Instances(ctx context.Context, p *dto.Page, permission *actions.DataPermission) ([]models.Instance, int64, error) {
 	rows := []models.Instance{}
 	var count int64
 	if e := p.Validate(); e != nil {
@@ -94,15 +95,6 @@ func deviceScope(db *gorm.DB, p *actions.DataPermission) *gorm.DB {
 
 func scopedInstances(db *gorm.DB, p *actions.DataPermission) *gorm.DB {
 	return db.Model(&models.Instance{}).Where("device_id IN (?)", deviceScope(db, p).Select("id"))
-}
-
-// InstanceInput carries instance input state for this module.
-type InstanceInput struct {
-	DeviceID      int    `json:"deviceId"`
-	DomainID      int    `json:"domainId"`
-	Vendor        string `json:"vendor"`
-	NativeContext string `json:"nativeContext"`
-	Mode          string `json:"mode"`
 }
 
 func inDomain(q, db *gorm.DB, domainID int) *gorm.DB {

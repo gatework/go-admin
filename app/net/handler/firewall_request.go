@@ -5,6 +5,7 @@ import (
 
 	_ "github.com/gatework/motor-core/response" // Swagger response annotations require this package.
 	service "github.com/gatework/motor/app/net/service/firewall"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 // Requests handles an authorized firewall workbench operation.
@@ -39,7 +40,7 @@ func (e Firewall) SaveRequest(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.RequestInput
+		var in dto.RequestInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -77,7 +78,7 @@ func (e Firewall) EnqueueAnalysis(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.JobInput
+		var in dto.JobInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -150,7 +151,7 @@ func (e Firewall) CancelAnalysis(c *gin.Context) {
 func (e Firewall) EnqueueDraft(c *gin.Context) {
 	e.run(c, func(s *service.Firewall) (any, error) {
 		ctx := c.Request.Context()
-		var in service.DraftInput
+		var in dto.DraftInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -206,7 +207,7 @@ func (e Firewall) EditDraft(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.DraftEdit
+		var in dto.DraftEdit
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
@@ -227,7 +228,7 @@ func (e Firewall) ReanalyzeDraft(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		var in service.JobInput
+		var in dto.JobInput
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}

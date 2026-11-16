@@ -10,6 +10,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 	"github.com/gatework/motor/app/net/service/firewall/engine"
 )
 
@@ -40,11 +41,11 @@ func TestImportAnalysisAndDraftPersistWithoutBrowserPolling(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
 	did := device(t, s, 7, "192.0.2.254")
-	i, e := s.CreateInstance(ctx, InstanceInput{DeviceID: did, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
+	i, e := s.CreateInstance(ctx, dto.InstanceInput{DeviceID: did, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
-	in := ImportInput{RequestKey: "capture-1", Text: syntheticConfig, Filename: "synthetic.cfg", Complete: true}
+	in := dto.ImportInput{RequestKey: "capture-1", Text: syntheticConfig, Filename: "synthetic.cfg", Complete: true}
 	job, e := s.EnqueueImport(ctx, i.ID, in, all())
 	if e != nil {
 		t.Fatal(e)
@@ -69,11 +70,11 @@ func TestImportAnalysisAndDraftPersistWithoutBrowserPolling(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := s.SaveRequest(ctx, 0, RequestInput{Title: "existing access", DomainID: 1, Input: types.Input{DefaultProtocol: "tcp", Rows: []types.InputRow{{Key: "r1", Source: "192.0.2.10", Destination: "198.51.100.10", Service: "443"}}}}, all())
+	r, e := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "existing access", DomainID: 1, Input: types.Input{DefaultProtocol: "tcp", Rows: []types.InputRow{{Key: "r1", Source: "192.0.2.10", Destination: "198.51.100.10", Service: "443"}}}}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
-	a, e := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "check-1", Version: r.Version}, all())
+	a, e := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "check-1", Version: r.Version}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -91,7 +92,7 @@ func TestImportAnalysisAndDraftPersistWithoutBrowserPolling(t *testing.T) {
 	if !allowed {
 		t.Fatalf("known permit lost: %+v", a.Result)
 	}
-	d, e := s.EnqueueDraft(ctx, DraftInput{RequestKey: "draft-1", AnalysisID: a.ID, Title: "existing access"}, all())
+	d, e := s.EnqueueDraft(ctx, dto.DraftInput{RequestKey: "draft-1", AnalysisID: a.ID, Title: "existing access"}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -114,11 +115,11 @@ func TestImportAnalysisAndDraftPersistWithoutBrowserPolling(t *testing.T) {
 func importedInstance(t *testing.T, s *Firewall) (models.Instance, models.Import) {
 	t.Helper()
 	ctx := context.Background()
-	i, err := s.CreateInstance(ctx, InstanceInput{DeviceID: device(t, s, 7, "203.0.113.10"), DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
+	i, err := s.CreateInstance(ctx, dto.InstanceInput{DeviceID: device(t, s, 7, "203.0.113.10"), DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, err := s.EnqueueImport(ctx, i.ID, ImportInput{RequestKey: "fixture", Text: syntheticConfig, Complete: true}, all())
+	job, err := s.EnqueueImport(ctx, i.ID, dto.ImportInput{RequestKey: "fixture", Text: syntheticConfig, Complete: true}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestZoneDomainInheritanceSurvivesSavingSettings(t *testing.T) {
 	s := testService(t)
 	i, _ := importedInstance(t, s)
 	ctx := context.Background()
-	d, err := s.SaveDomain(ctx, 0, DomainInput{Code: "isolated", Name: "隔离网络"})
+	d, err := s.SaveDomain(ctx, 0, dto.DomainInput{Code: "isolated", Name: "隔离网络"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,11 +205,11 @@ func TestImportRecoveryRetainsPublicationAfterInventoryChanges(t *testing.T) {
 func TestExpiredAnalysisWorkerCannotOverwriteReclaimedJob(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	r, err := s.SaveRequest(ctx, 0, RequestInput{Title: "lease", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
+	r, err := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "lease", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "lease", Version: r.Version}, all())
+	a, err := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "lease", Version: r.Version}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,11 +249,11 @@ func TestExpiredAnalysisWorkerCannotOverwriteReclaimedJob(t *testing.T) {
 func TestCancelledQueuedAnalysisNeverRuns(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	r, e := s.SaveRequest(ctx, 0, RequestInput{Title: "unlocated", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Key: "a", Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
+	r, e := s.SaveRequest(ctx, 0, dto.RequestInput{Title: "unlocated", DomainID: 1, Input: types.Input{Rows: []types.InputRow{{Key: "a", Source: "192.0.2.1", Destination: "198.51.100.1", Service: "443"}}}}, all())
 	if e != nil {
 		t.Fatal(e)
 	}
-	a, e := s.EnqueueAnalysis(ctx, r.ID, JobInput{RequestKey: "cancel-1", Version: r.Version}, all())
+	a, e := s.EnqueueAnalysis(ctx, r.ID, dto.JobInput{RequestKey: "cancel-1", Version: r.Version}, all())
 	if e != nil {
 		t.Fatal(e)
 	}

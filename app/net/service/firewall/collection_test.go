@@ -7,12 +7,13 @@ import (
 
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
 func collectionInstance(t *testing.T, s *Firewall, ip string) models.Instance {
 	t.Helper()
 	id := device(t, s, 7, ip)
-	i, err := s.CreateInstance(context.Background(), InstanceInput{DeviceID: id, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
+	i, err := s.CreateInstance(context.Background(), dto.InstanceInput{DeviceID: id, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +28,7 @@ func TestCollectionIdempotencyAndPartialAdmission(t *testing.T) {
 	if err := s.DB.Model(&inventory.Device{}).Where("id = ?", b.DeviceID).Update("status", "retired").Error; err != nil {
 		t.Fatal(err)
 	}
-	in := CollectionInput{RequestKey: "same", Kind: "capture", InstanceIDs: []int{a.ID, b.ID}}
+	in := dto.CollectionInput{RequestKey: "same", Kind: "capture", InstanceIDs: []int{a.ID, b.ID}}
 	first, err := s.EnqueueCollection(ctx, in, all())
 	if err != nil {
 		t.Fatal(err)
@@ -61,11 +62,11 @@ func TestCollectionRejectsUnsafeContextAndPayload(t *testing.T) {
 	if err := s.DB.Model(&i).Update("native_context", "vsys2").Error; err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.EnqueueCollection(ctx, CollectionInput{RequestKey: "context", Kind: "capture", InstanceIDs: []int{i.ID}}, all())
+	b, err := s.EnqueueCollection(ctx, dto.CollectionInput{RequestKey: "context", Kind: "capture", InstanceIDs: []int{i.ID}}, all())
 	if err != nil || b.Targets[0].ErrorCode != "context_unsupported" {
 		t.Fatalf("unsafe context: %+v %v", b, err)
 	}
-	for _, in := range []CollectionInput{{RequestKey: "bad", Kind: "apply", InstanceIDs: []int{i.ID}}, {RequestKey: "duplicate", Kind: "capture", InstanceIDs: []int{i.ID, i.ID}}, {RequestKey: "empty", Kind: "capture"}} {
+	for _, in := range []dto.CollectionInput{{RequestKey: "bad", Kind: "apply", InstanceIDs: []int{i.ID}}, {RequestKey: "duplicate", Kind: "capture", InstanceIDs: []int{i.ID, i.ID}}, {RequestKey: "empty", Kind: "capture"}} {
 		if _, err = s.EnqueueCollection(ctx, in, all()); !errors.Is(err, InvalidErr) {
 			t.Fatalf("invalid accepted: %+v %v", in, err)
 		}
