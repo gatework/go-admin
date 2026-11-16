@@ -42,7 +42,7 @@ func (s *Device) Page(ctx context.Context, r *dto.DevicePageReq, p *actions.Data
 	if err := r.Validate(); err != nil {
 		return nil, 0, err
 	}
-	groupFilter, err := groupScope(s.DB.WithContext(ctx), r.GroupID)
+	groupFilter, err := grouping.DeviceScope(s.DB.WithContext(ctx), r.GroupID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -186,7 +186,7 @@ func (s *Device) Export(ctx context.Context, r *dto.DevicePageReq, p *actions.Da
 		return nil, err
 	}
 	var rows []inventory.Device
-	groupFilter, err := groupScope(s.DB.WithContext(ctx), r.GroupID)
+	groupFilter, err := grouping.DeviceScope(s.DB.WithContext(ctx), r.GroupID)
 	if err != nil {
 		return nil, err
 	}

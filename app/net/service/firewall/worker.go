@@ -245,12 +245,14 @@ func (w *Worker) analysisJob(parent context.Context, job models.Analysis, token 
 		if err := tx.Where("analysis_id = ?", job.ID).Delete(&models.AnalysisResult{}).Error; err != nil {
 			return err
 		}
-		for i, item := range result.Items {
-			if err := tx.Create(&models.AnalysisResult{AnalysisID: job.ID, Position: i, Item: item}).Error; err != nil {
-				return err
-			}
+		if len(result.Items) == 0 {
+			return nil
 		}
-		return nil
+		rows := make([]models.AnalysisResult, len(result.Items))
+		for i, item := range result.Items {
+			rows[i] = models.AnalysisResult{AnalysisID: job.ID, Position: i, Item: item}
+		}
+		return tx.CreateInBatches(rows, 200).Error
 	})
 }
 func (w *Worker) draftJob(parent context.Context, job models.Draft, token string) error {

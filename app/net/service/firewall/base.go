@@ -23,6 +23,7 @@ import (
 	base "github.com/gatework/motor-core/sdk/service"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
+	"github.com/gatework/motor/app/net/models/grouping"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/database"
@@ -127,27 +128,11 @@ func (s *Firewall) Instances(ctx context.Context, p *Page, permission *actions.D
 		q = inDomain(q, s.db(ctx), p.DomainID)
 	}
 	if p.GroupID != nil {
-		devices := deviceScope(s.db(ctx), permission)
-		if *p.GroupID == 0 {
-			devices = devices.Where("group_id IS NULL")
-		} else {
-			var groups []network.DeviceGroup
-			if e := s.db(ctx).Find(&groups).Error; e != nil {
-				return rows, 0, e
-			}
-			ids := []int{*p.GroupID}
-			seen := map[int]bool{*p.GroupID: true}
-			for i := 0; i < len(ids); i++ {
-				for _, g := range groups {
-					if g.ParentID != nil && *g.ParentID == ids[i] && !seen[g.ID] {
-						seen[g.ID] = true
-						ids = append(ids, g.ID)
-					}
-				}
-			}
-			devices = devices.Where("group_id IN ?", ids)
+		inGroup, e := grouping.DeviceScope(s.db(ctx), p.GroupID)
+		if e != nil {
+			return rows, 0, e
 		}
-		q = q.Where("device_id IN (?)", devices.Select("id"))
+		q = q.Where("device_id IN (?)", deviceScope(s.db(ctx), permission).Scopes(inGroup).Select("id"))
 	}
 	if e := q.Count(&count).Error; e != nil {
 		return rows, 0, e
@@ -175,9 +160,12 @@ func hash(v any) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
-func validKey(s string) bool {
-	return len(s) > 0 && len(s) <= 128 && regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(s)
-}
+
+var keyPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// validKey reports whether s is a request or domain key: 1-128 ASCII
+// letters, digits, '_' or '-'.
+func validKey(s string) bool   { return len(s) > 0 && len(s) <= 128 && keyPattern.MatchString(s) }
 func validTitle(s string) bool { return strings.TrimSpace(s) != "" && utf8.RuneCountInString(s) <= 255 }
 
 // Page carries page state for this module.

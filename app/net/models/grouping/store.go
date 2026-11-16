@@ -191,3 +191,51 @@ func backfillDevices(tx *gorm.DB, rows []models.Device, groups Directory, legacy
 	}
 	return nil
 }
+
+// DeviceScope filters devices by group: nil is every device, 0 the ungrouped
+// ones, and any other ID that group with its whole subtree. An ID that names
+// no group matches nothing.
+func DeviceScope(tx *gorm.DB, id *int) (func(*gorm.DB) *gorm.DB, error) {
+	if id == nil {
+		return func(db *gorm.DB) *gorm.DB { return db }, nil
+	}
+	if *id == 0 {
+		return func(db *gorm.DB) *gorm.DB { return db.Where("group_id IS NULL") }, nil
+	}
+	groups, err := Load(tx)
+	if err != nil {
+		return nil, err
+	}
+	children := map[int][]int{}
+	exists := false
+	for _, group := range groups {
+		if group.ID == *id {
+			exists = true
+		}
+		if group.ParentID != nil {
+			children[*group.ParentID] = append(children[*group.ParentID], group.ID)
+		}
+	}
+	ids := []int{}
+	seen := map[int]bool{}
+	var visit func(int)
+	visit = func(current int) {
+		if seen[current] {
+			return
+		}
+		seen[current] = true
+		ids = append(ids, current)
+		for _, child := range children[current] {
+			visit(child)
+		}
+	}
+	if exists {
+		visit(*id)
+	}
+	return func(db *gorm.DB) *gorm.DB {
+		if len(ids) == 0 {
+			return db.Where("1 = 0")
+		}
+		return db.Where("group_id IN ?", ids)
+	}, nil
+}
