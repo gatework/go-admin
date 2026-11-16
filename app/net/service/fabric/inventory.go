@@ -22,7 +22,7 @@ import (
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is a request the service refuses as malformed.
-	InvalidErr = errors.New(errors.KindInvalid, "fabric.invalid_input", "")
+	InvalidErr = models.InvalidErr
 	// NotFoundErr is a fabric or device that does not exist or is out of scope.
 	NotFoundErr = errors.New(errors.KindNotFound, "fabric.not_found", "")
 	// ConflictErr is a write against fabric data that has since changed.
