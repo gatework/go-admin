@@ -104,7 +104,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	if e != nil || !sourceSnapshot.Complete() || len(sourceSnapshot.Dimensions["configuration"].Records) != 1 || opsHash(sourceSnapshot.Dimensions["configuration"].Records[0]) != c.SourceConfigHash {
 		return w.stopChange(ctx, &c, "source_configuration_drift")
 	}
-	if e := w.persistSnapshot(ctx, c.FabricID, 0, source, sourceSnapshot, started, time.Now().UTC()); e != nil {
+	if e := w.persistSnapshot(ctx, snapshotWrite{FabricID: c.FabricID, Target: source, Snapshot: sourceSnapshot, Started: started, Finished: time.Now().UTC()}); e != nil {
 		return w.stopChange(ctx, &c, "source_evidence_invalid")
 	}
 	return w.runChangeTargets(ctx, &c, plan)
@@ -129,7 +129,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 			t.ErrorCode = "configuration_drift"
 			return ConflictErr
 		}
-		if err = w.persistSnapshot(ctx, c.FabricID, 0, models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}, t.PreEvidence, started, time.Now().UTC()); err != nil {
+		if err = w.persistSnapshot(ctx, snapshotWrite{FabricID: c.FabricID, Target: evidenceTarget(*t), Snapshot: t.PreEvidence, Started: started, Finished: time.Now().UTC()}); err != nil {
 			return err
 		}
 		if err := w.writeChangeCommands(ctx, c, t, plan, held, session); err != nil {
@@ -146,7 +146,7 @@ func (w *Worker) runChangeTarget(ctx context.Context, c *models.Change, t *model
 			return ConflictErr
 		}
 		t.ConfigurationVerified = true
-		if err := w.persistSnapshot(ctx, c.FabricID, 0, models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}, t.PostEvidence, postStarted, time.Now().UTC()); err != nil {
+		if err := w.persistSnapshot(ctx, snapshotWrite{FabricID: c.FabricID, Target: evidenceTarget(*t), Snapshot: t.PostEvidence, Started: postStarted, Finished: time.Now().UTC()}); err != nil {
 			return err
 		}
 		t.RuntimeState = postRuntimeState(t.PostEvidence, afterObs.Records[0])
@@ -200,7 +200,7 @@ func (w *Worker) stopChange(ctx context.Context, c *models.Change, code string) 
 	}
 	for _, t := range c.Targets {
 		if t.Status == "uncertain" && !t.ConfigurationVerified {
-			if e := w.persistCollectionFailure(ctx, models.Collection{FabricID: c.FabricID, Mode: "all"}, models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}, "failed", code); e != nil {
+			if e := w.persistCollectionFailure(ctx, models.Collection{FabricID: c.FabricID, Mode: "all"}, evidenceTarget(t), "failed", code); e != nil {
 				return e
 			}
 		}
@@ -363,4 +363,10 @@ func (w *Worker) unlock(ctx context.Context, lock lease.Lease) error {
 		return e
 	}
 	return nil
+}
+
+// evidenceTarget is the collection target that a change target's evidence,
+// and a failure recorded against it, is stored under.
+func evidenceTarget(t models.ChangeTarget) models.CollectionTarget {
+	return models.CollectionTarget{DeviceID: t.DeviceID, Device: t.Device, Connection: t.Connection, SourceHash: t.SourceHash}
 }

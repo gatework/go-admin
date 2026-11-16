@@ -233,17 +233,30 @@ func (w *Worker) finishCollection(ctx context.Context, job *models.Collection) e
 	now := time.Now().UTC()
 	return opsDB(ctx, w.s).Model(job).Updates(map[string]any{"targets": opsJSON(job.Targets), "status": status, "finished_at": now, "version": gorm.Expr("version + 1")}).Error
 }
-func (w *Worker) persistSnapshot(ctx context.Context, fabric, id int, t models.CollectionTarget, snapshot vxlan.Snapshot, started, finished time.Time) error {
-	if opsHash(snapshot.Target) != opsHash(targetRecord(t.Device)) || fmt.Sprint(snapshot.FabricKey) != fmt.Sprint(fabric) || snapshot.ObservedAt == nil || snapshot.ObservedAt.Before(started.Add(-time.Second)) || snapshot.ObservedAt.After(finished.Add(time.Second)) {
+
+// snapshotWrite is one device snapshot to store as observations: the fabric
+// and collection it belongs to (CollectionID 0 for a change's own evidence),
+// the target it was taken from, and the window it must have been taken in.
+type snapshotWrite struct {
+	FabricID          int
+	CollectionID      int
+	Target            models.CollectionTarget
+	Snapshot          vxlan.Snapshot
+	Started, Finished time.Time
+}
+
+func (w *Worker) persistSnapshot(ctx context.Context, s snapshotWrite) error {
+	snapshot, t := s.Snapshot, s.Target
+	if opsHash(snapshot.Target) != opsHash(targetRecord(t.Device)) || fmt.Sprint(snapshot.FabricKey) != fmt.Sprint(s.FabricID) || snapshot.ObservedAt == nil || snapshot.ObservedAt.Before(s.Started.Add(-time.Second)) || snapshot.ObservedAt.After(s.Finished.Add(time.Second)) {
 		return InvalidErr
 	}
 	var member models.Membership
-	if e := opsDB(ctx, w.s).First(&member, "device_id = ? AND fabric_id = ? AND status = ?", t.DeviceID, fabric, "assigned").Error; e != nil {
+	if e := opsDB(ctx, w.s).First(&member, "device_id = ? AND fabric_id = ? AND status = ?", t.DeviceID, s.FabricID, "assigned").Error; e != nil {
 		return e
 	}
 	return opsDB(ctx, w.s).Transaction(func(tx *gorm.DB) error {
 		for dimension, o := range snapshot.Dimensions {
-			if e := persistFabricDimension(tx, fabric, id, t, member, snapshot, dimension, o, started, finished); e != nil {
+			if e := persistFabricDimension(tx, s, member, dimension, o); e != nil {
 				return e
 			}
 		}
@@ -305,7 +318,7 @@ func (w *Worker) persistCollectionFailure(ctx context.Context, job models.Collec
 		o.CompletedAt = &now
 		snapshot.Dimensions[dimension] = o
 	}
-	err := w.persistSnapshot(ctx, job.FabricID, job.ID, t, snapshot, now, now)
+	err := w.persistSnapshot(ctx, snapshotWrite{FabricID: job.FabricID, CollectionID: job.ID, Target: t, Snapshot: snapshot, Started: now, Finished: now})
 	// This synthetic observation invalidates current evidence only while the
 	// device still belongs to the original Fabric. Membership changes must not
 	// prevent historical runs from becoming terminal, or affect the new Fabric.
@@ -344,7 +357,7 @@ func (w *Worker) collectTarget(ctx context.Context, job models.Collection, t *mo
 		t.ErrorCode = "source_changed"
 	} else {
 		snapshot = collectionFailureSnapshot(job, *t, snapshot, e, started)
-		persistErr := w.persistSnapshot(ctx, job.FabricID, job.ID, *t, snapshot, started, time.Now().UTC())
+		persistErr := w.persistSnapshot(ctx, snapshotWrite{FabricID: job.FabricID, CollectionID: job.ID, Target: *t, Snapshot: snapshot, Started: started, Finished: time.Now().UTC()})
 		if e != nil || persistErr != nil {
 			t.Status = "failed"
 			t.ErrorCode = "collection_failed"
@@ -378,7 +391,8 @@ func collectionFailureSnapshot(job models.Collection, t models.CollectionTarget,
 	}
 	return snapshot
 }
-func persistFabricDimension(tx *gorm.DB, fabric, id int, t models.CollectionTarget, member models.Membership, snapshot vxlan.Snapshot, dimension string, o vxlan.Observation, started, finished time.Time) error {
+func persistFabricDimension(tx *gorm.DB, s snapshotWrite, member models.Membership, dimension string, o vxlan.Observation) error {
+	snapshot, t := s.Snapshot, s.Target
 	// Upstream synthesizes unconfigured vPC directly from the complete
 	// configuration dimension, so that observation borrows its clock.
 	if dimension == "vpc" && o.Complete() && o.CompletedAt == nil && snapshot.Dimensions["configuration"].Complete() {
@@ -389,7 +403,7 @@ func persistFabricDimension(tx *gorm.DB, fabric, id int, t models.CollectionTarg
 			}
 		}
 	}
-	if !validObservation(o, dimension, started, finished) {
+	if !validObservation(o, dimension, s.Started, s.Finished) {
 		return InvalidErr
 	}
 	var latest models.Observation
@@ -400,7 +414,7 @@ func persistFabricDimension(tx *gorm.DB, fabric, id int, t models.CollectionTarg
 	if e == nil && !o.CompletedAt.After(latest.ObservedAt) {
 		return nil
 	}
-	row := models.Observation{FabricID: fabric, DeviceID: t.DeviceID, CollectionID: id, Dimension: dimension, Status: o.Status, Data: o, ObservedAt: *o.CompletedAt, Version: latest.Version + 1, SourceHash: t.SourceHash, MembershipVersion: member.Version, RuleVersion: member.RuleVersion}
+	row := models.Observation{FabricID: s.FabricID, DeviceID: t.DeviceID, CollectionID: s.CollectionID, Dimension: dimension, Status: o.Status, Data: o, ObservedAt: *o.CompletedAt, Version: latest.Version + 1, SourceHash: t.SourceHash, MembershipVersion: member.Version, RuleVersion: member.RuleVersion}
 	if dimension == "configuration" && o.Complete() {
 		row.ConfigHash = opsHash(o.Records)
 	}
