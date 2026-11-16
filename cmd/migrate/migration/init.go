@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gorm.io/gorm"
@@ -42,20 +43,18 @@ type versionEntry struct {
 
 // Migration defines the migration contract.
 type Migration struct {
-	db      *gorm.DB
+	// db is the database migrations run against. It is set by the command
+	// and read by every operation, possibly from another goroutine.
+	db      atomic.Pointer[gorm.DB]
 	version map[string]versionEntry
 	mutex   sync.Mutex
 }
 
-// GetDB returns the selected data.
-func (e *Migration) GetDB() *gorm.DB {
-	return e.db
-}
+// GetDB returns the database migrations run against, or nil.
+func (e *Migration) GetDB() *gorm.DB { return e.db.Load() }
 
-// SetDB updates the corresponding value.
-func (e *Migration) SetDB(db *gorm.DB) {
-	e.db = db
-}
+// SetDB sets the database migrations run against.
+func (e *Migration) SetDB(db *gorm.DB) { e.db.Store(db) }
 
 // SetVersion registers a migration owned by the framework. Signature and
 // behaviour are unchanged: every existing call site in version/*.go keeps
@@ -182,7 +181,8 @@ type StatusEntry struct {
 // It only reads. Nothing here creates or alters a table, which is what lets
 // both `status` and `--dry-run` run against a database without touching it.
 func (e *Migration) Status() ([]StatusEntry, error) {
-	if e.db == nil {
+	db := e.GetDB()
+	if db == nil {
 		return nil, fmt.Errorf("migration: no database configured")
 	}
 
@@ -196,9 +196,9 @@ func (e *Migration) Status() ([]StatusEntry, error) {
 	// A database that has never been migrated has no sys_migration table.
 	// Reporting everything as pending is the honest answer there; erroring out
 	// would make status useless in exactly the case it is most wanted.
-	if e.db.Migrator().HasTable(&common.Migration{}) {
+	if db.Migrator().HasTable(&common.Migration{}) {
 		var rows []common.Migration
-		if err := e.db.Find(&rows).Error; err != nil {
+		if err := db.Find(&rows).Error; err != nil {
 			return nil, err
 		}
 		for _, r := range rows {
@@ -395,7 +395,7 @@ func (e *Migration) run(appCode string) error {
 	// migrations to apply", which reads exactly like "already up to date".
 	//
 	// The command layer rejects an unregistered code before any database
-	// work (exitUnlessAppRegistered), so on that path this is unreachable.
+	// work (appRegistrationError), so on that path this is unreachable.
 	// It is reachable from an installer, which asks for one app by name and
 	// must not be told that installing an app nothing registered succeeded.
 	if appCode != allApps && len(versions) == 0 {
@@ -403,11 +403,15 @@ func (e *Migration) run(appCode string) error {
 			DisplayAppCode(appCode), strings.Join(e.AppCodes(), ", "))
 	}
 
+	db := e.GetDB()
+	if db == nil {
+		return fmt.Errorf("migration: no database configured")
+	}
 	var err error
 	var count int64
 	applied := 0
 	for _, v := range versions {
-		err = e.db.Table("sys_migration").Where("version = ?", v).Count(&count).Error
+		err = db.Table("sys_migration").Where("version = ?", v).Count(&count).Error
 		if err != nil {
 			return fmt.Errorf("checking whether migration %s was applied: %w", v, err)
 		}
@@ -418,7 +422,7 @@ func (e *Migration) run(appCode string) error {
 			continue
 		}
 		log.Printf("applying migration %s", v)
-		if err = entries[v].fn(e.db.Debug(), v); err != nil {
+		if err = entries[v].fn(db.Debug(), v); err != nil {
 			return &VersionError{Version: v, Err: err}
 		}
 		applied++
