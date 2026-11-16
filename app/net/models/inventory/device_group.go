@@ -31,8 +31,9 @@ type DeviceGroup struct {
 func (DeviceGroup) TableName() string { return "sys_network_device_group" }
 
 // DeviceGroupLock is the lock table the device group hierarchy used before
-// txlock. Only the frozen device-group migration still creates it; nothing
-// takes this lock. Remove it once frozen migrations have their own models.
+// txlock. Only the frozen device-group migration still creates and takes it
+// (grouping.SeedAndBackfill runs before sys_network_lock exists). Remove it
+// once frozen migrations have their own models.
 type DeviceGroupLock struct {
 	ID      int   `gorm:"primaryKey;autoIncrement:false"`
 	Version int64 `gorm:"not null;default:0"`

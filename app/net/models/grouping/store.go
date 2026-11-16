@@ -7,14 +7,26 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/txlock"
 )
 
-// Lock provides the lock operation within the caller's authorized network scope.
+// Lock serializes changes to the group hierarchy and memberships for the rest
+// of tx.
 func Lock(tx *gorm.DB) error {
 	return txlock.Hold(tx, txlock.DeviceGroups)
+}
+
+// lockForMigration is Lock as the device-group migration takes it. That
+// frozen migration runs before sys_network_lock exists, so it keeps the
+// legacy lock row its own schema creates.
+func lockForMigration(tx *gorm.DB) error {
+	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceGroupLock{ID: 1}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.DeviceGroupLock{}).Where("id = 1").Update("version", gorm.Expr("version + 1")).Error
 }
 
 // Directory describes directory for network operations.
@@ -62,7 +74,7 @@ func (groups Directory) Resolve(name, serial string, current *int) *int {
 // reinterpret a manual override, even when the legacy column is retained.
 func SeedAndBackfill(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := Lock(tx); err != nil {
+		if err := lockForMigration(tx); err != nil {
 			return err
 		}
 		var rows []models.Device
