@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/gatework/motor-core/sdk/contract/actions"
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	models "github.com/gatework/motor/app/net/models/wireless"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
@@ -41,7 +42,7 @@ func (s *Wireless) Switches(ctx context.Context, r *dto.PageReq, p *actions.Data
 		return nil, 0, e
 	}
 	var rows []network.Device
-	if e := q.Order("id").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error; e != nil {
+	if e := q.Order("id").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error; e != nil {
 		return nil, 0, e
 	}
 	out := []dto.Switch{}
@@ -180,7 +181,7 @@ func (s *Wireless) Collections(ctx context.Context, id int, r *dto.PageReq, p *a
 		return nil, 0, e
 	}
 	rows := []models.Collection{}
-	e := q.Order("id DESC").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error
+	e := q.Order("id DESC").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error
 	return rows, n, e
 }
 

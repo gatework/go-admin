@@ -10,6 +10,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/common/database"
 )
@@ -128,7 +129,7 @@ func (s *Store) Objects(ctx context.Context, snapshotID int, kind string, f Filt
 	if err = db.Count(&page.Count).Error; err != nil {
 		return page, err
 	}
-	db = db.Order("position ASC, id ASC").Offset((page.PageIndex - 1) * page.PageSize).Limit(page.PageSize)
+	db = db.Order("position ASC, id ASC").Scopes(coredto.Paginate(page.PageSize, page.PageIndex))
 	page.List, err = readObjects(db, kind)
 	return page, err
 }

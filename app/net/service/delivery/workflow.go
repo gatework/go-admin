@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/gatework/go-net-connector/connector"
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/connection"
 	models "github.com/gatework/motor/app/net/models/delivery"
@@ -259,7 +260,7 @@ func (s *Workflow) Page(ctx context.Context, r dto.Page, p *actions.DataPermissi
 		return nil, 0, e
 	}
 	rows := []models.Order{}
-	e := q.Order("id DESC").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error
+	e := q.Order("id DESC").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error
 	for i := range rows {
 		decorate(&rows[i], s.Config.Enabled)
 		rows[i].Retryable = rows[i].Kind != "fabric" && s.Config.Enabled && rows[i].FailedCount > 0 && rows[i].FinishedAt != nil

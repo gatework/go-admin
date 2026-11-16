@@ -7,6 +7,8 @@ import (
 	common "github.com/gatework/motor/common/models"
 
 	"gorm.io/gorm"
+
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 )
 
 // SysTables stores sys tables data in the database.
@@ -73,7 +75,7 @@ func (e *SysTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]SysTabl
 
 	var count int64
 
-	if err := table.Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Offset(-1).Limit(-1).Count(&count).Error; err != nil {
+	if err := coredto.Paginate(pageSize, pageIndex)(table).Find(&doc).Offset(-1).Limit(-1).Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
 	//table.Where("`deleted_at` IS NULL").Count(&count)

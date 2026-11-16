@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
@@ -45,7 +46,7 @@ func (s *Circuit) Page(ctx context.Context, r *dto.CircuitPageReq, p *actions.Da
 	if err := s.scoped(ctx, p).Scopes(circuitFilters(r)).Count(&count).Error; err != nil {
 		return nil, 0, inventory.PersistenceErr
 	}
-	err := s.scoped(ctx, p).Scopes(circuitFilters(r)).Order("updated_at DESC, id DESC").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error
+	err := s.scoped(ctx, p).Scopes(circuitFilters(r)).Order("updated_at DESC, id DESC").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error
 	if err != nil {
 		return nil, 0, inventory.PersistenceErr
 	}

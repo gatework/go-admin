@@ -13,6 +13,7 @@ import (
 
 	vxlan "github.com/gatework/go-vxlan"
 	"github.com/gatework/motor-core/sdk/contract/actions"
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 )
@@ -283,7 +284,7 @@ func (s *Fabric) Assessments(ctx context.Context, id int, r *dto.PageReq, p *act
 	if err := q.Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
-	err = q.Order("id DESC").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error
+	err = q.Order("id DESC").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error
 	return rows, count, err
 }
 

@@ -5,6 +5,8 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 )
 
 // DBTables stores dbtables data in the database.
@@ -49,7 +51,7 @@ func (e *DBTables) GetPage(tx *gorm.DB, pageSize int, pageIndex int) ([]DBTables
 	if err := table.Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := table.Order(clause.OrderByColumn{Column: clause.Column{Name: "TABLE_NAME"}}).Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&doc).Error; err != nil {
+	if err := table.Order(clause.OrderByColumn{Column: clause.Column{Name: "TABLE_NAME"}}).Scopes(coredto.Paginate(pageSize, pageIndex)).Find(&doc).Error; err != nil {
 		return nil, 0, err
 	}
 	return doc, int(count), nil

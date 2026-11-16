@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/actions"
 )
@@ -29,7 +30,7 @@ func historicalPage[T any](ctx context.Context, s *Fabric, fabric int, req *dto.
 		if err := queryForTasks().Count(&count).Error; err != nil {
 			return nil, 0, err
 		}
-		err := queryForTasks().Order("id DESC").Offset((req.PageIndex - 1) * req.PageSize).Limit(req.PageSize).Find(&out).Error
+		err := queryForTasks().Order("id DESC").Scopes(coredto.Paginate(req.PageSize, req.PageIndex)).Find(&out).Error
 		return out, count, err
 	}
 	var deviceIDs []int

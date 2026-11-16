@@ -19,6 +19,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/vendors"
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	base "github.com/gatework/motor-core/sdk/service"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
@@ -196,7 +197,7 @@ func (p *Page) Validate() error {
 	return nil
 }
 func pageQuery(db *gorm.DB, p Page) *gorm.DB {
-	return db.Offset((p.PageIndex - 1) * p.PageSize).Limit(p.PageSize)
+	return db.Scopes(coredto.Paginate(p.PageSize, p.PageIndex))
 }
 func keyword(db *gorm.DB, column, value string) *gorm.DB {
 	if value != "" {

@@ -12,6 +12,7 @@ import (
 
 	"gorm.io/gorm"
 
+	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
@@ -48,7 +49,7 @@ func (s *Device) Page(ctx context.Context, r *dto.DevicePageReq, p *actions.Data
 	if err := s.scoped(ctx, p).Scopes(filters(r), groupFilter).Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
-	err = s.scoped(ctx, p).Scopes(filters(r), groupFilter).Order("updated_at DESC, id DESC").Offset((r.PageIndex - 1) * r.PageSize).Limit(r.PageSize).Find(&rows).Error
+	err = s.scoped(ctx, p).Scopes(filters(r), groupFilter).Order("updated_at DESC, id DESC").Scopes(coredto.Paginate(r.PageSize, r.PageIndex)).Find(&rows).Error
 	if err == nil {
 		err = populateGroupNames(s.DB.WithContext(ctx), rows)
 	}
