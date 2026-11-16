@@ -12,7 +12,6 @@ import (
 
 	vxlan "github.com/gatework/go-vxlan"
 	"github.com/gatework/motor-core/logger"
-	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	network "github.com/gatework/motor/app/net/models/inventory"
@@ -169,33 +168,31 @@ func (w *Worker) unlock(ctx context.Context, lock lease.Lease) error {
 	}
 	return nil
 }
+
+// executePermission is the menu permission a change's approver must still
+// hold when the change runs.
+const executePermission = "network:fabric:execute"
+
 func (w *Worker) currentAuthorization(ctx context.Context, c models.Change) error {
 	actor := c.ExecuteBy
 	if actor <= 0 {
 		actor = c.CreateBy
 	}
-	var p actions.DataPermission
-	q := opsDB(ctx, w.s).Table("sys_user").Select("sys_user.user_id,sys_user.dept_id,sys_role.role_id,sys_role.data_scope").Joins("JOIN sys_role ON sys_role.role_id = sys_user.role_id").Where("sys_user.user_id = ? AND sys_user.status = ? AND sys_role.status = ? AND sys_user.deleted_at = 0 AND sys_role.deleted_at = 0", actor, "2", "2").Scan(&p)
-	if q.Error != nil {
-		return q.Error
-	}
-	if p.UserID == 0 {
-		return ScopeErr
-	}
-	var role struct{ RoleKey string }
-	if e := opsDB(ctx, w.s).Table("sys_role").Select("role_key").Where("role_id = ?", p.RoleID).Scan(&role).Error; e != nil {
+	// The change runs long after it was approved: re-read the approver's
+	// grant, so a user disabled or a role that lost the permission stops it.
+	grant, ok, e := account.CurrentGrant(ctx, opsDB(ctx, w.s), actor)
+	if e != nil {
 		return e
 	}
-	if !account.IsAdmin(role.RoleKey) {
-		var grants int64
-		if e := opsDB(ctx, w.s).Table("sys_role_menu rm").Joins("JOIN sys_menu m ON m.menu_id = rm.menu_id").Where("rm.role_id = ? AND m.permission = ? AND m.deleted_at = 0", p.RoleID, "network:fabric:execute").Count(&grants).Error; e != nil {
-			return e
-		}
-		if grants == 0 {
-			return ScopeErr
-		}
+	if !ok {
+		return ScopeErr
 	}
-	devices, e := w.s.RequireFullScope(ctx, c.FabricID, &p)
+	if held, e := grant.Holds(ctx, opsDB(ctx, w.s), executePermission); e != nil {
+		return e
+	} else if !held {
+		return ScopeErr
+	}
+	devices, e := w.s.RequireFullScope(ctx, c.FabricID, grant.Permission())
 	if e != nil {
 		return e
 	}

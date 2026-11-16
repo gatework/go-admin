@@ -50,7 +50,7 @@ func (s Service) IssueEmail(ctx context.Context, kind, email string) (string, er
 	if kind == "register" && len(users) > 0 {
 		return token, nil
 	}
-	if kind == "reset" && (len(users) != 1 || users[0].Status != "2") {
+	if kind == "reset" && (len(users) != 1 || users[0].Status != StatusEnabled) {
 		return "", nil
 	}
 	n, e := rand.Int(rand.Reader, big.NewInt(1000000))
@@ -140,7 +140,7 @@ func (s Service) Register(r Registration) error {
 		} else if e != nil {
 			return e
 		}
-		if role.Admin || IsAdmin(role.RoleKey) || role.Status != "2" {
+		if role.Admin || IsAdmin(role.RoleKey) || role.Status != StatusEnabled {
 			return DisabledErr
 		}
 		// Never bind privileged fields from the request. This role starts with no administrative grants.
