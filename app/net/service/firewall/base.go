@@ -109,7 +109,7 @@ func (s *Firewall) CreateInstance(ctx context.Context, in InstanceInput, p *acti
 		out.Name = d.IP
 	}
 	if e = s.db(ctx).Create(&out).Error; e != nil {
-		return models.Instance{}, ConflictErr
+		return models.Instance{}, conflictOnDuplicate(e)
 	}
 	return out, nil
 }
@@ -230,15 +230,14 @@ func (s *Firewall) SaveDomain(ctx context.Context, id int, in DomainInput) (mode
 	}
 	if id == 0 {
 		d = models.Domain{Code: in.Code, Name: in.Name, Version: 1}
-		e := s.db(ctx).Create(&d).Error
-		if e != nil {
-			return d, ConflictErr
+		if e := s.db(ctx).Create(&d).Error; e != nil {
+			return d, conflictOnDuplicate(e)
 		}
 		return d, nil
 	}
 	q := s.db(ctx).Model(&models.Domain{}).Where("id = ? AND version = ?", id, in.Version).Updates(map[string]any{"name": in.Name, "code": in.Code, "version": gorm.Expr("version + 1")})
 	if q.Error != nil {
-		return d, q.Error
+		return d, conflictOnDuplicate(q.Error)
 	}
 	if q.RowsAffected != 1 {
 		return d, ConflictErr
@@ -298,4 +297,13 @@ func (s *Firewall) domain(ctx context.Context, id int) error {
 		return safeError(e)
 	}
 	return nil
+}
+
+// conflictOnDuplicate reports a broken unique key (one instance per device,
+// one domain per code) as ConflictErr, and any other error as itself.
+func conflictOnDuplicate(err error) error {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return ConflictErr.WithCause(err)
+	}
+	return err
 }

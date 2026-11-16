@@ -28,7 +28,7 @@ func testService(t *testing.T) *Firewall {
 	if dsn := os.Getenv("FIREWALL_TEST_POSTGRES_DSN"); dsn != "" {
 		dialect = postgres.Open(dsn)
 	}
-	db, err := gorm.Open(dialect, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(dialect, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent), TranslateError: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,5 +183,24 @@ func TestPermissionRevocationHidesSavedCrossDeviceInputAndLists(t *testing.T) {
 	_, count, e := s.Requests(ctx, &Page{}, p)
 	if e != nil || count != 0 {
 		t.Fatalf("list leaked hidden record: count=%d err=%v", count, e)
+	}
+}
+
+// Only a broken unique key is a conflict; any other failure to save is
+// reported as itself, not as "someone changed this first".
+func TestSaveDomainCallsOnlyADuplicateAConflict(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-1", Name: "DC 1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-1", Name: "again"}); !errors.Is(err, ConflictErr) {
+		t.Fatalf("duplicate code: %v, want ConflictErr", err)
+	}
+	if err := s.DB.Exec("DROP TABLE " + (models.Domain{}).TableName()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveDomain(ctx, 0, DomainInput{Code: "dc-2", Name: "DC 2"}); err == nil || errors.Is(err, ConflictErr) {
+		t.Fatalf("missing table: %v, want the database error", err)
 	}
 }
