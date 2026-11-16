@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gatework/motor/app/net/models/diagnosticrun"
+	"github.com/gatework/motor/common/account"
+
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -60,7 +63,12 @@ func TestDiagnosticsRoutesRequireJWTAndCasbin(t *testing.T) {
 	}
 	manager := service.NewManager()
 	t.Cleanup(manager.Close)
+	if err := db.AutoMigrate(&diagnosticrun.Record{}, &account.Limit{}); err != nil {
+		t.Fatal(err)
+	}
 	engine := gin.New()
+	// The host's global middleware puts the tenant database on every request.
+	engine.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
 	RegisterDiagnostics(engine, auth, manager)
 	for _, role := range []string{"", "denied", "diagnostics"} {
 		token, _, err := auth.TokenGenerator(jwt.MapClaims{"identity": 7, "rolekey": role, "roleid": 2})
