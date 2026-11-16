@@ -325,7 +325,8 @@ func (s *Fabric) deviceEndpoints(ctx context.Context, f models.Fabric, d network
 	localRows := []dto.Endpoint{}
 	sourceEvidence := map[int]models.Observation{}
 	for _, dimension := range []string{"l2route_mac_ips", "l2route_macs", "mac_addresses"} {
-		rows, err := s.dimensionEndpoints(ctx, f, d, membership, observations, currentSource, connectionErr, dimension, peerProof, sourceEvidence)
+		ev := deviceEvidence{Fabric: f, Device: d, Membership: membership, Observations: observations, CurrentSource: currentSource, ConnectionErr: connectionErr}
+		rows, err := s.dimensionEndpoints(ctx, ev, dimension, peerProof, sourceEvidence)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -334,7 +335,22 @@ func (s *Fabric) deviceEndpoints(ctx context.Context, f models.Fabric, d network
 	return localRows, sourceEvidence, nil
 
 }
-func (s *Fabric) dimensionEndpoints(ctx context.Context, f models.Fabric, d networkmodels.Device, membership models.Membership, observations []models.Observation, currentSource string, connectionErr error, dimension string, peerProof map[int]dto.Node, sourceEvidence map[int]models.Observation) ([]dto.Endpoint, error) {
+
+// deviceEvidence is one fabric member with what its observations are judged
+// against: its membership, its stored observations, the source hash its
+// device and connection have now, and whether that connection resolved.
+type deviceEvidence struct {
+	Fabric        models.Fabric
+	Device        networkmodels.Device
+	Membership    models.Membership
+	Observations  []models.Observation
+	CurrentSource string
+	ConnectionErr error
+}
+
+func (s *Fabric) dimensionEndpoints(ctx context.Context, ev deviceEvidence, dimension string, peerProof map[int]dto.Node, sourceEvidence map[int]models.Observation) ([]dto.Endpoint, error) {
+	f, d, membership, observations := ev.Fabric, ev.Device, ev.Membership, ev.Observations
+	currentSource, connectionErr := ev.CurrentSource, ev.ConnectionErr
 	localRows := []dto.Endpoint{}
 	e := DimensionEvidence(observations, dimension, time.Now().UTC(), 2*time.Duration(f.RuntimeMinutes)*time.Minute)
 	sources := []struct {
@@ -369,7 +385,7 @@ func (s *Fabric) dimensionEndpoints(ctx context.Context, f models.Fabric, d netw
 			return nil, err
 		}
 		sourceEvidence[source.row.ID] = *source.row
-		s.endpointPeerProof(f, d, membership, observations, *source.row, source.state, config, peerProof)
+		s.endpointPeerProof(ev, *source.row, source.state, config, peerProof)
 		for _, item := range endpointRows(*source.row, d.Name, config, source.state) {
 			item.FabricCode = f.Code
 			localRows = append(localRows, item)
@@ -377,7 +393,8 @@ func (s *Fabric) dimensionEndpoints(ctx context.Context, f models.Fabric, d netw
 	}
 	return localRows, nil
 }
-func (s *Fabric) endpointPeerProof(f models.Fabric, d networkmodels.Device, membership models.Membership, observations []models.Observation, source models.Observation, state string, config vxlan.Record, peerProof map[int]dto.Node) {
+func (s *Fabric) endpointPeerProof(ev deviceEvidence, source models.Observation, state string, config vxlan.Record, peerProof map[int]dto.Node) {
+	f, d, membership, observations := ev.Fabric, ev.Device, ev.Membership, ev.Observations
 	if config != nil && state == "current" {
 		vpc := record(config["vpc_domain"])
 		peer := record(vpc["peer_keepalive"])
