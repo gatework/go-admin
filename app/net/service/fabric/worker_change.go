@@ -60,7 +60,7 @@ func (w *Worker) runChange(parent context.Context, c models.Change) error {
 	defer cancel()
 	now := time.Now().UTC()
 	c.StartedAt = &now
-	until := now.Add(15 * time.Minute)
+	until := now.Add(claimDuration)
 	q := w.s.db(ctx).Model(&models.Change{}).Where("id = ? AND status = ?", c.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error

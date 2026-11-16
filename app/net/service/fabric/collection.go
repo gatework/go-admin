@@ -172,7 +172,7 @@ func (w *Worker) runCollection(ctx context.Context, job models.Collection) error
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 	now := time.Now().UTC()
-	until := now.Add(15 * time.Minute)
+	until := now.Add(claimDuration)
 	q := w.s.db(ctx).Model(&models.Collection{}).Where("id = ? AND status = ?", job.ID, "queued").Updates(map[string]any{"status": "running", "started_at": now, "claim_until": until, "version": gorm.Expr("version + 1")})
 	if q.Error != nil || q.RowsAffected != 1 {
 		return q.Error
@@ -266,6 +266,10 @@ func (w *Worker) persistSnapshot(ctx context.Context, s snapshotWrite) error {
 
 // runTimeout bounds one collection or change run; its leases add lease.Margin.
 const runTimeout = 10 * time.Minute
+
+// claimDuration is how long a worker's claim on a collection or change row
+// lasts: as long as the run's device leases, so neither outlives the other.
+const claimDuration = runTimeout + lease.Margin
 
 // leaseFailure maps a refused device lease to the target's error code:
 // busyCode while another run holds it, device_quarantined when it is quarantined.
