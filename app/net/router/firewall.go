@@ -5,14 +5,15 @@ import (
 
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor/app/net/handler"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 )
 
 // RegisterFirewall mounts firewall routes with authentication and data permissions.
-func RegisterFirewall(engine *gin.Engine, auth *jwt.GinJWTMiddleware) {
+func RegisterFirewall(engine *gin.Engine, auth *jwt.GinJWTMiddleware, access deviceaccess.Config) {
 	r := engine.Group("/api/v1/network-firewall").Use(auth.MiddlewareFunc()).Use(firewallRoutePermission()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
-	handlers := handler.Firewall{}.Handlers()
+	handlers := handler.Firewall{Access: access}.Handlers()
 	for _, route := range FirewallRoutes {
 		handler := handlers[route.Handler]
 		if handler == nil {

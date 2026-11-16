@@ -20,6 +20,7 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	service "github.com/gatework/motor/app/net/service/firewall"
 	"github.com/gatework/motor/internal/testconfig"
 )
@@ -81,7 +82,7 @@ func TestFirewallRoutesEnforceRegisteredCapabilityAndInputScope(t *testing.T) {
 	service.RegisterRoot(db, host)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("db", db.WithContext(c.Request.Context())); c.Next() })
-	RegisterFirewall(r, auth)
+	RegisterFirewall(r, auth, deviceaccess.Config{})
 	call := func(method, path, body, bearer string) (int, json.RawMessage) {
 		t.Helper()
 		req := httptest.NewRequest(method, "/api/v1/network-firewall"+path, strings.NewReader(body))

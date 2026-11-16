@@ -14,7 +14,10 @@ import (
 )
 
 // Delivery handles the delivery HTTP operations for each request.
-type Delivery struct{ api.API }
+type Delivery struct {
+	api.API
+	Config service.Config
+}
 
 // Options returns safe server configuration.
 // @Summary 配置下发选项
@@ -291,7 +294,7 @@ func (e Delivery) Cancel(c *gin.Context) { e.action(c, "cancel") }
 func (e Delivery) Retry(c *gin.Context) { e.action(c, "retry") }
 
 func prepareDelivery(e *Delivery, c *gin.Context) (*service.Workflow, bool) {
-	s := &service.Workflow{Config: service.FromEnvironment()}
+	s := &service.Workflow{Config: e.Config}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()

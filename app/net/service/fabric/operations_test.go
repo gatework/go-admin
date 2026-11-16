@@ -69,7 +69,7 @@ func operationsFixture(t *testing.T) *Fabric {
 			t.Fatal(e)
 		}
 	}
-	return &Fabric{DB: db}
+	return &Fabric{DB: db, DeliveryEnabled: true}
 }
 func operationsScope() *actions.DataPermission {
 	return &actions.DataPermission{DataScope: actions.DataScopeAll, UserID: 7, RoleID: 1}

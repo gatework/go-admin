@@ -8,6 +8,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/gatework/motor/app/net/service/netconfig"
 )
 
 // Every physical tenant database gets one complete worker set; tenants that
@@ -22,7 +24,7 @@ func TestWorkersBuildOneCompleteSetPerDatabase(t *testing.T) {
 		return db
 	}
 	shared, other := open("shared.db"), open("other.db")
-	workers := Workers(map[string]*gorm.DB{"b.example": shared, "a.example": shared, "c.example": other, "none.example": nil})
+	workers := Workers(map[string]*gorm.DB{"b.example": shared, "a.example": shared, "c.example": other, "none.example": nil}, netconfig.Config{})
 
 	want := []string{"fabric", "wireless", "delivery", "firewall offline", "inventory sync", "firewall collection"}
 	if len(workers) != 2*len(want) {

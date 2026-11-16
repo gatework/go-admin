@@ -9,6 +9,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	ds "github.com/gatework/motor/app/net/service/delivery"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 func collectionCredentials(t *testing.T, s *Firewall) {
@@ -17,6 +18,7 @@ func collectionCredentials(t *testing.T, s *Firewall) {
 	t.Setenv("NC_DEVICE_PASSWORD", "fixture-password")
 	t.Setenv("NC_HOST_KEY_POLICY", "strict")
 	t.Setenv("NC_KNOWN_HOSTS", "")
+	s.Access = deviceaccess.FromEnvironment()
 	if err := s.DB.AutoMigrate(&delivery.Connection{}, &delivery.DeviceLease{}, &delivery.Audit{}); err != nil {
 		t.Fatal(err)
 	}
@@ -82,6 +84,7 @@ func TestFirewallConnectionUsesSharedVersionedOptions(t *testing.T) {
 		t.Fatal("stale connection accepted", err)
 	}
 	t.Setenv("NC_DEVICE_PASSWORD", "")
+	s.Access = deviceaccess.FromEnvironment()
 	c, err = s.Connection(context.Background(), id, all())
 	if err != nil || c.Ready || c.Reason != "credentials_missing" {
 		t.Fatal(c, err)

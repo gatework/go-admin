@@ -36,6 +36,7 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	network "github.com/gatework/motor/app/net/models/inventory"
 	firewallrouter "github.com/gatework/motor/app/net/router"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	service "github.com/gatework/motor/app/net/service/firewall"
 	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
@@ -217,7 +218,7 @@ func fixtureRouter(db *gorm.DB, instanceID int, token, origin string, auth *jwt.
 		}
 		c.JSON(200, gin.H{"counts": counts, "currentRevision": current.CurrentRevision, "settingsVersion": current.SettingsVersion, "collection": gin.H{"opens": opens.Load(), "reads": reads.Load(), "closes": closes.Load()}})
 	})
-	firewallrouter.RegisterFirewall(engine, auth)
+	firewallrouter.RegisterFirewall(engine, auth, deviceaccess.FromEnvironment())
 	return engine
 }
 

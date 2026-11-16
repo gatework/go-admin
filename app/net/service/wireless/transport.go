@@ -19,11 +19,11 @@ import (
 type Collector interface {
 	Collect(ctx context.Context, device network.Device, connection delivery.Connection, collection models.Collection) (wireless.Snapshot, bool, error)
 }
-type nativeCollector struct{}
+type nativeCollector struct{ access deviceaccess.Config }
 
 // Collect provides the collect operation within the caller's authorized wireless scope.
-func (nativeCollector) Collect(ctx context.Context, d network.Device, c delivery.Connection, j models.Collection) (snapshot wireless.Snapshot, closed bool, err error) {
-	cfg, e := deviceaccess.FromEnvironment().ConnectionConfig(d.IP, c)
+func (n nativeCollector) Collect(ctx context.Context, d network.Device, c delivery.Connection, j models.Collection) (snapshot wireless.Snapshot, closed bool, err error) {
+	cfg, e := n.access.ConnectionConfig(d.IP, c)
 	if e != nil {
 		return snapshot, true, e
 	}

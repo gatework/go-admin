@@ -220,7 +220,7 @@ func (s *Device) source() Source {
 	if s.Source != nil {
 		return s.Source
 	}
-	return netdisco.FromEnvironment()
+	return netdisco.New(netdisco.Config{})
 }
 func (s *Device) scoped(ctx context.Context, p *actions.DataPermission) *gorm.DB {
 	if p == nil {

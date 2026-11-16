@@ -5,19 +5,21 @@ import (
 
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor/app/net/handler"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 )
 
 // RegisterInventory mounts authenticated business operations on the host router.
-func RegisterInventory(engine *gin.Engine, auth *jwt.GinJWTMiddleware) {
-	registerDeviceRouter(engine.Group("/api/v1"), auth)
+func RegisterInventory(engine *gin.Engine, auth *jwt.GinJWTMiddleware, nd netdisco.Config, zb zabbix.Config) {
+	registerDeviceRouter(engine.Group("/api/v1"), auth, nd)
 	registerDeviceGroupRouter(engine.Group("/api/v1"), auth)
-	registerCircuitRouter(engine.Group("/api/v1"), auth)
+	registerCircuitRouter(engine.Group("/api/v1"), auth, zb)
 }
 
-func registerCircuitRouter(v1 *gin.RouterGroup, auth *jwt.GinJWTMiddleware) {
-	h := handler.Circuit{}
+func registerCircuitRouter(v1 *gin.RouterGroup, auth *jwt.GinJWTMiddleware, zb zabbix.Config) {
+	h := handler.Circuit{Zabbix: zb}
 	circuits := v1.Group("/network-circuit").Use(auth.MiddlewareFunc()).Use(circuitRoutePermission()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	circuits.GET("", h.List)
 	circuits.GET("/options", h.Options)
@@ -30,8 +32,8 @@ func registerCircuitRouter(v1 *gin.RouterGroup, auth *jwt.GinJWTMiddleware) {
 	circuits.DELETE("/:id", h.Delete)
 	circuits.GET("/:id/traffic", h.Traffic)
 }
-func registerDeviceRouter(v1 *gin.RouterGroup, auth *jwt.GinJWTMiddleware) {
-	h := handler.Device{}
+func registerDeviceRouter(v1 *gin.RouterGroup, auth *jwt.GinJWTMiddleware, nd netdisco.Config) {
+	h := handler.Device{Netdisco: nd}
 	devices := v1.Group("/network-device").Use(auth.MiddlewareFunc()).Use(deviceRoutePermission()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	devices.GET("", h.List)
 	devices.GET("/options", h.Options)

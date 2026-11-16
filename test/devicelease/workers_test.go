@@ -206,7 +206,7 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 	worker := ds.NewWorker(flow, func(dm.Target) (ds.Session, error) { return session{gate}, nil })
 	switch kind {
 	case "wireless":
-		s := &ws.Wireless{Service: base.Service{DB: b}, Actor: 7}
+		s := &ws.Wireless{Service: base.Service{DB: b}, Actor: 7, Access: deviceaccess.FromEnvironment()}
 		if _, err := s.CreateCollection(context.Background(), d.ID, wd.CollectionReq{RequestKey: "lease-wireless-request"}, permission); err != nil {
 			t.Fatal(err)
 		}
@@ -217,7 +217,7 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 				t.Fatal(err)
 			}
 		}
-		s := &fs.Fabric{Service: base.Service{DB: b}}
+		s := &fs.Fabric{Service: base.Service{DB: b}, Access: deviceaccess.FromEnvironment(), DeliveryEnabled: true}
 		if _, err := s.CreateCollection(context.Background(), 1, &fd.CollectionCreateReq{RequestKey: "lease-fabric-request", Mode: "all"}, 7, permission); err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +226,7 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 		if err := b.Create(&fwmodel.Domain{ID: 1, Code: "default", Name: "fixture", Version: 1}).Error; err != nil {
 			t.Fatal(err)
 		}
-		s := &fw.Firewall{Service: base.Service{DB: b}, Actor: 7, Root: t.TempDir()}
+		s := &fw.Firewall{Service: base.Service{DB: b}, Actor: 7, Root: t.TempDir(), Access: deviceaccess.FromEnvironment()}
 		instance, err := s.CreateInstance(context.Background(), dto.InstanceInput{DeviceID: d.ID, DomainID: 1, Vendor: "hillstone", Mode: "routed"}, permission)
 		if err != nil {
 			t.Fatal(err)

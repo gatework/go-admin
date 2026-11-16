@@ -275,7 +275,7 @@ func (s *Circuit) source() CircuitSource {
 	if s.Source != nil {
 		return s.Source
 	}
-	return zabbix.FromEnvironment()
+	return zabbix.New(zabbix.Config{})
 }
 func (s *Circuit) scoped(ctx context.Context, p *actions.DataPermission) *gorm.DB {
 	return s.DB.WithContext(ctx).Model(&inventory.Circuit{}).Scopes(circuitPermission(inventory.Circuit{}.TableName(), p))

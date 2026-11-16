@@ -11,6 +11,7 @@ import (
 	base "github.com/gatework/motor-core/sdk/service"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/errors"
@@ -38,7 +39,13 @@ var (
 //revive:enable:error-naming
 
 // Fabric applies access scopes to fabric inventory, evidence and change operations.
-type Fabric struct{ base.Service }
+type Fabric struct {
+	base.Service
+	// Access is how Fabric reaches devices; DeliveryEnabled is delivery's
+	// switch, which Fabric changes are delivered through.
+	Access          deviceaccess.Config
+	DeliveryEnabled bool
+}
 
 func deviceScope(db *gorm.DB, p *actions.DataPermission) *gorm.DB {
 	if p == nil {

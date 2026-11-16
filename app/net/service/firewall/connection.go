@@ -90,8 +90,7 @@ func firewallInventory(d inventory.Device) bool {
 	return d.DeviceType == "firewall" || d.DeviceRole == "firewall"
 }
 
-func effectiveFirewallConnection(d inventory.Device, stored connection.Settings) ConnectionStatus {
-	access := deviceaccess.FromEnvironment()
+func effectiveFirewallConnection(access deviceaccess.Config, d inventory.Device, stored connection.Settings) ConnectionStatus {
 	c := ConnectionStatus{Settings: stored, Vendor: inferFirewallVendor(d)}
 	c.ProfileSource = "automatic"
 	if stored.Profile != "" {
@@ -193,7 +192,7 @@ func (s *Firewall) Devices(ctx context.Context, in *ndto.DevicePageReq, p *actio
 		if list == nil {
 			list = []models.Instance{}
 		}
-		out = append(out, Device{Device: d, Connection: effectiveFirewallConnection(d, c), Instances: list})
+		out = append(out, Device{Device: d, Connection: effectiveFirewallConnection(s.Access, d, c), Instances: list})
 	}
 	return out, count, nil
 }
@@ -203,7 +202,7 @@ func (s *Firewall) connectionFor(ctx context.Context, d inventory.Device) (Conne
 	if err != nil {
 		return ConnectionStatus{}, err
 	}
-	return effectiveFirewallConnection(d, stored), nil
+	return effectiveFirewallConnection(s.Access, d, stored), nil
 }
 
 func firewallBrand(v string) string {

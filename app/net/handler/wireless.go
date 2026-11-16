@@ -11,13 +11,17 @@ import (
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/contract/actions"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	service "github.com/gatework/motor/app/net/service/wireless"
 	"github.com/gatework/motor/common/request"
 )
 
 // Wireless handles the wireless HTTP operations for each request.
-type Wireless struct{ api.API }
+type Wireless struct {
+	api.API
+	Access deviceaccess.Config
+}
 
 // wirelessCall is what every wireless operation needs from its request: the
 // scoped service, the caller's data permission, and the controller and item
@@ -322,7 +326,7 @@ func prepareWireless(e *Wireless, c *gin.Context) (wirelessCall, bool) {
 	}
 	c.Header("Cache-Control", "no-store")
 	call := wirelessCall{
-		s: &service.Wireless{Service: e.Service(), Actor: user.ID(c)},
+		s: &service.Wireless{Service: e.Service(), Actor: user.ID(c), Access: e.Access},
 		p: actions.GetPermissionFromContext(c),
 		c: c,
 	}

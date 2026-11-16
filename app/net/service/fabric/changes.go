@@ -214,7 +214,7 @@ func (s *Fabric) ExecuteChange(ctx context.Context, id int, r *dto.VersionReq, a
 	if r == nil || r.Version != c.Version || c.Status != "preview" {
 		return c, ConflictErr
 	}
-	if !ds.FromEnvironment().Enabled {
+	if !s.DeliveryEnabled {
 		return c, ds.DisabledErr
 	}
 	if e = s.validateChange(ctx, c); e != nil {

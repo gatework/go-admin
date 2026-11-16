@@ -8,8 +8,6 @@ import (
 	"github.com/gatework/motor-core/logger"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	"github.com/gatework/motor/app/net/models/lease"
-	ds "github.com/gatework/motor/app/net/service/delivery"
-	"github.com/gatework/motor/app/net/service/deviceaccess"
 	"github.com/gatework/motor/common/worker"
 )
 
@@ -25,7 +23,7 @@ type Worker struct {
 // NewWorker constructs an application-owned background worker.
 func NewWorker(s *Fabric, t Transport) *Worker {
 	if t == nil {
-		t = nativeTransport{access: deviceaccess.FromEnvironment()}
+		t = nativeTransport{access: s.Access}
 	}
 	// A background worker has no caller to return an error to; its log line is the
 	// only trace of a failed tick, so it must never depend on the host's wiring.
@@ -72,7 +70,7 @@ func (w *Worker) Tick(ctx context.Context) error {
 		}
 		break
 	}
-	if !ds.FromEnvironment().Enabled {
+	if !w.s.DeliveryEnabled {
 		return nil
 	}
 	var changes []models.Change

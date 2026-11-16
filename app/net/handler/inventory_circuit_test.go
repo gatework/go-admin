@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	models "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 )
 
 func TestCircuitAPIRejectsAuditMutationReturnsContractAndConflicts(t *testing.T) {
@@ -15,7 +16,7 @@ func TestCircuitAPIRejectsAuditMutationReturnsContractAndConflicts(t *testing.T)
 	if err := db.AutoMigrate(&models.Circuit{}); err != nil {
 		t.Fatal(err)
 	}
-	a := Circuit{}
+	a := Circuit{Zabbix: zabbix.FromEnvironment()}
 	engine.GET("/circuits", a.List)
 	engine.GET("/circuits/options", a.Options)
 	engine.GET("/circuits/export", a.Export)
@@ -79,7 +80,7 @@ func TestCircuitAPIDuplicateNumberIsRetryableValidationAndCASRemainsConflict(t *
 	if err := db.AutoMigrate(&models.Circuit{}); err != nil {
 		t.Fatal(err)
 	}
-	a := Circuit{}
+	a := Circuit{Zabbix: zabbix.FromEnvironment()}
 	engine.POST("/circuits", a.Create)
 	engine.PUT("/circuits/:id", a.Update)
 	engine.DELETE("/circuits/:id", a.Delete)

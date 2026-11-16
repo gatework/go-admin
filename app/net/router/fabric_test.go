@@ -26,6 +26,7 @@ import (
 	"github.com/gatework/motor/app/net/models/delivery"
 	models "github.com/gatework/motor/app/net/models/fabric"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 func TestRegisteredFabricRoutesEnforceStaticPermissionAndDeviceScope(t *testing.T) {
@@ -74,7 +75,7 @@ func TestRegisteredFabricRoutesEnforceStaticPermissionAndDeviceScope(t *testing.
 	}
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
-	RegisterFabric(engine, auth)
+	RegisterFabric(engine, auth, deviceaccess.Config{}, false)
 	for _, tc := range []struct {
 		role, method, path, body string
 		code                     int
@@ -170,7 +171,7 @@ func TestFabricHTTPEnvelopesParsedEndpointsAndEmptyFabric(t *testing.T) {
 	}
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
-	RegisterFabric(engine, auth)
+	RegisterFabric(engine, auth, deviceaccess.Config{}, false)
 	token, _, err := auth.TokenGenerator(jwt.MapClaims{"identity": 7, "rolekey": "admin", "roleid": 1, "deptid": 3, "datascope": actions.DataScopeAll})
 	if err != nil {
 		t.Fatal(err)

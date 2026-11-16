@@ -45,6 +45,8 @@ const Freshness = 36 * time.Hour
 type Wireless struct {
 	base.Service
 	Actor int
+	// Access is how collection reaches controllers.
+	Access deviceaccess.Config
 }
 
 // Tables returns the persistent records required by the wireless module.
@@ -117,7 +119,7 @@ func platform(c delivery.Connection) string {
 	}
 }
 func (s *Wireless) connection(ctx context.Context, d network.Device) (delivery.Connection, error) {
-	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d, deviceaccess.Read)
+	return s.Access.Resolve(ctx, s.DB, d, deviceaccess.Read)
 }
 func validManagement(r dto.ManagementReq) bool {
 	return r.Version > 0 && utf8.ValidString(r.LocalAlias+r.InstallationLocation+r.Owner+r.Notes) && utf8.RuneCountInString(r.LocalAlias) <= 255 && utf8.RuneCountInString(r.InstallationLocation) <= 255 && utf8.RuneCountInString(r.Owner) <= 255 && utf8.RuneCountInString(r.Notes) <= 4000
@@ -180,5 +182,5 @@ func page(r *dto.PageReq) error {
 
 // inTx is s with its database bound to tx, for work inside a transaction.
 func (s *Wireless) inTx(tx *gorm.DB) *Wireless {
-	return &Wireless{DB: tx, Logger: s.Logger, Cache: s.Cache, Actor: s.Actor}
+	return &Wireless{DB: tx, Logger: s.Logger, Cache: s.Cache, Actor: s.Actor, Access: s.Access}
 }

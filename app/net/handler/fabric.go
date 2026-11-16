@@ -9,12 +9,17 @@ import (
 	_ "github.com/gatework/motor-core/response" // Swagger response schemas are resolved from this import.
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/contract/actions"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	service "github.com/gatework/motor/app/net/service/fabric"
 )
 
 // Fabric handles the fabric HTTP operations for each request.
-type Fabric struct{ api.API }
+type Fabric struct {
+	api.API
+	Access          deviceaccess.Config
+	DeliveryEnabled bool
+}
 
 // List returns scoped Fabric summaries.
 // @Summary Fabric 列表
@@ -314,7 +319,7 @@ func (e Fabric) Assessments(c *gin.Context) {
 }
 
 func prepareFabric(e *Fabric, c *gin.Context) (*service.Fabric, bool) {
-	s := &service.Fabric{}
+	s := &service.Fabric{Access: e.Access, DeliveryEnabled: e.DeliveryEnabled}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()

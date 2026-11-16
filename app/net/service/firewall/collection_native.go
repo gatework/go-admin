@@ -31,23 +31,26 @@ var collectionSourceErr = errors.New("firewall collection source changed")
 
 //revive:enable:error-naming
 
-func openFirewallReader(ctx context.Context, source CollectionSource) (native.Reader, error) {
-	factory := adapter.Factory{Resolve: func(ctx context.Context, id string) (adapter.Target, error) {
-		if err := ctx.Err(); err != nil {
-			return adapter.Target{}, err
-		}
-		if id != storage.DeviceKey(source.Instance.ID) || source.reason() != "" {
-			return adapter.Target{}, collectionSourceErr
-		}
-		c, err := deviceaccess.FromEnvironment().ConnectionConfig(source.Device.IP, source.Connection.Settings)
-		if err != nil {
-			return adapter.Target{}, err
-		}
-		c.MaxOutputBytes = config.DefaultMaxBytes
-		c.MaxScriptOutputBytes = config.DefaultMaxBytes
-		return adapter.Target{Metadata: fm.Metadata{Device: id, Vendor: source.Instance.Vendor, Context: source.Instance.NativeContext, Software: source.Device.OS}, Connection: c}, nil
-	}}
-	return factory.OpenReadOnly(ctx, storage.DeviceKey(source.Instance.ID))
+// nativeDialer opens collection readers to devices with access.
+func nativeDialer(access deviceaccess.Config) CollectionDialer {
+	return func(ctx context.Context, source CollectionSource) (native.Reader, error) {
+		factory := adapter.Factory{Resolve: func(ctx context.Context, id string) (adapter.Target, error) {
+			if err := ctx.Err(); err != nil {
+				return adapter.Target{}, err
+			}
+			if id != storage.DeviceKey(source.Instance.ID) || source.reason() != "" {
+				return adapter.Target{}, collectionSourceErr
+			}
+			c, err := access.ConnectionConfig(source.Device.IP, source.Connection.Settings)
+			if err != nil {
+				return adapter.Target{}, err
+			}
+			c.MaxOutputBytes = config.DefaultMaxBytes
+			c.MaxScriptOutputBytes = config.DefaultMaxBytes
+			return adapter.Target{Metadata: fm.Metadata{Device: id, Vendor: source.Instance.Vendor, Context: source.Instance.NativeContext, Software: source.Device.OS}, Connection: c}, nil
+		}}
+		return factory.OpenReadOnly(ctx, storage.DeviceKey(source.Instance.ID))
+	}
 }
 
 type collectionSession struct {
@@ -66,7 +69,7 @@ func (s *collectionSession) OpenReadOnly(ctx context.Context, id string) (native
 		return nil, err
 	}
 	// Recheck immediately before opening; publication performs a locked recheck.
-	source, err := collectionSource(ctx, s.worker.s.DB, s.target.InstanceID, false)
+	source, err := collectionSource(ctx, s.worker.s.Access, s.worker.s.DB, s.target.InstanceID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +157,7 @@ func (s *collectionStore) Publish(ctx context.Context, fw *fm.Firewall, options 
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, t.BatchID).Error; err != nil {
 			return err
 		}
-		source, err := collectionSource(ctx, tx, t.InstanceID, true)
+		source, err := collectionSource(ctx, s.worker.s.Access, tx, t.InstanceID, true)
 		if err != nil {
 			return err
 		}

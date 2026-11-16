@@ -29,7 +29,7 @@ type Worker struct {
 // NewWorker constructs an application-owned background worker.
 func NewWorker(s *Wireless, c Collector) *Worker {
 	if c == nil {
-		c = nativeCollector{}
+		c = nativeCollector{access: s.Access}
 	}
 	return &Worker{s: s, collector: c, loop: worker.Loop{Name: "wireless worker", Logger: s.Logger}}
 }

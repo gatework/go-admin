@@ -96,7 +96,7 @@ func TestCollectionSkipsBusyQueuePrefix(t *testing.T) {
 	idle := collectionInstance(t, s, "192.0.2.43")
 	// A hundred separate manual requests for one busy device must not consume
 	// the worker's entire candidate window and starve an unrelated idle device.
-	source, err := collectionSource(ctx, s.DB, busy.ID, false)
+	source, err := collectionSource(ctx, s.Access, s.DB, busy.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}

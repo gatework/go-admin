@@ -15,6 +15,7 @@ import (
 
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/firewall/types"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
@@ -37,6 +38,8 @@ type Firewall struct {
 	base.Service
 	Actor int
 	Root  string
+	// Access is how collection reaches devices.
+	Access deviceaccess.Config
 }
 
 func safeError(e error) error {

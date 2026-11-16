@@ -89,7 +89,7 @@ func (s *Fabric) db(ctx context.Context) *gorm.DB {
 }
 
 func (s *Fabric) deviceConnection(ctx context.Context, d network.Device, use deviceaccess.Use) (delivery.Connection, error) {
-	return deviceaccess.FromEnvironment().Resolve(ctx, s.DB, d, use)
+	return s.Access.Resolve(ctx, s.DB, d, use)
 }
 func jsonText(v any) string {
 	encoded, e := models.OperationsValue(v)

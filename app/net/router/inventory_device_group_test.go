@@ -19,6 +19,8 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/txlock"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -70,7 +72,7 @@ func TestDeviceRegisteredRoutesIsolateStaticActionsAndScopeGroupCounts(t *testin
 	}
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
-	RegisterInventory(engine, auth)
+	RegisterInventory(engine, auth, netdisco.FromEnvironment(), zabbix.FromEnvironment())
 	for _, test := range []struct {
 		role, method, path, body string
 		code                     int

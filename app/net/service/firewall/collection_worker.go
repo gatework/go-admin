@@ -19,6 +19,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/txlock"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 )
 
 // CollectionDialer carries collection dialer state for this module.
@@ -34,7 +35,7 @@ type CollectionWorker struct {
 // NewCollectionWorker provides new collection worker for this module.
 func NewCollectionWorker(s *Firewall, dial CollectionDialer) *CollectionWorker {
 	if dial == nil {
-		dial = openFirewallReader
+		dial = nativeDialer(s.Access)
 	}
 	return &CollectionWorker{s: s, dial: dial, loop: worker.Loop{Name: "firewall collection worker", Logger: s.Logger}}
 }
@@ -124,7 +125,7 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 		}
 		var reason string
 		var err error
-		source, reason, err = claimCollectionSource(ctx, tx, t, batch.CancelRequested)
+		source, reason, err = claimCollectionSource(ctx, w.s.Access, tx, t, batch.CancelRequested)
 		if err != nil {
 			return err
 		}
@@ -351,14 +352,14 @@ func collectionError(err error) string {
 	}
 }
 
-func claimCollectionSource(ctx context.Context, tx *gorm.DB, t models.CollectionTarget, cancelled bool) (CollectionSource, string, error) {
+func claimCollectionSource(ctx context.Context, access deviceaccess.Config, tx *gorm.DB, t models.CollectionTarget, cancelled bool) (CollectionSource, string, error) {
 	var source CollectionSource
 	reason := ""
 	if cancelled {
 		reason = "cancelled"
 	} else {
 		var err error
-		source, err = collectionSource(ctx, tx, t.InstanceID, true)
+		source, err = collectionSource(ctx, access, tx, t.InstanceID, true)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			reason = "source_changed"
 		} else if err != nil {

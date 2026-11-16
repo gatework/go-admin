@@ -16,6 +16,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
 
@@ -60,7 +61,7 @@ func (s CollectionSource) fingerprint() string {
 		s.Device.ID, s.Device.Version, s.Device.CreateBy, s.Device.IP, s.Device.Vendor, s.Device.OS, s.Device.HardwareModel, s.Device.Status, s.Device.DeviceType, s.Device.DeviceRole,
 		s.Connection.Version, s.Connection.Profile, s.Connection.Protocol, s.Connection.Port})
 }
-func collectionSource(ctx context.Context, db *gorm.DB, id int, lock bool) (CollectionSource, error) {
+func collectionSource(ctx context.Context, access deviceaccess.Config, db *gorm.DB, id int, lock bool) (CollectionSource, error) {
 	var out CollectionSource
 	q := db.WithContext(ctx)
 	// Device is the shared connection-settings lock. Keep this order everywhere.
@@ -85,7 +86,7 @@ func collectionSource(ctx context.Context, db *gorm.DB, id int, lock bool) (Coll
 	if err != nil {
 		return out, err
 	}
-	out.Connection = effectiveFirewallConnection(out.Device, c)
+	out.Connection = effectiveFirewallConnection(access, out.Device, c)
 	return out, nil
 }
 func batchScope(db *gorm.DB, actor int, p *actions.DataPermission) *gorm.DB {
@@ -176,7 +177,7 @@ func (s *Firewall) EnqueueCollection(ctx context.Context, in dto.CollectionInput
 	b = models.CollectionBatch{ActorID: s.Actor, RequestKey: in.RequestKey, PayloadHash: payload, Kind: in.Kind, Status: "queued", Targets: []models.CollectionTarget{}}
 	err = s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, id := range ids {
-			t, err := queuedCollectionTarget(ctx, tx, id, p, manifest)
+			t, err := queuedCollectionTarget(ctx, s.Access, tx, id, p, manifest)
 			if err != nil {
 				return err
 			}
@@ -269,12 +270,12 @@ func (s *Firewall) CancelCollection(ctx context.Context, id int, p *actions.Data
 	return s.Collection(ctx, id, p)
 }
 
-func queuedCollectionTarget(ctx context.Context, tx *gorm.DB, id int, p *actions.DataPermission, manifest snapshot.Manifest) (models.CollectionTarget, error) {
+func queuedCollectionTarget(ctx context.Context, access deviceaccess.Config, tx *gorm.DB, id int, p *actions.DataPermission, manifest snapshot.Manifest) (models.CollectionTarget, error) {
 	var i models.Instance
 	if err := scopedInstances(tx, p).First(&i, id).Error; err != nil {
 		return models.CollectionTarget{}, safeError(err)
 	}
-	source, err := collectionSource(ctx, tx, id, true)
+	source, err := collectionSource(ctx, access, tx, id, true)
 	if err != nil {
 		return models.CollectionTarget{}, safeError(err)
 	}

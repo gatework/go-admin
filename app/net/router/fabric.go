@@ -5,13 +5,14 @@ import (
 
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor/app/net/handler"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 )
 
 // RegisterFabric mounts authenticated business operations on the host router.
-func RegisterFabric(engine *gin.Engine, auth *jwt.GinJWTMiddleware) {
-	h := handler.Fabric{}
+func RegisterFabric(engine *gin.Engine, auth *jwt.GinJWTMiddleware, access deviceaccess.Config, deliveryEnabled bool) {
+	h := handler.Fabric{Access: access, DeliveryEnabled: deliveryEnabled}
 	r := engine.Group("/api/v1/network-fabrics").Use(auth.MiddlewareFunc()).Use(fabricRoutePermission()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	r.GET("", h.List)
 	r.GET("/rules", h.Rules)

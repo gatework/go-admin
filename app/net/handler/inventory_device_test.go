@@ -18,6 +18,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/txlock"
 	inventorysvc "github.com/gatework/motor/app/net/service/inventory"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
 )
 
 func apiTestEngine(t *testing.T) (*gin.Engine, *gorm.DB) {
@@ -40,7 +41,7 @@ func apiTestEngine(t *testing.T) (*gin.Engine, *gorm.DB) {
 		c.Set(actions.PermissionKey, &actions.DataPermission{DataScope: actions.DataScopeAll, UserID: 7})
 		c.Next()
 	})
-	api := Device{}
+	api := Device{Netdisco: netdisco.FromEnvironment()}
 	engine.GET("/devices", api.List)
 	engine.GET("/devices/options", api.Options)
 	engine.GET("/devices/sync-status", api.SyncStatus)
@@ -95,7 +96,7 @@ func TestAPIStatusPaginationCSVAndSafeProviderErrors(t *testing.T) {
 	t.Setenv("NETDISCO_API_KEY", "")
 	t.Setenv("NETDISCO_USERNAME", "")
 	t.Setenv("NETDISCO_PASSWORD", "")
-	engine, db := apiTestEngine(t)
+	engine, _ := apiTestEngine(t)
 	_, body := serve(t, engine, "GET", "/devices/sync-status", "")
 	data := body["data"].(map[string]any)
 	if data["configured"] != false || data["status"] != "idle" {
@@ -121,11 +122,13 @@ func TestAPIStatusPaginationCSVAndSafeProviderErrors(t *testing.T) {
 	defer upstream.Close()
 	t.Setenv("NETDISCO_URL", upstream.URL)
 	t.Setenv("NETDISCO_API_KEY", "fixture-secret")
+	// Configuration is read once, when routes are built.
+	engine, db := apiTestEngine(t)
 	_, body = serve(t, engine, "POST", "/devices/sync", "")
 	if body["code"] != float64(200) || body["data"].(map[string]any)["status"] != "queued" {
 		t.Fatalf("sync was not queued: %+v", body)
 	}
-	if _, ran, err := (&inventorysvc.Device{DB: db}).RunQueuedSync(context.Background()); !ran || err == nil {
+	if _, ran, err := (&inventorysvc.Device{DB: db, Source: netdisco.New(netdisco.FromEnvironment())}).RunQueuedSync(context.Background()); !ran || err == nil {
 		t.Fatalf("worker run: ran %v, err %v; want the upstream failure", ran, err)
 	}
 	response, body = serve(t, engine, "GET", "/devices/sync-status", "")

@@ -26,8 +26,8 @@ type Config struct {
 }
 
 // FromEnvironment loads the server-owned device transport configuration.
-func FromEnvironment() *Client {
-	return New(Config{URL: os.Getenv("NETDISCO_URL"), Username: os.Getenv("NETDISCO_USERNAME"), Password: secret.Secret(os.Getenv("NETDISCO_PASSWORD")), APIKey: secret.Secret(os.Getenv("NETDISCO_API_KEY"))})
+func FromEnvironment() Config {
+	return Config{URL: os.Getenv("NETDISCO_URL"), Username: os.Getenv("NETDISCO_USERNAME"), Password: secret.Secret(os.Getenv("NETDISCO_PASSWORD")), APIKey: secret.Secret(os.Getenv("NETDISCO_API_KEY"))}
 }
 
 // Client describes netdisco for network operations.

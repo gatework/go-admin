@@ -20,6 +20,8 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/app/net/models/txlock"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -76,7 +78,7 @@ func TestInventoryRoutesRequireJWTAndCasbinAndApplyScope(t *testing.T) {
 	}
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("db", db); c.Next() })
-	RegisterInventory(engine, auth)
+	RegisterInventory(engine, auth, netdisco.FromEnvironment(), zabbix.FromEnvironment())
 	tokens := map[string]string{}
 	for _, role := range []string{"denied", "inventory"} {
 		token, _, err := auth.TokenGenerator(jwt.MapClaims{"identity": 7, "rolekey": role, "roleid": 2, "deptid": 3, "datascope": actions.DataScopeSelf})

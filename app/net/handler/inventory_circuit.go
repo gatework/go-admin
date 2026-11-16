@@ -14,10 +14,14 @@ import (
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	service "github.com/gatework/motor/app/net/service/inventory"
+	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 )
 
 // Circuit handles the network HTTP operations for each request.
-type Circuit struct{ api.API }
+type Circuit struct {
+	api.API
+	Zabbix zabbix.Config
+}
 
 // List returns the caller's circuit inventory.
 // @Summary 查询专线台账
@@ -284,7 +288,7 @@ func (e Circuit) Traffic(c *gin.Context) {
 }
 
 func prepareCircuit(e *Circuit, c *gin.Context) (*service.Circuit, bool) {
-	s := &service.Circuit{}
+	s := &service.Circuit{Source: zabbix.New(e.Zabbix)}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()

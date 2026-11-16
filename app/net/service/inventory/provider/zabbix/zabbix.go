@@ -43,8 +43,8 @@ func cloneHTTPTransport() *http.Transport {
 }
 
 // FromEnvironment provides the zabbix from environment operation within the caller's authorized network scope.
-func FromEnvironment() *Client {
-	return New(Config{URL: os.Getenv("ZABBIX_API_URL"), Token: secret.Secret(os.Getenv("ZABBIX_API_TOKEN"))})
+func FromEnvironment() Config {
+	return Config{URL: os.Getenv("ZABBIX_API_URL"), Token: secret.Secret(os.Getenv("ZABBIX_API_TOKEN"))}
 }
 
 // New provides the new zabbix operation within the caller's authorized network scope.

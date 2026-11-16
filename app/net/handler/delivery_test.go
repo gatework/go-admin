@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -28,7 +29,14 @@ func deliveryTestEngine(t *testing.T) *gin.Engine {
 }
 func deliveryTestEngineWithScope(t *testing.T, permission *actions.DataPermission) (*gin.Engine, *gorm.DB) {
 	t.Helper()
-	t.Setenv("NETWORK_DELIVERY_ENABLED", "true")
+	return deliveryTestEngineSwitched(t, permission, true)
+}
+
+// deliveryTestEngineSwitched builds the engine with delivery switched on or
+// off; the handler reads its configuration once, as the host does.
+func deliveryTestEngineSwitched(t *testing.T, permission *actions.DataPermission, enabled bool) (*gin.Engine, *gorm.DB) {
+	t.Helper()
+	t.Setenv("NETWORK_DELIVERY_ENABLED", strconv.FormatBool(enabled))
 	t.Setenv("NC_DEVICE_USERNAME", "fixture")
 	t.Setenv("NC_DEVICE_PASSWORD", "fixture-secret")
 	t.Setenv("NC_H3C_USERNAME", "fixture")
@@ -59,7 +67,7 @@ func deliveryTestEngineWithScope(t *testing.T, permission *actions.DataPermissio
 		c.Set(actions.PermissionKey, permission)
 		c.Next()
 	})
-	a := Delivery{}
+	a := Delivery{Config: service.FromEnvironment()}
 	r.GET("/options", a.Options)
 	r.GET("/devices", a.Devices)
 	r.GET("/orders", a.List)
@@ -226,9 +234,9 @@ func TestAPIAnswersFailuresByKind(t *testing.T) {
 	if out["code"] != float64(404) || out["msg"] != "delivery.not_found" {
 		t.Fatalf("unknown order answered %+v", out)
 	}
-	t.Setenv("NETWORK_DELIVERY_ENABLED", "false")
+	off, _ := deliveryTestEngineSwitched(t, &actions.DataPermission{DataScope: actions.DataScopeAll, UserID: 7}, false)
 	body := `{"requestKey":"request-00002","title":"fixture","targets":[{"deviceId":1,"script":"display version"}]}`
-	out = callDelivery(t, r, "POST", "/orders", body)
+	out = callDelivery(t, off, "POST", "/orders", body)
 	if out["code"] != float64(503) || out["msg"] != "delivery.disabled" {
 		t.Fatalf("disabled delivery answered %+v", out)
 	}

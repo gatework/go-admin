@@ -18,10 +18,14 @@ import (
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	service "github.com/gatework/motor/app/net/service/inventory"
+	"github.com/gatework/motor/app/net/service/inventory/provider/netdisco"
 )
 
 // Device handles the network HTTP operations for each request.
-type Device struct{ api.API }
+type Device struct {
+	api.API
+	Netdisco netdisco.Config
+}
 
 // List returns the caller's persisted inventory snapshot.
 // @Summary 查询设备台账
@@ -247,7 +251,7 @@ func decodeDeviceBody(c *gin.Context, target any) bool {
 }
 
 func prepareDevice(e *Device, c *gin.Context) (*service.Device, bool) {
-	s := &service.Device{}
+	s := &service.Device{Source: netdisco.New(e.Netdisco)}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()

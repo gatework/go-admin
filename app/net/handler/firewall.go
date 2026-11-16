@@ -16,6 +16,7 @@ import (
 	"github.com/gatework/motor-core/sdk/api"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/firewall/types"
+	"github.com/gatework/motor/app/net/service/deviceaccess"
 	service "github.com/gatework/motor/app/net/service/firewall"
 	"github.com/gatework/motor/app/net/service/firewall/dto"
 )
@@ -23,7 +24,10 @@ import (
 // Firewall adapts firewall HTTP routes. Its methods take a value receiver: gin
 // registers each route once and serves it concurrently, so the request-scoped
 // API assigned in run must live on a per-call copy, never on a shared pointer.
-type Firewall struct{ api.API }
+type Firewall struct {
+	api.API
+	Access deviceaccess.Config
+}
 type pageResult struct {
 	List  any
 	Count int64
@@ -100,7 +104,7 @@ func (e Firewall) respond(err error) {
 }
 
 func (e Firewall) run(c *gin.Context, fn operation) {
-	s := &service.Firewall{Actor: user.ID(c)}
+	s := &service.Firewall{Actor: user.ID(c), Access: e.Access}
 	var err error
 	e.API, err = request.New(c)
 	s.Service = e.Service()

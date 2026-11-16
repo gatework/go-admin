@@ -5,13 +5,14 @@ import (
 
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor/app/net/handler"
+	"github.com/gatework/motor/app/net/service/delivery"
 	"github.com/gatework/motor/common/actions"
 	"github.com/gatework/motor/common/middleware"
 )
 
 // RegisterDelivery installs the module's routes and permission middleware.
-func RegisterDelivery(engine *gin.Engine, auth *jwt.GinJWTMiddleware) {
-	a := handler.Delivery{}
+func RegisterDelivery(engine *gin.Engine, auth *jwt.GinJWTMiddleware, cfg delivery.Config) {
+	a := handler.Delivery{Config: cfg}
 	r := engine.Group("/api/v1/network-delivery").Use(auth.MiddlewareFunc()).Use(middleware.AuthCheckRole()).Use(actions.PermissionAction())
 	r.GET("/options", a.Options)
 	r.GET("/devices", a.Devices)
