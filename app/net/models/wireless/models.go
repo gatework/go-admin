@@ -53,6 +53,25 @@ type Resource struct {
 	NeighborEvidenceID      string          `gorm:"size:64" json:"neighborEvidenceId"`
 	NeighborVersion         int64           `json:"neighborVersion"`
 	UpdatedAt               time.Time       `json:"updatedAt"`
+	// Search is what the list filters match, derived from Facts whenever they
+	// are written, so filtering and paging run in SQL.
+	Search ResourceSearch `gorm:"embedded;embeddedPrefix:search_" json:"-"`
+}
+
+// ResourceSearch holds, lowercased and newline-separated, the fact values
+// each resource list filter reads, plus the two names the exact AP filter
+// compares as they are. It is derived from Facts and never edited.
+type ResourceSearch struct {
+	IP     string `gorm:"column:ip;type:text"`
+	MAC    string `gorm:"column:mac;type:text"`
+	AP     string `gorm:"column:ap;type:text"`
+	SSID   string `gorm:"column:ssid;type:text"`
+	VLAN   string `gorm:"column:vlan;type:text"`
+	Band   string `gorm:"column:band;type:text"`
+	Status string `gorm:"column:status;type:text"`
+	APName string `gorm:"column:ap_name;size:255"`
+	Name   string `gorm:"column:name;size:255"`
+	Text   string `gorm:"column:text;type:text"`
 }
 
 // TableName returns the stable database table for Resource.

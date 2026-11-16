@@ -423,3 +423,67 @@ func TestLLDPIdentityIncludesActualRemoteFields(t *testing.T) {
 		t.Fatal("distinct neighbors collided")
 	}
 }
+
+// The resource filters, sort and paging. Written against the in-memory
+// implementation and kept unchanged when filtering moved into SQL, so both
+// answer every query alike.
+func TestResourceFiltersSortAndPage(t *testing.T) {
+	s, p := setup(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	rows := []wireless.Record{
+		{"ap_id": "01", "name": "Lobby-AP", "mac_address": "0011.2233.4455", "ip_address": "10.1.0.11", "operational_status": "run"},
+		{"ap_id": "02", "name": "Lab-AP", "mac_address": "0011.2233.6677", "ip_address": "10.2.0.12", "operational_status": "down"},
+		{"ap_id": "03", "name": "Lab-AP-2", "mac_address": "aabb.ccdd.eeff", "ip_address": "10.2.0.13", "operational_status": "run"},
+		{"ap_id": "04", "name": "100%_AP", "mac_address": "aabb.ccdd.0000", "ip_address": "10.3.0.14", "operational_status": "run"},
+	}
+	if e := persist(t, s, 1, now, wireless.Complete, rows); e != nil {
+		t.Fatal(e)
+	}
+	names := func(r dto.PageReq) ([]string, int64) {
+		t.Helper()
+		got, n, e := s.Resources(ctx, 1, "access_points", &r, p)
+		if e != nil {
+			t.Fatal(e)
+		}
+		out := make([]string, len(got))
+		for i, row := range got {
+			out[i] = text(row.Facts["name"])
+		}
+		return out, n
+	}
+	for _, tc := range []struct {
+		name  string
+		req   dto.PageReq
+		want  []string
+		count int64
+	}{
+		{"everything, by id", dto.PageReq{}, []string{"Lobby-AP", "Lab-AP", "Lab-AP-2", "100%_AP"}, 4},
+		{"newest first", dto.PageReq{Direction: "desc"}, []string{"100%_AP", "Lab-AP-2", "Lab-AP", "Lobby-AP"}, 4},
+		{"second page", dto.PageReq{PageIndex: 2, PageSize: 3}, []string{"100%_AP"}, 4},
+		{"ip contains", dto.PageReq{IP: "10.2."}, []string{"Lab-AP", "Lab-AP-2"}, 2},
+		{"mac ignores case", dto.PageReq{MAC: "AABB"}, []string{"Lab-AP-2", "100%_AP"}, 2},
+		{"ap contains", dto.PageReq{AP: "lab"}, []string{"Lab-AP", "Lab-AP-2"}, 2},
+		{"ap exact", dto.PageReq{AP: "Lab-AP", ExactAP: true}, []string{"Lab-AP"}, 1},
+		{"status", dto.PageReq{Status: "down"}, []string{"Lab-AP"}, 1},
+		{"keyword over facts", dto.PageReq{Keyword: "6677"}, []string{"Lab-AP"}, 1},
+		{"wildcards are literal", dto.PageReq{AP: "%_"}, []string{"100%_AP"}, 1},
+		{"filters combine", dto.PageReq{IP: "10.2.", Status: "run"}, []string{"Lab-AP-2"}, 1},
+		{"no match", dto.PageReq{SSID: "guest"}, []string{}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, n := names(tc.req)
+			if n != tc.count || len(got) != len(tc.want) {
+				t.Fatalf("got %v (count %d), want %v (count %d)", got, n, tc.want, tc.count)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+	if _, _, e := s.Resources(ctx, 1, "access_points", &dto.PageReq{Sort: "name"}, p); e == nil {
+		t.Fatal("an unsupported sort was accepted")
+	}
+}

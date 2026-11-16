@@ -58,13 +58,11 @@ func (s *Wireless) Clients(ctx context.Context, r *dto.PageReq, p *actions.DataP
 		return nil, 0, e
 	}
 	ids := s.devices(ctx, p).Select("id").Where("device_type = ?", "wireless_controller")
-	var rows []models.Resource
-	if e := s.db(ctx).Where("controller_id IN (?) AND kind = ?", ids, "clients").Order("id").Find(&rows).Error; e != nil {
+	rows, n, e := resourcePage(s.db(ctx).Model(&models.Resource{}).Where("controller_id IN (?) AND kind = ?", ids, "clients"), r)
+	if e != nil {
 		return nil, 0, e
 	}
-	rows = filterResources(rows, r)
-	selected, n := slicePage(rows, r)
-	v, e := s.resourceViews(ctx, selected, p)
+	v, e := s.resourceViews(ctx, rows, p)
 	return v, n, e
 }
 
@@ -237,15 +235,11 @@ func (s *Wireless) apChildren(ctx context.Context, id int, ap models.Resource, p
 		case "clients":
 			out.Clients = v
 		}
-		var all []models.Resource
-		if e := s.db(ctx).Where("controller_id = ? AND kind = ?", id, kind).Find(&all).Error; e != nil {
+		var n int64
+		if e := s.db(ctx).Model(&models.Resource{}).Where("controller_id = ? AND kind = ? AND (parent_resource_id IS NULL OR parent_resource_id = ?)", id, kind, ap.ID).Scopes(resourceFilter(&dto.PageReq{AP: name, ExactAP: true})).Count(&n).Error; e != nil {
 			return e
 		}
-		for _, row := range filterResources(all, &dto.PageReq{AP: name, ExactAP: true}) {
-			if row.ParentResourceID == nil || *row.ParentResourceID == ap.ID {
-				out.Counts[kind]++
-			}
-		}
+		out.Counts[kind] = n
 	}
 	return nil
 }

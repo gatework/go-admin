@@ -124,10 +124,12 @@ func projectLLDP(tx *gorm.DB, controller int, sourceHash string, version int64, 
 // Collection owns observed fields only. Never write back a previously read
 // management draft, association, or optimistic version.
 func saveFacts(tx *gorm.DB, row *models.Resource) error {
+	row.Search = searchOf(row.Facts)
 	if row.ID == 0 {
 		return tx.Create(row).Error
 	}
-	return tx.Model(row).Select("Facts", "SourceHash", "ObservationVersion", "ObservedAt", "Missing", "ParentStatus", "ParentResourceID").Updates(row).Error
+	columns := append([]string{"facts", "source_hash", "observation_version", "observed_at", "missing", "parent_status", "parent_resource_id"}, searchColumns...)
+	return tx.Model(row).Select(columns).Updates(row).Error
 }
 
 func validateDimensions(snapshot wireless.Snapshot, started, finished time.Time) error {

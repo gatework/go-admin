@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -178,13 +177,3 @@ func page(r *dto.PageReq) error {
 	}
 	return nil
 }
-func slicePage[T any](rows []T, r *dto.PageReq) ([]T, int64) {
-	count := int64(len(rows))
-	start := (r.PageIndex - 1) * r.PageSize
-	if start >= len(rows) {
-		return []T{}, count
-	}
-	end := min(start+r.PageSize, len(rows))
-	return rows[start:end], count
-}
-func contains(s, q string) bool { return strings.Contains(strings.ToLower(s), strings.ToLower(q)) }
