@@ -36,3 +36,11 @@ func fail(a *api.API, err, notFound error) {
 	}
 	request.Fail(a, err)
 }
+
+// pageOf cuts one page from rows already in memory and returns it with the
+// total count. A page past the end is empty.
+func pageOf[T any](rows []T, pageIndex, pageSize int) ([]T, int) {
+	start := min(max(pageIndex-1, 0)*pageSize, len(rows))
+	end := min(start+pageSize, len(rows))
+	return rows[start:end], len(rows)
+}

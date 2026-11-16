@@ -29,3 +29,16 @@ func TestDecodeStrictJSONRefusesAnythingButOneKnownValue(t *testing.T) {
 		}
 	}
 }
+
+func TestPageOf(t *testing.T) {
+	rows := []int{1, 2, 3, 4, 5}
+	for _, tc := range []struct {
+		index, size int
+		want        []int
+	}{{1, 2, []int{1, 2}}, {3, 2, []int{5}}, {4, 2, []int{}}, {1, 10, rows}} {
+		got, n := pageOf(rows, tc.index, tc.size)
+		if n != 5 || len(got) != len(tc.want) || len(got) > 0 && got[0] != tc.want[0] {
+			t.Errorf("pageOf(%d, %d) = %v, %d; want %v, 5", tc.index, tc.size, got, n, tc.want)
+		}
+	}
+}

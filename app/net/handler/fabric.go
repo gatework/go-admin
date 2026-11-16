@@ -364,27 +364,19 @@ func (e Fabric) detailPage(c *gin.Context, kind string) {
 		e.respond(err)
 		return
 	}
+	// The detail is an assessment of the whole fabric, so it is computed in
+	// full and the requested page cut from it.
 	var rows any
-	count := 0
-	start, end := 0, 0
-	bounds := func(n int) {
-		count = n
-		start = min((r.PageIndex-1)*r.PageSize, n)
-		end = min(start+r.PageSize, n)
-	}
+	var count int
 	switch kind {
 	case "nodes":
-		bounds(len(d.Nodes))
-		rows = d.Nodes[start:end]
+		rows, count = pageOf(d.Nodes, r.PageIndex, r.PageSize)
 	case "segments":
-		bounds(len(d.Segments))
-		rows = d.Segments[start:end]
+		rows, count = pageOf(d.Segments, r.PageIndex, r.PageSize)
 	case "vpc":
-		bounds(len(d.VPCGroups))
-		rows = d.VPCGroups[start:end]
+		rows, count = pageOf(d.VPCGroups, r.PageIndex, r.PageSize)
 	case "findings":
-		bounds(len(d.Findings))
-		rows = d.Findings[start:end]
+		rows, count = pageOf(d.Findings, r.PageIndex, r.PageSize)
 	}
 	e.PageOK(rows, count, r.PageIndex, r.PageSize, "查询成功")
 }
