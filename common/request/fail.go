@@ -7,27 +7,33 @@ import (
 
 	"github.com/gatework/motor-core/sdk/api"
 
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 )
 
-// Fail answers err with the status of its kind and its stable code. A record
-// that does not exist is NotFound. Anything unclassified is an internal
-// failure: it is logged with its detail, and the client sees only
+// Fail answers err with the HTTP status of its kind and its stable code. A
+// record that does not exist is not_found and a broken unique key is
+// duplicate. An internal failure - anything unclassified, or classified as
+// internal - is logged with its detail, and the client sees only
 // "internal_error", never the text of a driver, file system or device error.
 func Fail(a *api.API, err error) {
-	kind, code := errkind.Of(err)
-	switch {
-	case kind != errkind.Unknown:
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		kind, code = errkind.NotFound, "not_found"
-	case errors.Is(err, gorm.ErrDuplicatedKey):
-		kind, code = errkind.Conflict, "duplicate"
+	if errs.CodeOf(err) == "" {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			err = errs.Wrap(err, errs.KindNotFound, "not_found", "")
+		case errors.Is(err, gorm.ErrDuplicatedKey):
+			err = errs.Wrap(err, errs.KindConflict, "duplicate", "")
+		}
 	}
-	if kind == errkind.Unknown {
+	kind, code := errs.KindOf(err), errs.CodeOf(err)
+	switch {
+	case kind == errs.KindInternal:
 		code = "internal_error"
 		if a.Logger != nil {
 			a.Logger.Errorf("request failed: %v", err)
 		}
+	case code == "":
+		// A context deadline or cancellation carries a kind but no code.
+		code = kind.String()
 	}
-	a.Error(kind.Status(), nil, code)
+	a.Error(kind.HTTPStatus(), nil, code)
 }

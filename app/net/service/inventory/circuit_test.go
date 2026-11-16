@@ -11,7 +11,7 @@ import (
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -137,13 +137,13 @@ func TestCircuitDuplicateValidationPreservesVersionForCorrectedRetry(t *testing.
 			}
 		}
 		_, err := s.Create(ctx, circuitDraft(" reserved "), 7, fullScope())
-		if kind, _ := errkind.Of(err); !errors.Is(err, inventory.CircuitDuplicateErr) || kind != errkind.Invalid {
+		if !errors.Is(err, inventory.CircuitDuplicateErr) || errs.KindOf(err) != errs.KindInvalid {
 			t.Errorf("create duplicate deleted=%v: %v", deleted, err)
 		}
 		draft := draftFromCircuit(editable)
 		draft.CircuitNo, draft.Name = "RESERVED", "must not persist"
 		_, err = s.Update(ctx, editable.ID, draft, 8, fullScope())
-		if kind, _ := errkind.Of(err); !errors.Is(err, inventory.CircuitDuplicateErr) || kind != errkind.Invalid {
+		if !errors.Is(err, inventory.CircuitDuplicateErr) || errs.KindOf(err) != errs.KindInvalid {
 			t.Errorf("update duplicate deleted=%v: %v", deleted, err)
 		}
 		current, err := s.Get(ctx, editable.ID, fullScope())
@@ -158,7 +158,7 @@ func TestCircuitDuplicateValidationPreservesVersionForCorrectedRetry(t *testing.
 		t.Fatalf("corrected retry failed: %+v %v", updated, err)
 	}
 	_, err = s.Update(ctx, editable.ID, draft, 8, fullScope())
-	if kind, _ := errkind.Of(err); !errors.Is(err, inventory.ConflictErr) || kind != errkind.Conflict {
+	if !errors.Is(err, inventory.ConflictErr) || errs.KindOf(err) != errs.KindConflict {
 		t.Fatalf("stale CAS no longer uses 409: %v", err)
 	}
 }

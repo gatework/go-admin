@@ -74,4 +74,4 @@ func isErrorConstructor(sf *sourceFile, values []ast.Expr, index int) bool {
 
 // classifiedErrors declares the project's classified sentinels; they follow
 // the same naming rule as errors.New.
-const classifiedErrors = "github.com/gatework/motor/common/errkind"
+const classifiedErrors = "github.com/gatework/motor/common/errs"

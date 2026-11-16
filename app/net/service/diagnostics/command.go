@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 )
 
 const maxDuration = 60 * time.Second
@@ -17,13 +17,13 @@ const serverDuration = 120 * time.Second
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is a target or parameter the service will not run.
-	InvalidErr = errkind.New(errkind.Invalid, "diagnostics.invalid_input")
+	InvalidErr = errs.New(errs.KindInvalid, "diagnostics.invalid_input", "")
 	// UnavailableErr is a tool that is not installed on this server.
-	UnavailableErr = errkind.New(errkind.Unavailable, "diagnostics.tool_unavailable")
+	UnavailableErr = errs.New(errs.KindUnavailable, "diagnostics.tool_unavailable", "")
 	// BusyErr is a caller already running a diagnostic, or a server at capacity.
-	BusyErr = errkind.New(errkind.Busy, "diagnostics.busy")
+	BusyErr = errs.New(errs.KindUnavailable, "diagnostics.busy", "")
 	// NotFoundErr is a job that does not exist, has expired, or is someone else's.
-	NotFoundErr     = errkind.New(errkind.NotFound, "diagnostics.not_found")
+	NotFoundErr     = errs.New(errs.KindNotFound, "diagnostics.not_found", "")
 	hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 )
 

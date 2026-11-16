@@ -14,7 +14,7 @@ import (
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 )
 
 // Fabric failures.
@@ -23,17 +23,17 @@ import (
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is a request the service refuses as malformed.
-	InvalidErr = errkind.New(errkind.Invalid, "fabric.invalid_input")
+	InvalidErr = errs.New(errs.KindInvalid, "fabric.invalid_input", "")
 	// NotFoundErr is a fabric or device that does not exist or is out of scope.
-	NotFoundErr = errkind.New(errkind.NotFound, "fabric.not_found")
+	NotFoundErr = errs.New(errs.KindNotFound, "fabric.not_found", "")
 	// ConflictErr is a write against fabric data that has since changed.
-	ConflictErr = errkind.New(errkind.Conflict, "fabric.version_conflict")
+	ConflictErr = errs.New(errs.KindConflict, "fabric.version_conflict", "")
 	// ScopeErr is an operation that needs the full fabric data scope.
-	ScopeErr = errkind.New(errkind.Forbidden, "fabric.full_scope_required")
+	ScopeErr = errs.New(errs.KindForbidden, "fabric.full_scope_required", "")
 	// UnavailableErr is a fabric device whose connection is not configured.
-	UnavailableErr = errkind.New(errkind.Unavailable, "fabric.connection_not_configured")
+	UnavailableErr = errs.New(errs.KindUnavailable, "fabric.connection_not_configured", "")
 	// UnsupportedPlatformErr is a device platform fabric changes cannot drive.
-	UnsupportedPlatformErr = errkind.New(errkind.Invalid, "fabric.unsupported_platform")
+	UnsupportedPlatformErr = errs.New(errs.KindInvalid, "fabric.unsupported_platform", "")
 )
 
 //revive:enable:error-naming

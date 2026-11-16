@@ -6,7 +6,7 @@ import (
 
 	"github.com/gatework/motor/app/net/models/connection"
 	"github.com/gatework/motor/app/net/models/inventory"
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 )
 
 // Use is what a session will do on the device, which decides the inventory
@@ -26,7 +26,7 @@ const (
 // UnavailableErr is a device whose inventory status does not allow the use.
 //
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var UnavailableErr = errkind.New(errkind.Invalid, "device_access.device_unavailable") //revive:disable-line:error-naming
+var UnavailableErr = errs.New(errs.KindInvalid, "device_access.device_unavailable", "") //revive:disable-line:error-naming
 
 // Allows reports whether a device in inventory status may be opened for u.
 // Maintenance, disabled and retired devices are opened for nothing.

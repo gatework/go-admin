@@ -14,12 +14,12 @@ import (
 
 	"github.com/gatework/motor-core/sdk/api"
 
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 )
 
 func TestFailAnswersWithTheKindAndNeverLeaksDetail(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	conflict := errkind.New(errkind.Conflict, "firewall.version_conflict")
+	conflict := errs.New(errs.KindConflict, "firewall.version_conflict", "")
 	for name, tc := range map[string]struct {
 		err  error
 		code int

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gatework/motor/common/errkind"
+	"github.com/gatework/motor/common/errs"
 
 	"github.com/gatework/firemon/flow"
 
@@ -30,7 +30,7 @@ import (
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var InvalidErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
+var InvalidErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
 
 //revive:enable:error-naming
 
@@ -38,7 +38,7 @@ var InvalidErr = errkind.New(errkind.Invalid, "firewall.invalid_input")
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var VersionErr = errkind.New(errkind.Conflict, "firewall.version_conflict")
+var VersionErr = errs.New(errs.KindConflict, "firewall.version_conflict", "")
 
 //revive:enable:error-naming
 

@@ -4,10 +4,10 @@ import "testing"
 
 func TestSentinelErrorNames(t *testing.T) {
 	root := fixture(t, map[string]string{"errors.go": `package sample
-import (e "errors"; "fmt"; "github.com/gatework/motor/common/errkind")
+import (e "errors"; "fmt"; "github.com/gatework/motor/common/errs")
 var ErrInvalid = e.New("invalid")
-var conflict = errkind.New(errkind.Conflict, "sample.conflict")
-var ConflictErr = errkind.New(errkind.Conflict, "sample.conflict")
+var conflict = errs.New(errs.KindConflict, "sample.conflict", "")
+var ConflictErr = errs.New(errs.KindConflict, "sample.conflict", "")
 var invalid = fmt.Errorf("invalid")
 var InvalidErr = e.New("invalid")
 var err error

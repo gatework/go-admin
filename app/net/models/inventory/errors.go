@@ -1,7 +1,7 @@
 // Package inventory defines safe failures shared by the inventory boundaries.
 package inventory
 
-import "github.com/gatework/motor/common/errkind"
+import "github.com/gatework/motor/common/errs"
 
 // MaxExportRows bounds one CSV export; a filter matching more is refused
 // rather than truncated, so a download is never silently incomplete.
@@ -14,39 +14,39 @@ const MaxExportRows = 10000
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// NotConfiguredErr is a sync while the Netdisco connection is not configured.
-	NotConfiguredErr = errkind.New(errkind.Unavailable, "inventory.netdisco_not_configured")
+	NotConfiguredErr = errs.New(errs.KindUnavailable, "inventory.netdisco_not_configured", "")
 	// UpstreamErr is Netdisco failing to answer a request.
-	UpstreamErr = errkind.New(errkind.Upstream, "inventory.netdisco_unavailable")
+	UpstreamErr = errs.New(errs.KindUnavailable, "inventory.netdisco_unavailable", "")
 	// AuthenticationErr is Netdisco refusing the configured credentials.
-	AuthenticationErr = errkind.New(errkind.Upstream, "inventory.netdisco_authentication_failed")
+	AuthenticationErr = errs.New(errs.KindUnavailable, "inventory.netdisco_authentication_failed", "")
 	// InvalidInventoryErr is Netdisco returning data the sync will not write.
-	InvalidInventoryErr = errkind.New(errkind.Upstream, "inventory.netdisco_invalid_data")
+	InvalidInventoryErr = errs.New(errs.KindUnavailable, "inventory.netdisco_invalid_data", "")
 	// TimeoutErr is a sync that timed out or was cancelled; the stored
 	// inventory is unchanged.
-	TimeoutErr = errkind.New(errkind.Timeout, "inventory.sync_timeout")
+	TimeoutErr = errs.New(errs.KindTimeout, "inventory.sync_timeout", "")
 	// RunningErr is a sync requested while another one holds the sync lease.
-	RunningErr = errkind.New(errkind.Conflict, "inventory.sync_running")
+	RunningErr = errs.New(errs.KindConflict, "inventory.sync_running", "")
 	// InterruptedErr is a sync whose lease expired before it finished.
-	InterruptedErr = errkind.New(errkind.Conflict, "inventory.sync_interrupted")
+	InterruptedErr = errs.New(errs.KindConflict, "inventory.sync_interrupted", "")
 	// SyncScopeErr is a sync by a caller without the all-data scope it needs.
-	SyncScopeErr = errkind.New(errkind.Forbidden, "inventory.sync_scope_required")
+	SyncScopeErr = errs.New(errs.KindForbidden, "inventory.sync_scope_required", "")
 	// NotFoundErr is a device that does not exist or is out of scope.
-	NotFoundErr = errkind.New(errkind.NotFound, "inventory.device_not_found")
+	NotFoundErr = errs.New(errs.KindNotFound, "inventory.device_not_found", "")
 	// ConflictErr is a write against a version that has since changed.
-	ConflictErr = errkind.New(errkind.Conflict, "inventory.version_conflict")
+	ConflictErr = errs.New(errs.KindConflict, "inventory.version_conflict", "")
 	// PersistenceErr is a write that failed; the stored inventory is unchanged.
 	// It is an internal failure: the HTTP answer is internal_error.
-	PersistenceErr = errkind.New(errkind.Unknown, "inventory.persistence_failed")
+	PersistenceErr = errs.New(errs.KindInternal, "inventory.persistence_failed", "")
 	// InvalidErr is a request the service refuses as malformed.
-	InvalidErr = errkind.New(errkind.Invalid, "inventory.invalid_input")
+	InvalidErr = errs.New(errs.KindInvalid, "inventory.invalid_input", "")
 	// ExportLimitErr is a device or circuit export over MaxExportRows rows.
-	ExportLimitErr = errkind.New(errkind.Invalid, "inventory.export_limit")
+	ExportLimitErr = errs.New(errs.KindInvalid, "inventory.export_limit", "")
 	// GroupNotFoundErr is a device group that does not exist.
-	GroupNotFoundErr = errkind.New(errkind.NotFound, "inventory.group_not_found")
+	GroupNotFoundErr = errs.New(errs.KindNotFound, "inventory.group_not_found", "")
 	// GroupNotEmptyErr is a delete of a group that still has children or devices.
-	GroupNotEmptyErr = errkind.New(errkind.Conflict, "inventory.group_not_empty")
+	GroupNotEmptyErr = errs.New(errs.KindConflict, "inventory.group_not_empty", "")
 	// GroupDuplicateErr is a group code that is already taken.
-	GroupDuplicateErr = errkind.New(errkind.Conflict, "inventory.group_duplicate_code")
+	GroupDuplicateErr = errs.New(errs.KindConflict, "inventory.group_duplicate_code", "")
 )
 
 //revive:enable:error-naming
