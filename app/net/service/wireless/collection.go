@@ -15,8 +15,9 @@ import (
 )
 
 // CreateCollection persists a request; it does not open a device session.
-func (s *Wireless) CreateCollection(ctx context.Context, controller int, req dto.CollectionReq, actor int, p *actions.DataPermission) (models.Collection, error) {
+func (s *Wireless) CreateCollection(ctx context.Context, controller int, req dto.CollectionReq, p *actions.DataPermission) (models.Collection, error) {
 	var result models.Collection
+	actor := s.Actor
 	if actor <= 0 || len(req.RequestKey) < 8 || len(req.RequestKey) > 100 || strings.TrimSpace(req.RequestKey) != req.RequestKey {
 		return result, InvalidErr
 	}

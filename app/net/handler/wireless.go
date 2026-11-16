@@ -193,7 +193,7 @@ func (e Wireless) Groups(c *gin.Context) {
 // @Security Bearer
 func (e Wireless) Collect(c *gin.Context) {
 	e.serve(c, withWirelessBody(func(w wirelessCall, r dto.CollectionReq) (any, error) {
-		return w.s.CreateCollection(w.ctx(), w.controller, r, user.ID(w.c), w.p)
+		return w.s.CreateCollection(w.ctx(), w.controller, r, w.p)
 	}))
 }
 

@@ -134,8 +134,7 @@ func (s *Wireless) Associate(ctx context.Context, id, ap int, r dto.NeighborReq,
 		return result, InvalidErr
 	}
 	e := s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		scoped := *s
-		scoped.DB = tx
+		scoped := s.inTx(tx)
 		var lock models.Resource
 		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND controller_id = ?", ap, id).First(&lock).Error; e != nil {
 			return ScopeErr

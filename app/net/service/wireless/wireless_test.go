@@ -40,7 +40,7 @@ func setup(t *testing.T) (*Wireless, *actions.DataPermission) {
 			t.Fatal(e)
 		}
 	}
-	return &Wireless{DB: db}, &actions.DataPermission{DataScope: actions.DataScopeAll}
+	return &Wireless{DB: db, Actor: 1}, &actions.DataPermission{DataScope: actions.DataScopeAll}
 }
 func snapshot(t *testing.T, id int, at time.Time, status wireless.Status, rows []wireless.Record) wireless.Snapshot {
 	t.Helper()
@@ -177,7 +177,8 @@ func TestCollectionValidationDedupAndTargetedLLDP(t *testing.T) {
 	s, p := setup(t)
 	ctx := context.Background()
 	r := dto.CollectionReq{RequestKey: "test-key-001"}
-	job, e := s.CreateCollection(ctx, 1, r, 9, p)
+	s.Actor = 9
+	job, e := s.CreateCollection(ctx, 1, r, p)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -186,18 +187,19 @@ func TestCollectionValidationDedupAndTargetedLLDP(t *testing.T) {
 			t.Fatal("implicit LLDP")
 		}
 	}
-	same, e := s.CreateCollection(ctx, 1, r, 9, p)
+	same, e := s.CreateCollection(ctx, 1, r, p)
 	if e != nil || same.ID != job.ID {
 		t.Fatal("dedup", e)
 	}
 	r.Dimensions = []wireless.Dimension{wireless.Clients}
-	if _, e = s.CreateCollection(ctx, 1, r, 9, p); !errors.Is(e, ConflictErr) {
+	if _, e = s.CreateCollection(ctx, 1, r, p); !errors.Is(e, ConflictErr) {
 		t.Fatal("request key rebound", e)
 	}
-	if _, e = s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "test-key-002", Dimensions: []wireless.Dimension{wireless.LLDP}}, 9, p); !errors.Is(e, InvalidErr) {
+	if _, e = s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "test-key-002", Dimensions: []wireless.Dimension{wireless.LLDP}}, p); !errors.Is(e, InvalidErr) {
 		t.Fatal("untargeted LLDP", e)
 	}
-	if _, e = s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "test-key-003"}, 0, p); !errors.Is(e, InvalidErr) {
+	s.Actor = 0
+	if _, e = s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "test-key-003"}, p); !errors.Is(e, InvalidErr) {
 		t.Fatal("spoofed actor", e)
 	}
 	s.DB.Model(&network.Device{}).Where("id = ?", 2).Updates(map[string]any{"vendor": "Huawei"})

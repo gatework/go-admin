@@ -78,7 +78,7 @@ func TestPostgresPublicationFencesConcurrentSourceEdits(t *testing.T) {
 					t.Fatal(e)
 				}
 			}
-			if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "source-fence", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p); e != nil {
+			if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "source-fence", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p); e != nil {
 				t.Fatal(e)
 			}
 			entered, release := make(chan struct{}), make(chan struct{})

@@ -177,3 +177,8 @@ func page(r *dto.PageReq) error {
 	}
 	return nil
 }
+
+// inTx is s with its database bound to tx, for work inside a transaction.
+func (s *Wireless) inTx(tx *gorm.DB) *Wireless {
+	return &Wireless{DB: tx, Logger: s.Logger, Cache: s.Cache, Actor: s.Actor}
+}

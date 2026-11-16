@@ -46,8 +46,7 @@ func (s *Wireless) CommitImport(ctx context.Context, req dto.ImportReq, p *actio
 		return ConflictErr
 	}
 	return s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		scoped := *s
-		scoped.DB = tx
+		scoped := s.inTx(tx)
 		preview, rows, err := scoped.parseImport(ctx, req.Content, p)
 		if err != nil {
 			return err

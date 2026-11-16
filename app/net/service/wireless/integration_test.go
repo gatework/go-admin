@@ -23,7 +23,7 @@ func TestWorkerPublishesAndRejectsChangedSource(t *testing.T) {
 		t.Run(map[bool]string{false: "publish", true: "changed"}[changed], func(t *testing.T) {
 			s, p := setup(t)
 			ctx := context.Background()
-			job, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "worker-test", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p)
+			job, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "worker-test", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -59,7 +59,7 @@ func TestWorkerPublishesAndRejectsChangedSource(t *testing.T) {
 func TestWorkerRetainsUnclosedLease(t *testing.T) {
 	s, p := setup(t)
 	ctx := context.Background()
-	s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "worker-fail"}, 1, p)
+	s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "worker-fail"}, p)
 	w := NewWorker(s, collectFunc(func(context.Context, network.Device, delivery.Connection, models.Collection) (wireless.Snapshot, bool, error) {
 		return wireless.Snapshot{}, false, errors.New("secret failure")
 	}))

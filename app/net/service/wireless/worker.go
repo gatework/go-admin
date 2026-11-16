@@ -3,7 +3,6 @@ package wireless
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	wireless "github.com/gatework/go-wireless"
@@ -25,7 +24,6 @@ type Worker struct {
 	loop      worker.Loop
 	s         *Wireless
 	collector Collector
-	mu        sync.Mutex
 }
 
 // NewWorker constructs an application-owned background worker.
@@ -56,8 +54,6 @@ func (w *Worker) Run(ctx context.Context) error {
 
 // Tick advances due work while preserving lease ownership and durable outcomes.
 func (w *Worker) Tick(ctx context.Context) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	if e := w.Recover(ctx); e != nil {
 		return e
 	}
@@ -146,8 +142,7 @@ func (w *Worker) run(ctx context.Context, job models.Collection, held lease.Leas
 func (w *Worker) finishCollection(ctx, finishCtx context.Context, job models.Collection, held lease.Lease, snap wireless.Snapshot, code string, started time.Time) error {
 	token := held.Token
 	return w.s.db(finishCtx).Transaction(func(tx *gorm.DB) error {
-		scoped := *w.s
-		scoped.DB = tx
+		scoped := w.s.inTx(tx)
 		var current models.Collection
 		if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ? AND claim_token = ? AND claim_until > ?", job.ID, "running", token, time.Now().UTC()).First(&current).Error; e != nil {
 			return e

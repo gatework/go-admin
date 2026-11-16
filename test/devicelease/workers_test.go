@@ -206,8 +206,8 @@ func fixture(t *testing.T, kind string, a, b *gorm.DB, gate *barrier) (*ds.Worke
 	worker := ds.NewWorker(flow, func(dm.Target) (ds.Session, error) { return session{gate}, nil })
 	switch kind {
 	case "wireless":
-		s := &ws.Wireless{Service: base.Service{DB: b}}
-		if _, err := s.CreateCollection(context.Background(), d.ID, wd.CollectionReq{RequestKey: "lease-wireless-request"}, 7, permission); err != nil {
+		s := &ws.Wireless{Service: base.Service{DB: b}, Actor: 7}
+		if _, err := s.CreateCollection(context.Background(), d.ID, wd.CollectionReq{RequestKey: "lease-wireless-request"}, permission); err != nil {
 			t.Fatal(err)
 		}
 		return worker, ws.NewWorker(s, collector{gate}).Tick

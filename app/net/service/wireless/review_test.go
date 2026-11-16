@@ -73,7 +73,7 @@ func TestSelectedAPFailureWithoutPerAPEvidenceInvalidatesOnlyItsNeighbors(t *tes
 	s, p := setup(t)
 	before, _ := neighborFixture(t, s, p)
 	ctx := context.Background()
-	if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "lldp-no-evidence", Dimensions: []wireless.Dimension{wireless.LLDP}, APNames: []string{"A"}}, 1, p); e != nil {
+	if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "lldp-no-evidence", Dimensions: []wireless.Dimension{wireless.LLDP}, APNames: []string{"A"}}, p); e != nil {
 		t.Fatal(e)
 	}
 	w := NewWorker(s, collectFunc(func(context.Context, network.Device, delivery.Connection, models.Collection) (wireless.Snapshot, bool, error) {
@@ -227,7 +227,7 @@ func TestFailedTransportInvalidatesCoverageWithoutLosingFacts(t *testing.T) {
 			detail, _ := neighborFixture(t, s, p)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			_, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "fail-" + mode, Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p)
+			_, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "fail-" + mode, Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -254,14 +254,14 @@ func TestBlockedControllerCannotStarveLaterQueuedWork(t *testing.T) {
 	s, p := setup(t)
 	ctx := context.Background()
 	for i := range 20 {
-		if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: time.Unix(int64(i), 0).String(), Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p); e != nil {
+		if _, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: time.Unix(int64(i), 0).String(), Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p); e != nil {
 			t.Fatal(e)
 		}
 	}
 	if e := s.DB.Create(&delivery.DeviceLease{DeviceID: 1, Token: "quarantined", Quarantined: true, ExpiresAt: time.Now().Add(time.Hour)}).Error; e != nil {
 		t.Fatal(e)
 	}
-	job, e := s.CreateCollection(ctx, 2, dto.CollectionReq{RequestKey: "eligible", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p)
+	job, e := s.CreateCollection(ctx, 2, dto.CollectionReq{RequestKey: "eligible", Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -289,7 +289,7 @@ func TestCollectionFollowsTheReadUseOfDeviceStatus(t *testing.T) {
 		if e := s.DB.Model(&network.Device{}).Where("id = ?", 1).Update("status", tc.status).Error; e != nil {
 			t.Fatal(e)
 		}
-		_, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "status-" + tc.status + strconv.Itoa(i), Dimensions: []wireless.Dimension{wireless.AccessPoints}}, 1, p)
+		_, e := s.CreateCollection(ctx, 1, dto.CollectionReq{RequestKey: "status-" + tc.status + strconv.Itoa(i), Dimensions: []wireless.Dimension{wireless.AccessPoints}}, p)
 		if !errors.Is(e, tc.want) {
 			t.Errorf("%s controller: %v, want %v", tc.status, e, tc.want)
 		}
