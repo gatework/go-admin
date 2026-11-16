@@ -56,12 +56,15 @@ func validTarget(target string) bool {
 	if len(target) == 0 || len(target) > 253 {
 		return false
 	}
-	for label := range strings.SplitSeq(strings.TrimSuffix(target, "."), ".") {
+	labels := strings.Split(strings.TrimSuffix(target, "."), ".")
+	for _, label := range labels {
 		if !hostnamePattern.MatchString(label) {
 			return false
 		}
 	}
-	return true
+	// A top label of digits only is not a hostname (RFC 3696 §2); a resolver
+	// may read "1" or "10.1.2" as an address.
+	return strings.Trim(labels[len(labels)-1], "0123456789") != ""
 }
 
 func buildCommand(req Request, serverPort int) (command, error) {

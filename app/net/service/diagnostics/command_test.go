@@ -45,3 +45,16 @@ func TestCommandsHaveFixedBoundsAndBothIperfModes(t *testing.T) {
 		t.Fatalf("server: %+v %v", server, err)
 	}
 }
+
+// A name whose last label is all digits is not a hostname (RFC 3696 §2): "1"
+// or "10.1.2" must not be handed to a resolver that may read it as an address.
+func TestTargetsWithANumericTopLabelAreRefused(t *testing.T) {
+	for target, want := range map[string]bool{
+		"1": false, "123": false, "10.1.2": false, "host.42": false,
+		"10.1.2.3": true, "localhost": true, "sw-01.example.com": true, "1host": true, "a.1b": true,
+	} {
+		if got := validTarget(target); got != want {
+			t.Errorf("validTarget(%q) = %v, want %v", target, got, want)
+		}
+	}
+}

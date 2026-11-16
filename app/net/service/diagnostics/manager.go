@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -58,12 +59,20 @@ type Manager struct {
 	jobs   map[string]*processJob
 	lookup func(string) (string, error)
 	closed bool
-	wg     sync.WaitGroup
+	// name and publicHost come from the environment, read by NewManager.
+	name, publicHost string
+	wg               sync.WaitGroup
 }
 
 // NewManager creates a manager owning diagnostic jobs and their processes.
+// NewManager constructs the process-wide manager. The server's display name
+// (NETWORK_DIAGNOSTICS_NAME) and the host clients connect to for server mode
+// (NETWORK_DIAGNOSTICS_PUBLIC_HOST) are read once, here.
 func NewManager() *Manager {
-	return &Manager{jobs: make(map[string]*processJob), lookup: exec.LookPath}
+	return &Manager{
+		jobs: make(map[string]*processJob), lookup: exec.LookPath,
+		name: os.Getenv("NETWORK_DIAGNOSTICS_NAME"), publicHost: os.Getenv("NETWORK_DIAGNOSTICS_PUBLIC_HOST"),
+	}
 }
 
 // Start launches a bounded diagnostic job owned by the caller.
@@ -181,21 +190,27 @@ func snapshot(job *processJob) Job {
 
 // Server describes the server used by this module.
 func (m *Manager) Server(connectHost string) Server {
-	hostname, _ := os.Hostname()
-	// Server describes the diagnostic tools available on this backend.
-	name := os.Getenv("NETWORK_DIAGNOSTICS_NAME")
+	// The host name and interface addresses are informational: when the OS
+	// cannot report them the server is still described, without them.
+	hostname := ""
+	if h, err := os.Hostname(); err == nil {
+		hostname = h
+	}
+	name := m.name
 	if name == "" {
 		name = hostname
 	}
-	publicHost := os.Getenv("NETWORK_DIAGNOSTICS_PUBLIC_HOST")
-	if validTarget(publicHost) {
-		connectHost = publicHost
+	if validTarget(m.publicHost) {
+		connectHost = m.publicHost
 	}
 	if !validTarget(connectHost) {
 		connectHost = hostname
 	}
 	result := Server{ID: "backend", Name: name, Hostname: hostname, ConnectHost: connectHost, Addresses: []string{}, Tools: []Tool{}, SessionSeconds: int(serverDuration.Seconds())}
-	addresses, _ := net.InterfaceAddrs()
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		addresses = nil
+	}
 	for _, address := range addresses {
 		ip, _, err := net.ParseCIDR(address.String())
 		if err == nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
@@ -273,9 +288,9 @@ func (m *Manager) wait(jobCtx context.Context, cancel context.CancelFunc, cmd *e
 	job.finishedAt = time.Now().UTC()
 	job.FinishedAt = &job.finishedAt
 	switch {
-	case jobCtx.Err() == context.Canceled:
+	case errors.Is(jobCtx.Err(), context.Canceled):
 		job.Status = "cancelled"
-	case jobCtx.Err() == context.DeadlineExceeded:
+	case errors.Is(jobCtx.Err(), context.DeadlineExceeded):
 		job.Status = "timed_out"
 		if job.Mode == "server" {
 			job.Status = "expired"
