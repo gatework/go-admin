@@ -270,3 +270,20 @@ func TestCancelledQueuedAnalysisNeverRuns(t *testing.T) {
 		t.Fatal(stored.Status)
 	}
 }
+
+// Sentinels match by code, so a budget overrun needs a code of its own: an
+// ordinary invalid input must not be reported as budget_exceeded.
+func TestErrorCodeTellsInvalidInputFromABudgetOverrun(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{InvalidErr, "operation_failed"},
+		{engine.InputErr, "operation_failed"},
+		{fmt.Errorf("resolving: %w", engine.BudgetErr), "budget_exceeded"},
+	} {
+		if got := errorCode(tc.err); got != tc.want {
+			t.Errorf("errorCode(%v) = %q, want %q", tc.err, got, tc.want)
+		}
+	}
+}

@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	errs "github.com/gatework/motor/common/errors"
-
 	"github.com/gatework/firemon/flow"
 
 	"gorm.io/gorm"
@@ -26,19 +24,19 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/types"
 )
 
-// InvalidErr reports invalid.
+// InvalidErr is input the store refuses as malformed.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var InvalidErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
+var InvalidErr = types.InvalidErr
 
 //revive:enable:error-naming
 
-// VersionErr reports version.
+// VersionErr is a write against a snapshot version that has since changed.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var VersionErr = errs.New(errs.KindConflict, "firewall.version_conflict", "")
+var VersionErr = types.ConflictErr
 
 //revive:enable:error-naming
 

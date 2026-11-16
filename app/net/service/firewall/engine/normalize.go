@@ -29,11 +29,13 @@ const MaxDesignRows = 100
 // MaxRegions bounds intermediate traffic partitions.
 const MaxRegions = 4096
 
-// BudgetErr reports a calculation exceeding a configured bound.
+// BudgetErr reports a calculation exceeding a configured bound. Its code is
+// its own: sentinels match by code, so sharing InputErr's would make every
+// invalid input read as a budget overrun.
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var BudgetErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
+var BudgetErr = errs.New(errs.KindInvalid, "firewall.budget_exceeded", "")
 
 //revive:enable:error-naming
 
@@ -41,7 +43,7 @@ var BudgetErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var InputErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
+var InputErr = types.InvalidErr
 
 //revive:enable:error-naming
 var digits = regexp.MustCompile(`^[0-9]+$`)

@@ -15,17 +15,18 @@ import (
 	"gorm.io/gorm"
 
 	base "github.com/gatework/motor-core/sdk/service"
+	"github.com/gatework/motor/app/net/models/firewall/types"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
-	// InvalidErr reports invalid.
-	InvalidErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
+	// InvalidErr is input the workbench refuses as malformed.
+	InvalidErr = types.InvalidErr
 	// NotFoundErr describes the err not found used by this module.
 	NotFoundErr = errs.New(errs.KindNotFound, "firewall.not_found", "")
-	// ConflictErr reports a concurrent firewall update.
-	ConflictErr = errs.New(errs.KindConflict, "firewall.version_conflict", "")
+	// ConflictErr is a write against a version that has since changed.
+	ConflictErr = types.ConflictErr
 	// UnavailableErr reports missing firewall evidence.
 	UnavailableErr = errs.New(errs.KindUnavailable, "firewall.evidence_unavailable", "")
 )
