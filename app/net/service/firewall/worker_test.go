@@ -256,7 +256,7 @@ func TestCancelledQueuedAnalysisNeverRuns(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = s.CancelAnalysis(ctx, a.ID, all()); e != nil {
+	if cancelled, e := s.CancelAnalysis(ctx, a.ID, all()); e != nil || cancelled.Status != "cancelled" {
 		t.Fatal(e)
 	}
 	if e = NewWorker(s).Tick(ctx); e != nil {

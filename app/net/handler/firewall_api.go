@@ -17,7 +17,6 @@ import (
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	service "github.com/gatework/motor/app/net/service/firewall"
-	"github.com/gatework/motor/app/net/service/firewall/engine"
 )
 
 // Firewall adapts firewall HTTP routes. Its methods take a value receiver: gin
@@ -38,10 +37,7 @@ type operation func(*service.Firewall) (any, error)
 // @Router /api/v1/network-firewall/options [get]
 // @Security Bearer
 func (e Firewall) Options(c *gin.Context) {
-	e.run(c, func(s *service.Firewall) (any, error) {
-		domains, err := s.Domains(c.Request.Context())
-		return gin.H{"domains": domains, "vendors": []string{"paloalto", "srx", "huawei", "hillstone", "fortinet", "netscreen", "asa"}, "limits": gin.H{"maxRows": engine.MaxRows, "maxDesignRows": engine.MaxDesignRows, "maxFileBytes": config.DefaultMaxBytes, "maxCollectionTargets": service.MaxCollectionTargets, "collectionConcurrency": service.CollectionConcurrency}, "defaultProtocol": "tcp"}, err
-	})
+	e.run(c, func(s *service.Firewall) (any, error) { return s.Options(c.Request.Context()) })
 }
 
 // Normalize previews structured input without modifying a saved request.
@@ -57,7 +53,7 @@ func (e Firewall) Normalize(c *gin.Context) {
 		if err := decodeFirewallRequest(c, &in); err != nil {
 			return nil, err
 		}
-		return engine.Normalize(in)
+		return s.Normalize(in)
 	})
 }
 func id(c *gin.Context, key string) (int, error) {

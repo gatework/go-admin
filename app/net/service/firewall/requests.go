@@ -217,19 +217,20 @@ func (s *Firewall) Analyses(ctx context.Context, id int, page *Page, p *actions.
 	return out, count, nil
 }
 
-// CancelAnalysis provides cancel analysis for this module.
-func (s *Firewall) CancelAnalysis(ctx context.Context, id int, p *actions.DataPermission) error {
+// CancelAnalysis cancels a queued or running analysis and returns it as it
+// now stands.
+func (s *Firewall) CancelAnalysis(ctx context.Context, id int, p *actions.DataPermission) (models.Analysis, error) {
 	if _, e := s.Analysis(ctx, id, p); e != nil {
-		return e
+		return models.Analysis{}, e
 	}
 	q := s.db(ctx).Model(&models.Analysis{}).Where("id = ? AND status IN ?", id, []string{"queued", "running"}).Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC(), "claim_token": ""})
 	if q.Error != nil {
-		return q.Error
+		return models.Analysis{}, q.Error
 	}
 	if q.RowsAffected != 1 {
-		return ConflictErr
+		return models.Analysis{}, ConflictErr
 	}
-	return nil
+	return s.Analysis(ctx, id, p)
 }
 
 // JobInput carries job input state for this module.

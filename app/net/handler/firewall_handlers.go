@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/gatework/motor/app/net/models/firewall/storage"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	service "github.com/gatework/motor/app/net/service/firewall"
 )
@@ -223,10 +222,7 @@ func (e Firewall) CancelImport(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.CancelImport(ctx, i, permission(c)); err != nil {
-			return nil, err
-		}
-		return s.Import(ctx, i, permission(c))
+		return s.CancelImport(ctx, i, permission(c))
 	})
 }
 
@@ -265,12 +261,12 @@ func (e Firewall) Objects(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		p, err := page(c)
-		if err != nil {
-			return nil, err
+		var q service.ObjectQuery
+		if c.ShouldBindQuery(&q) != nil {
+			return nil, service.InvalidErr
 		}
-		out, err := s.Objects(ctx, i, c.Param("kind"), storage.Filter{Keyword: p.Keyword, Address: c.Query("address"), Protocol: c.Query("protocol"), Port: c.Query("port"), Zone: c.Query("zone"), State: c.Query("state"), PageIndex: p.PageIndex, PageSize: p.PageSize}, permission(c))
-		return pageResult{out.List, out.Count, p}, err
+		out, err := s.Objects(ctx, i, c.Param("kind"), q, permission(c))
+		return pageResult{out.List, out.Count, q.Page}, err
 	})
 }
 
@@ -446,10 +442,7 @@ func (e Firewall) CancelAnalysis(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.CancelAnalysis(ctx, i, permission(c)); err != nil {
-			return nil, err
-		}
-		return s.Analysis(ctx, i, permission(c))
+		return s.CancelAnalysis(ctx, i, permission(c))
 	})
 }
 

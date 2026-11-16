@@ -152,11 +152,26 @@ func (s *Firewall) Snapshots(ctx context.Context, id int, page *Page, p *actions
 	return out, count, e
 }
 
-// Objects provides objects for this module.
-func (s *Firewall) Objects(ctx context.Context, id int, kind string, f storage.Filter, p *actions.DataPermission) (storage.Page, error) {
+// ObjectQuery filters a snapshot's objects. Address, protocol and port find
+// objects that match a flow; zone and state narrow by placement and status.
+type ObjectQuery struct {
+	Page
+	Address  string `form:"address"`
+	Protocol string `form:"protocol"`
+	Port     string `form:"port"`
+	Zone     string `form:"zone"`
+	State    string `form:"state"`
+}
+
+// Objects lists one kind of object in a snapshot the caller may view.
+func (s *Firewall) Objects(ctx context.Context, id int, kind string, q ObjectQuery, p *actions.DataPermission) (storage.Page, error) {
+	if e := q.Validate(); e != nil {
+		return storage.Page{}, e
+	}
 	if _, e := s.Snapshot(ctx, id, p); e != nil {
 		return storage.Page{}, e
 	}
+	f := storage.Filter{Keyword: q.Keyword, Address: q.Address, Protocol: q.Protocol, Port: q.Port, Zone: q.Zone, State: q.State, PageIndex: q.PageIndex, PageSize: q.PageSize}
 	st, e := s.store()
 	if e != nil {
 		return storage.Page{}, e
@@ -286,19 +301,19 @@ func (s *Firewall) Imports(ctx context.Context, id int, page *Page, p *actions.D
 	return out, count, e
 }
 
-// CancelImport provides cancel import for this module.
-func (s *Firewall) CancelImport(ctx context.Context, id int, p *actions.DataPermission) error {
+// CancelImport cancels a queued import and returns it as it now stands.
+func (s *Firewall) CancelImport(ctx context.Context, id int, p *actions.DataPermission) (models.Import, error) {
 	if _, e := s.Import(ctx, id, p); e != nil {
-		return e
+		return models.Import{}, e
 	}
 	q := s.db(ctx).Model(&models.Import{}).Where("id = ? AND status = ?", id, "queued").Updates(map[string]any{"status": "cancelled", "finished_at": time.Now().UTC()})
 	if q.Error != nil {
-		return q.Error
+		return models.Import{}, q.Error
 	}
 	if q.RowsAffected != 1 {
-		return ConflictErr
+		return models.Import{}, ConflictErr
 	}
-	return nil
+	return s.Import(ctx, id, p)
 }
 
 func (s *Firewall) validateSettingsBindings(ctx context.Context, i models.Instance, in types.Settings, fw *fm.Firewall) error {
