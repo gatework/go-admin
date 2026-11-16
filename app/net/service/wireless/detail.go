@@ -99,16 +99,28 @@ func (s *Wireless) APDetail(ctx context.Context, id, apID int, p *actions.DataPe
 		return out, e
 	}
 	out.NeighborCoverage = neighborCoverage(ap, state, source(d, c))
+	// The switches the neighbors name, found in one query rather than one per
+	// neighbor.
+	ips := []string{}
 	for _, r := range state.Records {
-		n := dto.Neighbor{EvidenceID: hash([]any{state.Version, r}), APName: name, SystemName: text(r["remote_name"]), ManagementIP: text(r["management_address"]), LocalInterface: text(r["local_interface"]), PortID: text(r["remote_interface"]), ChassisID: text(r["remote_chassis_id"]), Candidates: []dto.Switch{}}
+		if ip := text(r["management_address"]); ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	switches := map[string][]dto.Switch{}
+	if len(ips) > 0 {
 		var devices []network.Device
-		if n.ManagementIP != "" {
-			if e := s.devices(ctx, p).Where("device_type = ? AND ip = ?", "switch", n.ManagementIP).Find(&devices).Error; e != nil {
-				return out, e
-			}
+		if e := s.devices(ctx, p).Where("device_type = ? AND ip IN ?", "switch", ips).Order("id").Find(&devices).Error; e != nil {
+			return out, e
 		}
 		for _, sw := range devices {
-			n.Candidates = append(n.Candidates, dto.Switch{ID: sw.ID, Name: sw.Name, IP: sw.IP})
+			switches[sw.IP] = append(switches[sw.IP], dto.Switch{ID: sw.ID, Name: sw.Name, IP: sw.IP})
+		}
+	}
+	for _, r := range state.Records {
+		n := dto.Neighbor{EvidenceID: hash([]any{state.Version, r}), APName: name, SystemName: text(r["remote_name"]), ManagementIP: text(r["management_address"]), LocalInterface: text(r["local_interface"]), PortID: text(r["remote_interface"]), ChassisID: text(r["remote_chassis_id"]), Candidates: []dto.Switch{}}
+		if found := switches[n.ManagementIP]; n.ManagementIP != "" && found != nil {
+			n.Candidates = found
 		}
 		out.Neighbors = append(out.Neighbors, n)
 	}
