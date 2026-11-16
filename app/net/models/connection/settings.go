@@ -14,7 +14,7 @@ import (
 
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.

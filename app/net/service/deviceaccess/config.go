@@ -8,7 +8,7 @@ import (
 	"github.com/gatework/go-net-connector/connector"
 	"github.com/gatework/go-net-connector/vendors"
 	"github.com/gatework/motor/app/net/models/connection"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/common/secret"
 )
 

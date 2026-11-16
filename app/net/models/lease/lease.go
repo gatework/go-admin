@@ -31,7 +31,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 // Margin is added to every run timeout, so a lease outlives the work it guards.

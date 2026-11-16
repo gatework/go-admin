@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/motor/app/net/models/firewall/types"

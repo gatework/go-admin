@@ -15,7 +15,7 @@ import (
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 // syncTimeout bounds one sync, fetch and write together. It runs in the

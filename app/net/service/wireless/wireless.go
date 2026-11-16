@@ -22,7 +22,7 @@ import (
 	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/common/paging"
 )
 

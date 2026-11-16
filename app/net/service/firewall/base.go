@@ -13,7 +13,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 
 	"gorm.io/gorm"
 

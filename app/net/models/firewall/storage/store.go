@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 
 	"github.com/gatework/firemon/flow"
 

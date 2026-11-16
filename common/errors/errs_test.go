@@ -1,4 +1,4 @@
-package errs_test
+package errors_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gatework/motor-core/sdk/api"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 // Fail answers err with the HTTP status of its kind and its stable code. A

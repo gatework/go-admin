@@ -62,7 +62,7 @@ declared:
   - ./common/actions
   - ./common/database
   - ./common/dto
-  - ./common/errs
+  - ./common/errors
   - ./common/filestore
   - ./common/auditlog
   - ./common/buildinfo

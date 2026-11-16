@@ -1,4 +1,4 @@
-// Package errs is the error model shared by every package of this module.
+// Package errors is the error model shared by every package of this module.
 //
 // An Error carries three things a caller acts on: a Kind, which says what
 // class of failure it is and maps to a transport status; a stable code, which
@@ -12,9 +12,13 @@
 //
 // An Error is immutable. WithCause and WithMessage return copies, so a
 // package-level value can be shared between goroutines.
-package errs
+package errors
 
-// This package is a verbatim copy of github.com/gatework/motor-core/errs at
+// Import it as errs, the name the package has in motor-core: it then never
+// clashes with the standard library's errors, and the motor-core upgrade
+// changes only the import path.
+//
+// This package is a verbatim copy of github.com/gatework/motor-core/errs (there package errs) at
 // motor-core commit 993066d (branch refactor/runtime-hardening), which motor
 // cannot import until it upgrades from motor-core v0.1.0. Do not change it
 // here (apart from one test variable renamed to motor's Err-suffix

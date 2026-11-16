@@ -1,7 +1,7 @@
 // Package inventory defines safe failures shared by the inventory boundaries.
 package inventory
 
-import "github.com/gatework/motor/common/errs"
+import errs "github.com/gatework/motor/common/errors"
 
 // MaxExportRows bounds one CSV export; a filter matching more is refused
 // rather than truncated, so a download is never silently incomplete.

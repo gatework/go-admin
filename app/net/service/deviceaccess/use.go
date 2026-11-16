@@ -6,7 +6,7 @@ import (
 
 	"github.com/gatework/motor/app/net/models/connection"
 	"github.com/gatework/motor/app/net/models/inventory"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 // Use is what a session will do on the device, which decides the inventory

@@ -11,7 +11,7 @@ import (
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/internal/testconfig"
 )
 

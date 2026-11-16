@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 const maxDuration = 60 * time.Second

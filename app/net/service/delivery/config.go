@@ -11,7 +11,7 @@ import (
 	"github.com/gatework/motor/app/net/service/deviceaccess"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	network "github.com/gatework/motor/app/net/service/inventory"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.

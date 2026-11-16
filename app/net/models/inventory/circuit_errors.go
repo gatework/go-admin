@@ -1,6 +1,6 @@
 package inventory
 
-import "github.com/gatework/motor/common/errs"
+import errs "github.com/gatework/motor/common/errors"
 
 // Circuit failures.
 //

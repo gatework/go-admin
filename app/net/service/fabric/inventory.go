@@ -14,7 +14,7 @@ import (
 	networkmodels "github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/fabric"
 	"github.com/gatework/motor/common/actions"
-	"github.com/gatework/motor/common/errs"
+	errs "github.com/gatework/motor/common/errors"
 )
 
 // Fabric failures.
