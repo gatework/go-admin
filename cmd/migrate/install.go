@@ -444,7 +444,7 @@ func reportInstall(w io.Writer, rep installReport) {
 // manifestFor finds the manifest an application registered for code.
 //
 // A code nothing registered is an error naming what is registered, for the
-// same reason exitUnlessAppRegistered exists: the alternative is telling an
+// same reason appRegistrationError exists: the alternative is telling an
 // operator who typed `install ordr` that there was nothing to do.
 // Takes the snapshot rather than reading it, so this lookup and the caller's
 // cycle check see the same set. Two calls to app.Snapshot() would also be two

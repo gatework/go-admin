@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strconv"
@@ -44,8 +43,8 @@ var (
 		Use:     "status",
 		Short:   "List applied and pending migrations, grouped by app",
 		Example: "motor migrate status -c config/settings.yml",
-		Run: func(cmd *cobra.Command, args []string) {
-			runStatus(cmd.Context())
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatus(cmd.Context())
 		},
 	}
 	// Under migrate rather than under the existing `app` command, which
@@ -60,8 +59,8 @@ var (
 		Short:   "Install one application: run its migrations and record it in sys_app",
 		Example: "motor migrate install order -c config/settings.yml",
 		Args:    cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			runInstall(cmd.Context(), args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInstall(cmd.Context(), args[0])
 		},
 	}
 	uninstallCmd = &cobra.Command{
@@ -69,8 +68,8 @@ var (
 		Short:   "Remove one application's menus, apis and permission grants; its own tables are left alone",
 		Example: "motor migrate uninstall order -c config/settings.yml",
 		Args:    cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			runUninstall(cmd.Context(), args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUninstall(cmd.Context(), args[0])
 		},
 	}
 )
@@ -84,8 +83,8 @@ func init() {
 		Use:     "migrate",
 		Short:   "Initialize the database",
 		Example: "motor migrate -c config/settings.yml",
-		Run: func(cmd *cobra.Command, args []string) {
-			run(cmd.Context())
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd.Context())
 		},
 	}
 
@@ -106,18 +105,16 @@ func init() {
 	StartCmd.AddCommand(uninstallCmd)
 }
 
-func run(ctx context.Context) {
-
-	if !generate {
-		fmt.Println(`start init`)
-		//1. 读取配置
-		withDatabase(ctx,
-			initDB,
-		)
-	} else {
+// run migrates, or with -g writes a new migration file. Its error is the
+// command's: the root command reports it and exits non-zero, after every
+// deferred close here has run.
+func run(ctx context.Context) error {
+	if generate {
 		fmt.Println(`generate migration file`)
-		exitOnError(os.Stderr, genFile())
+		return genFile()
 	}
+	fmt.Println(`start init`)
+	return withDatabase(ctx, initDB)
 }
 
 // resolveDB picks the tenant database and hands it to the registry.
@@ -156,29 +153,11 @@ func withTableOptions(db *gorm.DB, driver string) *gorm.DB {
 	return db.Set("gorm:table_options", "ENGINE=InnoDB CHARSET=utf8mb4").Session(&gorm.Session{})
 }
 
-// exitUnlessAppRegistered ends the command when --app names something no
-// migration was registered under.
-//
-// Every path took a typo as "nothing matched" and reported success: `migrate`
-// printed that the app was unknown and still exited 0, while `--dry-run` and
-// `status` said "nothing to apply" and "none recorded" - which is what an
-// up-to-date database says too, so the output does not even hint at the typo.
-// An operator running `motor migrate --app crmm && deploy` gets the deploy.
-//
-// Checked against the registry, which init() has already filled, so this runs
-// before any database work and costs nothing. It lives in the command layer
-// because the exit code does: the migration package stays callable from a test
-// without taking the process down with it.
-func exitUnlessAppRegistered() {
-	if err := appRegistrationError(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-// appRegistrationError carries the decision on its own so it can be tested;
-// exitUnlessAppRegistered is only the os.Exit around it. Nil means --app was
-// either empty or names a registered app.
+// appRegistrationError refuses an --app that names no registered app, before
+// any database work. Every path used to take a typo as "nothing matched" and
+// report success - which is what an up-to-date database says too - so
+// `motor migrate --app crmm && deploy` deployed. Nil means --app was either
+// empty or names a registered app.
 func appRegistrationError() error {
 	if appCode == "" {
 		return nil
@@ -211,151 +190,100 @@ func migrateModel() error {
 	return migration.Migrate.Migrate()
 }
 
-func initDB() {
+func initDB() error {
 	// Before the database is touched, so a typo cannot get as far as looking
 	// like a successful no-op on either path below.
-	exitUnlessAppRegistered()
-
-	//3. 初始化数据库链接
-
+	if err := appRegistrationError(); err != nil {
+		return err
+	}
 	if dryRun {
 		db, err := resolveDB()
 		if err != nil {
-			fmt.Println(err)
-			return
+			return err
 		}
 		migration.Migrate.SetDB(db)
 		entries, err := migration.Migrate.Status()
 		if err != nil {
-			fmt.Println(err)
-			return
+			return err
 		}
-		if err = printPending(os.Stdout, entries, appCode); err != nil {
-			fmt.Println(err)
-		}
-		return
+		return printPending(os.Stdout, entries, appCode)
 	}
-
-	//4. 数据库迁移
 	fmt.Println("数据库迁移开始")
-	exitOnError(os.Stderr, migrateModel())
-	fmt.Println(`数据库基础数据初始化成功`)
-}
-
-// exitOnError ends the command non-zero when the migration did not go through.
-//
-// A caller that migrates before starting a server decides whether to go ahead
-// on the exit code alone - the deploy workflow does exactly that. Every path
-// out of migrateModel used to return without one: an unreachable tenant
-// database or a failed AutoMigrate printed a line and exited 0, so a
-// deployment carried on onto a schema that had not been brought forward. A
-// failing migration function was the only one reported, and only because it
-// ended the process from inside the migration engine - which is the call this
-// batch moved out here, so without this the last reported failure would have
-// stopped being reported too.
-//
-// Split from the exit itself, the way appRegistrationError is split from
-// exitUnlessAppRegistered, so what it decides can be tested without a
-// subprocess. osExit is a variable for the same reason.
-func exitOnError(w io.Writer, err error) {
-	if err == nil {
-		return
+	if err := migrateModel(); err != nil {
+		return err
 	}
-	fmt.Fprintln(w, err)
-	osExit(1)
+	fmt.Println(`数据库基础数据初始化成功`)
+	return nil
 }
 
-// osExit is a variable so a test can watch the decision without ending the
-// test binary; origExit is what it is put back to.
-var (
-	osExit   = os.Exit
-	origExit = os.Exit
-)
-
-func runStatus(ctx context.Context) {
-	withDatabase(ctx,
-		func() {
-			exitUnlessAppRegistered()
-
-			db, err := resolveDB()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			migration.Migrate.SetDB(db)
-			entries, err := migration.Migrate.Status()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			// Which applications exist is a different question from which
-			// migrations ran, and an install that stopped partway is only
-			// visible in the answer to the first.
-			apps, err := loadApps(db)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if err = printStatus(os.Stdout, entries, apps, appCode); err != nil {
-				fmt.Println(err)
-			}
-		},
-	)
+func runStatus(ctx context.Context) error {
+	return withDatabase(ctx, func() error {
+		if err := appRegistrationError(); err != nil {
+			return err
+		}
+		db, err := resolveDB()
+		if err != nil {
+			return err
+		}
+		migration.Migrate.SetDB(db)
+		entries, err := migration.Migrate.Status()
+		if err != nil {
+			return err
+		}
+		// Which applications exist is a different question from which
+		// migrations ran, and an install that stopped partway is only
+		// visible in the answer to the first.
+		apps, err := loadApps(db)
+		if err != nil {
+			return err
+		}
+		return printStatus(os.Stdout, entries, apps, appCode)
+	})
 }
 
-func runInstall(ctx context.Context, code string) {
-	withDatabase(ctx,
-		func() {
-
-			db, err := resolveDB()
-			if err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			registered := app.Snapshot()
-			m, err := manifestFor(registered, code)
-			if err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			// Over every registered manifest, not just this one's closure: a
-			// cycle between two other applications is still an authoring
-			// mistake, and the day somebody installs into it is the worse
-			// time to find out.
-			if err := refuseOnDependencyCycle(registered); err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			rep, err := install(db, migration.Migrate, m)
-			if err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			reportInstall(os.Stdout, rep)
-		},
-	)
+func runInstall(ctx context.Context, code string) error {
+	return withDatabase(ctx, func() error {
+		db, err := resolveDB()
+		if err != nil {
+			return err
+		}
+		registered := app.Snapshot()
+		m, err := manifestFor(registered, code)
+		if err != nil {
+			return err
+		}
+		// Over every registered manifest, not just this one's closure: a
+		// cycle between two other applications is still an authoring
+		// mistake, and the day somebody installs into it is the worse
+		// time to find out.
+		if err := refuseOnDependencyCycle(registered); err != nil {
+			return err
+		}
+		rep, err := install(db, migration.Migrate, m)
+		if err != nil {
+			return err
+		}
+		reportInstall(os.Stdout, rep)
+		return nil
+	})
 }
 
-func runUninstall(ctx context.Context, code string) {
-	withDatabase(ctx,
-		func() {
-
-			db, err := resolveDB()
-			if err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			// No manifest lookup. An application whose code has already been
-			// taken out of the binary registers nothing, and that is exactly
-			// when somebody needs to clear its rows out of the database.
-			rep, err := uninstall(db, code)
-			if err != nil {
-				exitOnError(os.Stderr, err)
-				return
-			}
-			reportUninstall(os.Stdout, rep)
-		},
-	)
+func runUninstall(ctx context.Context, code string) error {
+	return withDatabase(ctx, func() error {
+		db, err := resolveDB()
+		if err != nil {
+			return err
+		}
+		// No manifest lookup. An application whose code has already been
+		// taken out of the binary registers nothing, and that is exactly
+		// when somebody needs to clear its rows out of the database.
+		rep, err := uninstall(db, code)
+		if err != nil {
+			return err
+		}
+		reportUninstall(os.Stdout, rep)
+		return nil
+	})
 }
 
 func genFile() error {
@@ -381,11 +309,12 @@ func genFile() error {
 	return pkg.FileCreate(b1, "./cmd/migrate/migration/version-local/"+m["GenerateTime"]+"_migrate.go")
 }
 
-func withDatabase(ctx context.Context, action func()) {
+// withDatabase loads the configuration and tenant databases, runs action, and
+// closes both before returning action's error.
+func withDatabase(ctx context.Context, action func() error) error {
 	watcher, err := settings.Load(ctx, sdk.Runtime, file.NewSource(file.WithPath(configYml)), database.Setup)
 	if err != nil {
-		exitOnError(os.Stderr, err)
-		return
+		return err
 	}
 	defer watcher.Close()
 	defer func() {
@@ -393,5 +322,5 @@ func withDatabase(ctx context.Context, action func()) {
 			fmt.Fprintf(os.Stderr, "close logger: %v\n", err)
 		}
 	}()
-	action()
+	return action()
 }
