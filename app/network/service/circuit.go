@@ -6,26 +6,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gatework/go-zabbix"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/config"
 	"github.com/go-admin-team/go-admin-core/v2/sdk/contract/actions"
 	base "github.com/go-admin-team/go-admin-core/v2/sdk/service"
+	"gorm.io/gorm"
+
 	"go-admin/app/network"
 	"go-admin/app/network/models"
 	"go-admin/app/network/provider"
 	"go-admin/app/network/service/dto"
-	"gorm.io/gorm"
 )
 
 // CircuitSource is the read-only upstream boundary. No write operation exists
 // here, and deterministic tests need neither credentials nor a live Zabbix.
 type CircuitSource interface {
+	zabbix.TrafficSource
 	Configured() bool
-	Hosts(context.Context, string) (provider.ZabbixHostList, error)
-	Items(context.Context, string, string) (provider.ZabbixItemList, error)
-	Host(context.Context, string) (provider.ZabbixHost, error)
-	Item(context.Context, string) (provider.ZabbixItem, error)
-	History(context.Context, string, string, int64, int64) ([]provider.ZabbixSample, bool, error)
-	Trends(context.Context, string, int64, int64) ([]provider.ZabbixTrend, bool, error)
+	Hosts(context.Context, string) (zabbix.MonitoredHostList, error)
+	Items(context.Context, string, string) (zabbix.MonitoredItemList, error)
 }
 type Circuit struct {
 	base.Service
@@ -312,14 +311,14 @@ func (s *Circuit) Options(ctx context.Context, p *actions.DataPermission) (dto.C
 	}
 	return result, nil
 }
-func (s *Circuit) Hosts(ctx context.Context, keyword string) (provider.ZabbixHostList, error) {
+func (s *Circuit) Hosts(ctx context.Context, keyword string) (zabbix.MonitoredHostList, error) {
 	result, err := s.source().Hosts(ctx, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)
 	}
 	return result, nil
 }
-func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (provider.ZabbixItemList, error) {
+func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (zabbix.MonitoredItemList, error) {
 	result, err := s.source().Items(ctx, hostID, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)

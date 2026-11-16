@@ -149,6 +149,8 @@ github.com/gatework/go-wireless v0.1.0 h1:4i0+cgF03cPbnwP+v6LZ+7rW0pmJqQSFUXpkrS
 github.com/gatework/go-wireless v0.1.0/go.mod h1:XVaSMMF32yp3NQ1LbK9badstMqwYtNvTjRU3rEzzQ0U=
 github.com/gatework/go-zabbix v0.0.0-20261107160521-182600c51b9f h1:efb0sd2BPh/+Zs4Uzl3XczPKX19oPtkWL0lswYOChWY=
 github.com/gatework/go-zabbix v0.0.0-20261107160521-182600c51b9f/go.mod h1:a4FHs+VDfJgG6dvNu03gilmJR0oV7g1ED5KWy98RhWk=
+github.com/gatework/go-zabbix v0.3.0 h1:GpULrOAzD7DlW8OyZO0133HfW7FjxDzjtmWS8Q83MlI=
+github.com/gatework/go-zabbix v0.3.0/go.mod h1:PHK1OqImhWuz648t1a2Q5lXH3tJY9VYFamy9cE3C3R8=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gin-contrib/gzip v0.0.6 h1:NjcunTcGAj5CO1gn4N8jHOSIeRFHIbn51z6K+xaN4d4=

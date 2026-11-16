@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gatework/go-zabbix"
+
 	"go-admin/app/network"
 )
 
@@ -150,7 +151,7 @@ func TestZabbixHostAndItemBindings(t *testing.T) {
 		{"hostid": "1", "name": "Router", "host": "router"},
 	}})
 	host, err := p.Host(context.Background(), "1")
-	if err != nil || host != (ZabbixHost{ID: "1", Name: "Router", Host: "router"}) {
+	if err != nil || host != (zabbix.MonitoredHost{ID: "1", Name: "Router", Host: "router"}) {
 		t.Fatalf("host = %+v, %v", host, err)
 	}
 	assertZabbixRequest(t, requests, "host.get", `{
@@ -163,7 +164,7 @@ func TestZabbixHostAndItemBindings(t *testing.T) {
 		},
 	}})
 	item, err := p.Item(context.Background(), "10")
-	want := ZabbixItem{
+	want := zabbix.MonitoredItem{
 		ID: "10", HostID: "1", Name: "Receive", Key: "net.if.in", Units: "Bps",
 		ValueType: "0", Status: "0", State: "1", LastValue: "12.5", LastClock: 1234,
 	}
@@ -228,7 +229,7 @@ func TestZabbixHistoryCapValueTypesAndTrendQuery(t *testing.T) {
 		{"clock": "0", "num": "1", "value_avg": "2", "value_max": "3"},
 	}})
 	rows, partial, err := p.Trends(context.Background(), "10", 0, 2000)
-	if err != nil || partial || len(rows) != 2 || rows[0] != (ZabbixTrend{Clock: 1000, Count: 3, Avg: "12.5", Max: "900"}) || rows[1].Clock != 0 {
+	if err != nil || partial || len(rows) != 2 || rows[0] != (zabbix.MetricTrend{Clock: 1000, Count: 3, Avg: "12.5", Max: "900"}) || rows[1].Clock != 0 {
 		t.Fatalf("trend observations changed: %+v %v %v", rows, partial, err)
 	}
 	assertZabbixRequest(t, requests, "trend.get", `{
