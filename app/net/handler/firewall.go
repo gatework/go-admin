@@ -82,6 +82,11 @@ func page(c *gin.Context) (service.Page, error) {
 }
 func permission(c *gin.Context) *actions.DataPermission { return actions.GetPermissionFromContext(c) }
 
+// Handlers is the compile-time method map used by the declared route contract.
+func (e Firewall) Handlers() map[string]gin.HandlerFunc {
+	return map[string]gin.HandlerFunc{"Devices": e.Devices, "Connection": e.Connection, "SetConnection": e.SetConnection, "EnqueueCollection": e.EnqueueCollection, "Collections": e.Collections, "Collection": e.Collection, "CancelCollection": e.CancelCollection, "Options": e.Options, "Normalize": e.Normalize, "Domains": e.Domains, "SaveDomain": e.SaveDomain, "Instances": e.Instances, "CreateInstance": e.CreateInstance, "Instance": e.Instance, "Settings": e.Settings, "SaveSettings": e.SaveSettings, "Coverage": e.Coverage, "EnqueueImport": e.EnqueueImport, "Imports": e.Imports, "Import": e.Import, "CancelImport": e.CancelImport, "Snapshots": e.Snapshots, "Objects": e.Objects, "Object": e.Object, "References": e.References, "Requests": e.Requests, "SaveRequest": e.SaveRequest, "Request": e.Request, "EnqueueAnalysis": e.EnqueueAnalysis, "Analyses": e.Analyses, "Analysis": e.Analysis, "CancelAnalysis": e.CancelAnalysis, "EnqueueDraft": e.EnqueueDraft, "Drafts": e.Drafts, "Draft": e.Draft, "EditDraft": e.EditDraft, "ReanalyzeDraft": e.ReanalyzeDraft}
+}
+
 // respond translates the two failures that arrive unclassified - a dependency's
 // conflict and a missing row - into this module's codes, then lets the shared
 // adapter answer by kind. Anything else unclassified is logged and reported
