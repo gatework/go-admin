@@ -18,6 +18,7 @@ import (
 	"github.com/gatework/go-net-connector/connector"
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/storage"
+	"github.com/gatework/motor/app/net/models/txlock"
 )
 
 // CollectionDialer carries collection dialer state for this module.
@@ -97,10 +98,9 @@ func (w *CollectionWorker) claim(ctx context.Context, t models.CollectionTarget)
 	var source CollectionSource
 	claimed := false
 	err := w.s.db(ctx).Transaction(func(tx *gorm.DB) error {
-		// One permanent domain row serializes the tenant-wide admission count across
-		// processes. Physical exclusion remains shared with delivery and wireless.
-		var gate models.Domain
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Order("id").First(&gate).Error; err != nil {
+		// Serialize the tenant-wide admission count across processes. Physical
+		// exclusion per device is the device lease, shared with every module.
+		if err := txlock.Hold(tx, txlock.FirewallCollectionAdmission); err != nil {
 			return err
 		}
 		var count int64

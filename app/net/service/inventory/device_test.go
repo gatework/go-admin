@@ -17,6 +17,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 	"github.com/gatework/motor/internal/testconfig"
 )
@@ -45,7 +46,7 @@ func testService(t *testing.T) *Device {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlDB.Close() })
-	if err := db.AutoMigrate(&inventory.Device{}, &inventory.SyncState{}, &inventory.DeviceGroup{}, &inventory.DeviceGroupLock{}); err != nil {
+	if err := db.AutoMigrate(&inventory.Device{}, &inventory.SyncState{}, &inventory.DeviceGroup{}, &inventory.DeviceGroupLock{}, &txlock.Row{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Device{DB: db}

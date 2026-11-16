@@ -17,6 +17,7 @@ import (
 
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
 )
 
@@ -55,7 +56,7 @@ func postgresService(t *testing.T) *Device {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { conn.Close() })
-	if err := scoped.AutoMigrate(&inventory.Device{}, &inventory.SyncState{}, &inventory.DeviceGroup{}, &inventory.DeviceGroupLock{}); err != nil {
+	if err := scoped.AutoMigrate(&inventory.Device{}, &inventory.SyncState{}, &inventory.DeviceGroup{}, &inventory.DeviceGroupLock{}, &txlock.Row{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Device{Service: base.Service{DB: scoped}}

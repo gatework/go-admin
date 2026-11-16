@@ -30,9 +30,9 @@ type DeviceGroup struct {
 // TableName returns the stable database table for DeviceGroup.
 func (DeviceGroup) TableName() string { return "sys_network_device_group" }
 
-// DeviceGroupLock serializes hierarchy and membership changes per tenant.
-// its memberships across processes and dialects; it is held until commit.
-// DeviceGroupLock records device group lock state for network persistence.
+// DeviceGroupLock is the lock table the device group hierarchy used before
+// txlock. Only the frozen device-group migration still creates it; nothing
+// takes this lock. Remove it once frozen migrations have their own models.
 type DeviceGroupLock struct {
 	ID      int   `gorm:"primaryKey;autoIncrement:false"`
 	Version int64 `gorm:"not null;default:0"`

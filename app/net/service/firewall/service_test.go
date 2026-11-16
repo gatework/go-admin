@@ -19,6 +19,7 @@ import (
 	models "github.com/gatework/motor/app/net/models/firewall"
 	"github.com/gatework/motor/app/net/models/firewall/types"
 	network "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -53,7 +54,7 @@ func testService(t *testing.T) *Firewall {
 	if err = models.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.AutoMigrate(&network.Device{}, &network.DeviceGroup{}); err != nil {
+	if err = db.AutoMigrate(&network.Device{}, &network.DeviceGroup{}, &txlock.Row{}); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Create(&models.Domain{Code: "default", Name: "默认网络域", Version: 1}).Error; err != nil {

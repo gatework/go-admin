@@ -18,6 +18,7 @@ import (
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	"github.com/gatework/motor/internal/testconfig"
 )
 
@@ -39,7 +40,7 @@ func TestDeviceRegisteredRoutesIsolateStaticActionsAndScopeGroupCounts(t *testin
 	conn, _ := db.DB()
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
-	if err := db.AutoMigrate(&models.Device{}, &models.SyncState{}, &models.DeviceGroup{}, &models.DeviceGroupLock{}); err != nil {
+	if err := db.AutoMigrate(&models.Device{}, &models.SyncState{}, &models.DeviceGroup{}, &models.DeviceGroupLock{}, &txlock.Row{}); err != nil {
 		t.Fatal(err)
 	}
 	group := models.DeviceGroup{Code: "region", Name: "Region", Enabled: true}

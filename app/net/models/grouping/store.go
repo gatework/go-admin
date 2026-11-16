@@ -7,17 +7,14 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	models "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 )
 
 // Lock provides the lock operation within the caller's authorized network scope.
 func Lock(tx *gorm.DB) error {
-	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.DeviceGroupLock{ID: 1}).Error; err != nil {
-		return err
-	}
-	return tx.Model(&models.DeviceGroupLock{}).Where("id = 1").Update("version", gorm.Expr("version + 1")).Error
+	return txlock.Hold(tx, txlock.DeviceGroups)
 }
 
 // Directory describes directory for network operations.

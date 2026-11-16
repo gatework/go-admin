@@ -16,6 +16,7 @@ import (
 	jwt "github.com/gatework/motor-core/jwtauth"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	models "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	inventorysvc "github.com/gatework/motor/app/net/service/inventory"
 )
 
@@ -29,7 +30,7 @@ func apiTestEngine(t *testing.T) (*gin.Engine, *gorm.DB) {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlDB.Close() })
-	if err := db.AutoMigrate(&models.Device{}, &models.SyncState{}, &models.DeviceGroup{}, &models.DeviceGroupLock{}); err != nil {
+	if err := db.AutoMigrate(&models.Device{}, &models.SyncState{}, &models.DeviceGroup{}, &models.DeviceGroupLock{}, &txlock.Row{}); err != nil {
 		t.Fatal(err)
 	}
 	engine := gin.New()

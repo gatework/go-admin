@@ -29,6 +29,7 @@ declared:
   - ./app/net/models/grouping
   - ./app/net/models/inventory
   - ./app/net/models/lease
+  - ./app/net/models/txlock
   - ./app/net/models/wireless
   - ./app/net/router
   - ./app/net/service
