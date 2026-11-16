@@ -20,9 +20,7 @@ func TestFirewallCollectionMigrationAddsSeparateReadCapabilities(t *testing.T) {
 	if err = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; err != nil {
-		t.Fatal(err)
-	}
+	createCasbinRule(t, db)
 	if err = seedNetworkFirewall(db); err != nil {
 		t.Fatal(err)
 	}

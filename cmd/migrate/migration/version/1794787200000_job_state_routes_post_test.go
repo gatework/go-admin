@@ -18,11 +18,11 @@ func TestJobStateRouteGrantsMoveToPost(t *testing.T) {
 	}
 	pool.SetMaxOpenConns(1)
 	t.Cleanup(func() { pool.Close() })
+	createCasbinRule(t, db)
 	for _, sql := range []string{
 		"CREATE TABLE sys_api (id INTEGER PRIMARY KEY, handle TEXT, path TEXT, action TEXT)",
-		"CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY, ptype TEXT, v0 TEXT, v1 TEXT, v2 TEXT)",
 		"INSERT INTO sys_api VALUES (57, 'GET /api/v1/job/remove/:id', '/api/v1/job/remove/:id', 'GET'), (58, 'GET /api/v1/job/start/:id', '/api/v1/job/start/:id', 'GET'), (59, 'GET /api/v1/sysjob', '/api/v1/sysjob', 'GET')",
-		"INSERT INTO casbin_rule VALUES (1, 'p', 'operator', '/api/v1/job/start/:id', 'GET'), (2, 'p', 'operator', '/api/v1/sysjob', 'GET')",
+		"INSERT INTO casbin_rule (id, ptype, v0, v1, v2) VALUES (1, 'p', 'operator', '/api/v1/job/start/:id', 'GET'), (2, 'p', 'operator', '/api/v1/sysjob', 'GET')",
 	} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)

@@ -19,9 +19,7 @@ func TestNetworkDeliverySeedsSchemaPermissionsAndDependencies(t *testing.T) {
 	if e = db.AutoMigrate(&adminmodels.SysMenu{}, &adminmodels.SysAPI{}, &adminmodels.SysRole{}, &adminmodels.SysAppCasbinGrant{}); e != nil {
 		t.Fatal(e)
 	}
-	if e = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; e != nil {
-		t.Fatal(e)
-	}
+	createCasbinRule(t, db)
 	if e = db.Create(&adminmodels.SysRole{RoleName: "Admin", RoleKey: "admin"}).Error; e != nil {
 		t.Fatal(e)
 	}

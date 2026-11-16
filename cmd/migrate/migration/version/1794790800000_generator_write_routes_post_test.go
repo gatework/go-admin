@@ -18,11 +18,11 @@ func TestGeneratorWriteGrantsMoveToPost(t *testing.T) {
 	}
 	pool.SetMaxOpenConns(1)
 	t.Cleanup(func() { pool.Close() })
+	createCasbinRule(t, db)
 	for _, sql := range []string{
 		"CREATE TABLE sys_api (id INTEGER PRIMARY KEY, handle TEXT, path TEXT, action TEXT)",
-		"CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY, ptype TEXT, v0 TEXT, v1 TEXT, v2 TEXT)",
 		"INSERT INTO sys_api VALUES (1, 'GET /api/v1/gen/todb/:tableId', '/api/v1/gen/todb/:tableId', 'GET'), (2, 'GET /api/v1/gen/preview/:tableId', '/api/v1/gen/preview/:tableId', 'GET')",
-		"INSERT INTO casbin_rule VALUES (1, 'p', 'developer', '/api/v1/gen/todb/:tableId', 'GET'), (2, 'p', 'developer', '/api/v1/gen/preview/:tableId', 'GET')",
+		"INSERT INTO casbin_rule (id, ptype, v0, v1, v2) VALUES (1, 'p', 'developer', '/api/v1/gen/todb/:tableId', 'GET'), (2, 'p', 'developer', '/api/v1/gen/preview/:tableId', 'GET')",
 	} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)

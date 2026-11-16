@@ -30,10 +30,7 @@ func openGenMenuDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(new(models.SysAPI), new(models.SysMenu), new(models.SysRole)); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`CREATE TABLE casbin_rule (id integer primary key autoincrement,
-		ptype text, v0 text, v1 text, v2 text, v3 text, v4 text, v5 text)`).Error; err != nil {
-		t.Fatal(err)
-	}
+	createCasbinRule(t, db)
 	for _, m := range []models.SysMenu{
 		{MenuID: genMenuID, MenuName: "Gen", Component: "/dev-tools/gen/index", MenuType: "C"},
 		{MenuID: editMenuID, MenuName: "EditTable", Component: "/dev-tools/gen/editTable", MenuType: "C"},

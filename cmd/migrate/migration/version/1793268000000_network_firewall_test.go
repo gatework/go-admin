@@ -21,9 +21,7 @@ func TestFirewallMigrationCreatesOfflineCapabilitiesIdempotently(t *testing.T) {
 	if e = db.AutoMigrate(&admin.SysMenu{}, &admin.SysAPI{}, &admin.SysRole{}, &admin.SysAppCasbinGrant{}); e != nil {
 		t.Fatal(e)
 	}
-	if e = db.Exec(`CREATE TABLE casbin_rule (id INTEGER PRIMARY KEY AUTOINCREMENT, ptype TEXT,v0 TEXT,v1 TEXT,v2 TEXT,v3 TEXT,v4 TEXT,v5 TEXT)`).Error; e != nil {
-		t.Fatal(e)
-	}
+	createCasbinRule(t, db)
 	if e = db.Create(&admin.SysRole{RoleName: "Admin", RoleKey: "admin"}).Error; e != nil {
 		t.Fatal(e)
 	}
