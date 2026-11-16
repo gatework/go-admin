@@ -367,8 +367,8 @@ func TestCheckDoesNotDisguiseDatabaseFailures(t *testing.T) {
 		name, sql string
 		want      error
 	}{
-		{"lease table unreadable", "DROP TABLE sys_delivery_device_lease", errCheck},
-		{"device table unreadable", "DROP TABLE sys_network_device", errCheck},
+		{"lease table unreadable", "DROP TABLE sys_delivery_device_lease", checkErr},
+		{"device table unreadable", "DROP TABLE sys_network_device", checkErr},
 		{"device deleted", "DELETE FROM sys_network_device", IdentityErr},
 		{"order cancelled", "UPDATE sys_delivery_order SET cancel_requested = true", CancelledErr},
 	} {
@@ -387,7 +387,7 @@ func TestCheckDoesNotDisguiseDatabaseFailures(t *testing.T) {
 			if !errors.Is(e, tc.want) {
 				t.Fatalf("check = %v, want %v", e, tc.want)
 			}
-			for _, other := range []error{errCheck, IdentityErr, CancelledErr} {
+			for _, other := range []error{checkErr, IdentityErr, CancelledErr} {
 				if !errors.Is(tc.want, other) && errors.Is(e, other) {
 					t.Fatalf("check = %v, also reads as %v", e, other)
 				}

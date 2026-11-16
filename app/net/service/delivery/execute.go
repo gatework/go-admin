@@ -85,9 +85,12 @@ func (w *Worker) RunTarget(parent context.Context, t models.Target) {
 	code = ""
 }
 
-// errCheck is a pre-command check that could not run, usually because the
+// checkErr is a pre-command check that could not run, usually because the
 // database could not be read. It is not a finding about the order or device.
-var errCheck = errors.New("delivery: pre-command check could not run")
+//
+//revive:disable-next-line:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
+//nolint:errname,staticcheck // ST1012: project sentinel errors use Err suffix; see docs/standards.md.
+var checkErr = errors.New("delivery: pre-command check could not run")
 
 // check confirms, before the target touches its device, that it still holds
 // its device lease and claim, that its order was not cancelled, and that the
@@ -97,7 +100,7 @@ func (w *Worker) check(ctx context.Context, t models.Target) error {
 	if e := ctx.Err(); e != nil {
 		return e
 	}
-	failed := func(e error) error { return fmt.Errorf("%w: %w", errCheck, e) }
+	failed := func(e error) error { return fmt.Errorf("%w: %w", checkErr, e) }
 	db := w.s.db(ctx)
 	if e := lease.Check(db, lease.Lease{DeviceID: t.DeviceID, Token: t.ClaimToken}); errors.Is(e, lease.LostErr) {
 		return CancelledErr
@@ -200,7 +203,7 @@ func executionFailure(e error, attempted bool, status, code string) (string, str
 	} else if errors.Is(e, IdentityErr) {
 		status = "failed"
 		code = "device_changed"
-	} else if errors.Is(e, errCheck) {
+	} else if errors.Is(e, checkErr) {
 		status = "failed"
 		code = "check_failed"
 	}
