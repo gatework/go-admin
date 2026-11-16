@@ -32,8 +32,7 @@ func coverageSet(c types.Coverage) flow.AddressSet {
 	if !ok {
 		return flow.AddressSet{}
 	}
-	s, _ := flow.NewAddressSet(r)
-	return s
+	return rangeSet(r)
 }
 
 type endpointEvidence struct {
@@ -198,8 +197,7 @@ func sortedContexts(groups map[contextKey][]types.Coverage) []contextKey {
 func locateTraffic(ctx context.Context, t types.Target, key contextKey, coverage []types.Coverage, row types.NormalizedRow, traffic flow.Traffic, at time.Time, c *calculation) ([]located, flow.Traffic, error) {
 	b := locationBuilder{index: map[string]int{}}
 	for _, box := range traffic.Regions() {
-		srcSet, _ := flow.NewAddressSet(box.Source)
-		dstSet, _ := flow.NewAddressSet(box.Destination)
+		srcSet, dstSet := rangeSet(box.Source), rangeSet(box.Destination)
 		src, e := endpoints(ctx, t, key, coverage, srcSet)
 		if e != nil {
 			return nil, b.used, e

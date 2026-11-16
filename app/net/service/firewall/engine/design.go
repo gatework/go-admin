@@ -283,13 +283,6 @@ func describeChange(before, after *fm.Firewall, c plan.Change) (types.DraftChang
 	b, e := json.Marshal(data)
 	return types.DraftChange{Kind: kind, RuleID: string(c.Rule), Description: kind, Data: b}, e
 }
-func allTraffic() (flow.Traffic, error) {
-	a, _ := flow.PrefixRange(netPrefix4)
-	b, _ := flow.PrefixRange(netPrefix6)
-	full := flow.Interval{Low: 0, High: 65535}
-	octet := flow.Interval{Low: 0, High: 255}
-	return flow.NewTraffic(MaxRegions, flow.TrafficRegion{Source: a, Destination: a, Protocol: octet, SourcePort: full, DestinationPort: full, ICMPType: octet, ICMPCode: octet}, flow.TrafficRegion{Source: b, Destination: b, Protocol: octet, SourcePort: full, DestinationPort: full, ICMPType: octet, ICMPCode: octet})
-}
 func samePolicyContext(a, b policy.Request) bool {
 	a.EgressInterface = ""
 	b.EgressInterface = ""
@@ -311,7 +304,7 @@ func finalChecks(ctx context.Context, base, after *fm.Firewall, targets []design
 	if err != nil {
 		return true, false, true, err
 	}
-	universe, err := allTraffic()
+	universe, err := flow.AllTraffic(MaxRegions)
 	if err != nil {
 		return true, false, true, err
 	}

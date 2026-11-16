@@ -206,8 +206,7 @@ func (c *coverageBuilder) connected(s zoneSpec, zoneKnown bool) (flow.AddressSet
 					continue
 				}
 				if known {
-					set, _ := flow.NewAddressSet(r)
-					original = original.Union(set)
+					original = original.Union(rangeSet(r))
 				}
 				if err := c.add(s, p.Masked().String(), "connected", iface.ID(), known); err != nil {
 					return original, ifaceIDs, err

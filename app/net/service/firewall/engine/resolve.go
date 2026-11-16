@@ -15,8 +15,27 @@ import (
 	"github.com/gatework/motor/app/net/models/firewall/types"
 )
 
-var netPrefix4 = netip.MustParsePrefix("0.0.0.0/0")
-var netPrefix6 = netip.MustParsePrefix("::/0")
+// anyAddress is every IPv4 and IPv6 address.
+var anyAddress = func() flow.AddressSet {
+	var set flow.AddressSet
+	for _, cidr := range []string{"0.0.0.0/0", "::/0"} {
+		r, err := flow.PrefixRange(netip.MustParsePrefix(cidr))
+		if err != nil {
+			panic(err) // a constant prefix
+		}
+		set = set.Union(rangeSet(r))
+	}
+	return set
+}()
+
+// rangeSet is the set holding one range. Every caller passes a range that is
+// valid by construction - from PrefixRange, addressRange or a normalized
+// traffic region - and NewAddressSet fails only for an invalid one, which
+// would yield the empty set.
+func rangeSet(r flow.AddressRange) flow.AddressSet {
+	set, _ := flow.NewAddressSet(r)
+	return set
+}
 
 func nativeEngine() policy.Engine {
 	return policy.Engine{Limits: policy.Limits{MaxRegions: MaxRegions, MaxCombinations: MaxRegions, MaxVisits: 100000}}
@@ -136,15 +155,13 @@ func resolveAddressTerms(ctx context.Context, terms []types.Term, fw *fm.Firewal
 		known := true
 		switch term.Kind {
 		case "any":
-			a, _ := flow.PrefixRange(netPrefix4)
-			b, _ := flow.PrefixRange(netPrefix6)
-			set, _ = flow.NewAddressSet(a, b)
+			set = anyAddress
 		case "address":
 			r, ok := addressRange(term.Value)
 			if !ok {
 				known = false
 			} else {
-				set, _ = flow.NewAddressSet(r)
+				set = rangeSet(r)
 			}
 		case "name":
 			refs, ok := addressRefs(ctx, fw, term.Value, scope)
@@ -326,17 +343,13 @@ func literalAddressSet(terms []types.Term) (flow.AddressSet, bool) {
 	for _, term := range terms {
 		switch term.Kind {
 		case "any":
-			v4, _ := flow.PrefixRange(netPrefix4)
-			v6, _ := flow.PrefixRange(netPrefix6)
-			both, _ := flow.NewAddressSet(v4, v6)
-			set = set.Union(both)
+			set = set.Union(anyAddress)
 		case "address":
 			r, ok := addressRange(term.Value)
 			if !ok {
 				return set, false
 			}
-			single, _ := flow.NewAddressSet(r)
-			set = set.Union(single)
+			set = set.Union(rangeSet(r))
 		default:
 			return set, false
 		}
