@@ -4,8 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"github.com/gatework/motor/app/net/models/diagnosticrun"
+	"github.com/gatework/motor/common/account"
 
 	"github.com/gin-gonic/gin"
 
@@ -19,6 +27,7 @@ func TestDiagnosticsRejectsMalformedBodyAndUnknownJob(t *testing.T) {
 	defer manager.Close()
 	api := Diagnostics{Manager: manager}
 	engine := gin.New()
+	diagnosticsDB(t, engine)
 	engine.Use(func(c *gin.Context) {
 		c.Set(jwt.JwtPayloadKey, jwt.MapClaims{"identity": float64(7), "rolekey": "operator"})
 		c.Next()
@@ -59,4 +68,21 @@ func TestDiagnosticsRejectsMalformedBodyAndUnknownJob(t *testing.T) {
 	if !strings.Contains(response.Body.String(), `"id":"backend"`) || !strings.Contains(response.Body.String(), `"sessionSeconds":120`) {
 		t.Fatal(response.Body.String())
 	}
+}
+
+// diagnosticsDB gives every request the tenant database diagnostics audits
+// and rate-limits in.
+func diagnosticsDB(t *testing.T, engine *gin.Engine) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "diagnostics.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&diagnosticrun.Record{}, &account.Limit{}); err != nil {
+		t.Fatal(err)
+	}
+	engine.Use(func(c *gin.Context) {
+		c.Set("db", db)
+		c.Next()
+	})
 }

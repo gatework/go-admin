@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -63,8 +62,20 @@ func (e Diagnostics) Start(c *gin.Context) {
 		respondDiagnostics(a, service.InvalidErr)
 		return
 	}
-	job, err := e.Manager.Start(c.Request.Context(), owner(c), req)
+	ctx, who := c.Request.Context(), owner(c)
+	runs := service.Runs{DB: a.DB}
+	if err := runs.Admit(ctx, who); err != nil {
+		respondDiagnostics(a, err)
+		return
+	}
+	job, err := e.Manager.Start(ctx, who, req)
 	if err != nil {
+		respondDiagnostics(a, err)
+		return
+	}
+	// A run that cannot be audited does not run.
+	if err := runs.Record(ctx, who, job); err != nil {
+		_, _ = e.Manager.Stop(who, job.ID)
 		respondDiagnostics(a, err)
 		return
 	}
@@ -116,13 +127,13 @@ func (e Diagnostics) Stop(c *gin.Context) {
 }
 
 func (e Diagnostics) prepare(c *gin.Context) (*api.API, bool) {
-	a, err := api.New(c, api.Dependencies{})
+	a, err := request.New(c)
 	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
+		request.Fail(&a, err)
 		return nil, false
 	}
 	c.Header("Cache-Control", "no-store")
-	return a, true
+	return &a, true
 }
 
 func respondDiagnostics(a *api.API, err error) { request.Fail(a, err) }

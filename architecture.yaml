@@ -21,6 +21,7 @@ declared:
   - ./app/jobs/service/dto
   - ./app/net/handler
   - ./app/net/models/connection
+  - ./app/net/models/diagnosticrun
   - ./app/net/models/delivery
   - ./app/net/models/fabric
   - ./app/net/models/firewall

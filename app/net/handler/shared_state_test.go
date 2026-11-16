@@ -53,6 +53,7 @@ func TestDiagnosticsHandlersKeepNoStateBetweenRequests(t *testing.T) {
 	defer manager.Close()
 	h := Diagnostics{Manager: manager}
 	engine := gin.New()
+	diagnosticsDB(t, engine)
 	identified(engine)
 	engine.GET("/server", h.Server)
 	engine.GET("/jobs/:id", h.Get)
