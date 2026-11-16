@@ -2,7 +2,6 @@ package request
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,12 +13,12 @@ import (
 
 	"github.com/gatework/motor-core/sdk/api"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
 func TestFailAnswersWithTheKindAndNeverLeaksDetail(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	conflict := errs.New(errs.KindConflict, "firewall.version_conflict", "")
+	conflict := errors.New(errors.KindConflict, "firewall.version_conflict", "")
 	for name, tc := range map[string]struct {
 		err  error
 		code int
@@ -28,7 +27,7 @@ func TestFailAnswersWithTheKindAndNeverLeaksDetail(t *testing.T) {
 		"classified":   {fmt.Errorf("draft 7: %w", conflict), http.StatusConflict, "firewall.version_conflict"},
 		"missing row":  {fmt.Errorf("loading: %w", gorm.ErrRecordNotFound), http.StatusNotFound, "not_found"},
 		"duplicate":    {fmt.Errorf("saving: %w", gorm.ErrDuplicatedKey), http.StatusConflict, "duplicate"},
-		"unclassified": {errors.New("pq: password authentication failed for user motor"), http.StatusInternalServerError, "internal_error"},
+		"unclassified": {fmt.Errorf("pq: password authentication failed for user motor"), http.StatusInternalServerError, "internal_error"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()

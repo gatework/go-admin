@@ -8,19 +8,19 @@
 //
 // Packages declare their conditions once as values and compare with errors.Is:
 //
-//	var ErrTokenExpired = errs.New(errs.KindUnauthenticated, "auth.token_expired", "token is expired")
+//	var TokenExpiredErr = errors.New(errors.KindUnauthenticated, "auth.token_expired", "token is expired")
+//
+// Import it without an alias. It also forwards the standard library's Is, As,
+// AsType, Join and Unwrap, so a file never needs both errors packages; build
+// an unclassified error with fmt.Errorf.
 //
 // An Error is immutable. WithCause and WithMessage return copies, so a
 // package-level value can be shared between goroutines.
 package errors
 
-// Import it as errs, the name the package has in motor-core: it then never
-// clashes with the standard library's errors, and the motor-core upgrade
-// changes only the import path.
-//
-// This package is a verbatim copy of github.com/gatework/motor-core/errs (there package errs) at
-// motor-core commit 993066d (branch refactor/runtime-hardening), which motor
-// cannot import until it upgrades from motor-core v0.1.0. Do not change it
-// here (apart from one test variable renamed to motor's Err-suffix
-// convention): change motor-core, and on the upgrade replace this import path with
-// motor-core's and delete the package.
+// kind.go and error.go are a verbatim copy of github.com/gatework/motor-core/errs
+// (package errs there) at motor-core commit 993066d, branch
+// refactor/runtime-hardening; motor cannot import that until it upgrades from
+// motor-core v0.1.0. Change those two files in motor-core, not here. std.go is
+// motor's own: on the upgrade, either motor-core gains the same forwarders and
+// motor switches to its package, or this package keeps std.go and its copy.

@@ -4,7 +4,6 @@ package connection
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -14,18 +13,18 @@ import (
 
 	models "github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is connection settings that fail validation.
-	InvalidErr = errs.New(errs.KindInvalid, "connection.invalid_input", "")
+	InvalidErr = errors.New(errors.KindInvalid, "connection.invalid_input", "")
 	// ConflictErr is a save against a settings version that has since changed.
-	ConflictErr = errs.New(errs.KindConflict, "connection.version_conflict", "")
+	ConflictErr = errors.New(errors.KindConflict, "connection.version_conflict", "")
 	// NotFoundErr is a device that does not exist or is out of the caller's scope.
-	NotFoundErr = errs.New(errs.KindNotFound, "connection.not_found", "")
+	NotFoundErr = errors.New(errors.KindNotFound, "connection.not_found", "")
 )
 
 //revive:enable:error-naming

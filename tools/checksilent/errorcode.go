@@ -11,7 +11,7 @@ import (
 const checkErrorCodeReused = "sentinel-code-reused"
 
 // checkErrorCodesReused reports a classified sentinel whose code another one
-// already declares. errs.Error matches by code, so the two are the same error
+// already declares. errors.Error matches by code, so the two are the same error
 // under errors.Is: a check for one silently catches the other. A condition
 // that several packages report is declared once and referenced. Test files
 // are skipped.
@@ -61,7 +61,7 @@ func checkErrorCodesReused(s *snapshot) []Finding {
 	return out
 }
 
-// classifiedCode is the code of an errs.New(kind, "code", msg) value.
+// classifiedCode is the code of an errors.New(kind, "code", msg) value.
 func classifiedCode(sf *sourceFile, values []ast.Expr, index int) (string, bool) {
 	if index >= len(values) {
 		return "", false

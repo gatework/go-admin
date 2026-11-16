@@ -1,6 +1,6 @@
 package types
 
-import errs "github.com/gatework/motor/common/errors"
+import "github.com/gatework/motor/common/errors"
 
 // The firewall conditions every layer reports - engine, storage and service.
 // Each is declared once: sentinels match by code, so a second declaration of
@@ -10,9 +10,9 @@ import errs "github.com/gatework/motor/common/errors"
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is input the firewall workbench refuses as malformed.
-	InvalidErr = errs.New(errs.KindInvalid, "firewall.invalid_input", "")
+	InvalidErr = errors.New(errors.KindInvalid, "firewall.invalid_input", "")
 	// ConflictErr is a write against a version that has since changed.
-	ConflictErr = errs.New(errs.KindConflict, "firewall.version_conflict", "")
+	ConflictErr = errors.New(errors.KindConflict, "firewall.version_conflict", "")
 )
 
 //revive:enable:error-naming

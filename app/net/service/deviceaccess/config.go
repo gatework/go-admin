@@ -8,7 +8,7 @@ import (
 	"github.com/gatework/go-net-connector/connector"
 	"github.com/gatework/go-net-connector/vendors"
 	"github.com/gatework/motor/app/net/models/connection"
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/common/secret"
 )
 
@@ -19,7 +19,7 @@ const MaxOutputBytes = 4 << 20
 // policy the connector does not know.
 //
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var CredentialsErr = errs.New(errs.KindInvalid, "device_access.credentials_missing", "") //revive:disable-line:error-naming
+var CredentialsErr = errors.New(errors.KindInvalid, "device_access.credentials_missing", "") //revive:disable-line:error-naming
 
 // Credentials sign in to a device. The passwords are secret.Secret, so a
 // Config logged or printed by mistake shows "[redacted]".

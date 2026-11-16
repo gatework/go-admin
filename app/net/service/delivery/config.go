@@ -11,29 +11,29 @@ import (
 	"github.com/gatework/motor/app/net/service/deviceaccess"
 	ndto "github.com/gatework/motor/app/net/service/dto/inventory"
 	network "github.com/gatework/motor/app/net/service/inventory"
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is a request the service refuses as malformed.
-	InvalidErr = errs.New(errs.KindInvalid, "delivery.invalid_input", "")
+	InvalidErr = errors.New(errors.KindInvalid, "delivery.invalid_input", "")
 	// ConflictErr is a write against a version that has since changed.
-	ConflictErr = errs.New(errs.KindConflict, "delivery.version_conflict", "")
+	ConflictErr = errors.New(errors.KindConflict, "delivery.version_conflict", "")
 	// NotFoundErr is an order or target that does not exist or is out of scope.
-	NotFoundErr = errs.New(errs.KindNotFound, "delivery.not_found", "")
+	NotFoundErr = errors.New(errors.KindNotFound, "delivery.not_found", "")
 	// DisabledErr is any delivery request while NETWORK_DELIVERY_ENABLED is off.
-	DisabledErr = errs.New(errs.KindUnavailable, "delivery.disabled", "")
+	DisabledErr = errors.New(errors.KindUnavailable, "delivery.disabled", "")
 	// ConnectionErr is a device whose connection profile cannot be used yet:
 	// no profile, an unknown platform, or credentials that are not configured.
-	ConnectionErr = errs.New(errs.KindInvalid, "delivery.connection_not_ready", "")
+	ConnectionErr = errors.New(errors.KindInvalid, "delivery.connection_not_ready", "")
 	// CancelledErr is a target whose order was cancelled or whose lease was lost
 	// while it ran.
-	CancelledErr = errs.New(errs.KindConflict, "delivery.cancelled", "")
+	CancelledErr = errors.New(errors.KindConflict, "delivery.cancelled", "")
 	// IdentityErr is a device whose identity changed between planning and
 	// execution, so the planned script may no longer apply to it.
-	IdentityErr = errs.New(errs.KindConflict, "delivery.device_changed", "")
+	IdentityErr = errors.New(errors.KindConflict, "delivery.device_changed", "")
 )
 
 //revive:enable:error-naming

@@ -23,7 +23,6 @@
 package lease
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -31,7 +30,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
 // Margin is added to every run timeout, so a lease outlives the work it guards.
@@ -41,15 +40,15 @@ const Margin = 5 * time.Minute
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// BusyErr is a device or fabric another piece of work holds. Try again later.
-	BusyErr = errs.New(errs.KindUnavailable, "lease.busy", "")
+	BusyErr = errors.New(errors.KindUnavailable, "lease.busy", "")
 	// QuarantinedErr is a device that may hold an unconfirmed change and takes
 	// no new work until an operator releases it.
-	QuarantinedErr = errs.New(errs.KindConflict, "lease.quarantined", "")
+	QuarantinedErr = errors.New(errors.KindConflict, "lease.quarantined", "")
 	// LostErr is a lease the caller no longer holds: it expired, was
 	// quarantined, or was never taken.
-	LostErr = errs.New(errs.KindConflict, "lease.lost", "")
+	LostErr = errors.New(errors.KindConflict, "lease.lost", "")
 	// InvalidErr is a device or fabric ID that cannot be leased.
-	InvalidErr = errs.New(errs.KindInvalid, "lease.invalid", "")
+	InvalidErr = errors.New(errors.KindInvalid, "lease.invalid", "")
 )
 
 //revive:enable:error-naming

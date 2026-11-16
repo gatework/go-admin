@@ -3,7 +3,7 @@ package inventory
 import (
 	"context"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/common/worker"
 )
 
@@ -28,7 +28,7 @@ func (w *SyncWorker) Run(ctx context.Context) error { return w.loop.Run(ctx, 1, 
 // sync state; only an unexpected failure is returned, for the loop to log.
 func (w *SyncWorker) Tick(ctx context.Context) error {
 	_, _, err := w.s.RunQueuedSync(ctx)
-	if err != nil && errs.KindOf(err) == errs.KindInternal {
+	if err != nil && errors.KindOf(err) == errors.KindInternal {
 		return err
 	}
 	return nil

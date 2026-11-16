@@ -2,7 +2,6 @@ package inventory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 	"github.com/gatework/motor/app/net/models/grouping"
 	"github.com/gatework/motor/app/net/models/inventory"
 	"github.com/gatework/motor/common/actions"
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
 // syncTimeout bounds one sync, fetch and write together. It runs in the
@@ -135,7 +134,7 @@ func (s *Device) run(ctx context.Context, token string, actor int) (SyncResult, 
 			err = inventory.TimeoutErr
 		}
 		s.fail(ctx, token, err)
-		if errs.KindOf(err) == errs.KindInternal {
+		if errors.KindOf(err) == errors.KindInternal {
 			err = fmt.Errorf("%w: %w", inventory.PersistenceErr, err)
 		}
 		return SyncResult{}, err
@@ -172,7 +171,7 @@ func (s *Device) fail(ctx context.Context, token string, cause error) {
 	cleanup, cancel := worker.Cleanup(ctx, 3*time.Second)
 	defer cancel()
 	message := inventory.PersistenceErr.Code()
-	if code := errs.CodeOf(cause); code != "" {
+	if code := errors.CodeOf(cause); code != "" {
 		message = code
 	}
 

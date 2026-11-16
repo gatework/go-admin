@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 
 	"gorm.io/gorm"
 
@@ -24,11 +23,11 @@ var (
 	// InvalidErr is input the workbench refuses as malformed.
 	InvalidErr = types.InvalidErr
 	// NotFoundErr describes the err not found used by this module.
-	NotFoundErr = errs.New(errs.KindNotFound, "firewall.not_found", "")
+	NotFoundErr = errors.New(errors.KindNotFound, "firewall.not_found", "")
 	// ConflictErr is a write against a version that has since changed.
 	ConflictErr = types.ConflictErr
 	// UnavailableErr reports missing firewall evidence.
-	UnavailableErr = errs.New(errs.KindUnavailable, "firewall.evidence_unavailable", "")
+	UnavailableErr = errors.New(errors.KindUnavailable, "firewall.evidence_unavailable", "")
 )
 
 //revive:enable:error-naming

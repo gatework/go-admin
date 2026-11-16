@@ -7,19 +7,19 @@ import "testing"
 func TestSentinelCodeDeclaredTwice(t *testing.T) {
 	root := fixture(t, map[string]string{
 		"a/errors.go": `package a
-import errs "github.com/gatework/motor/common/errors"
-var InvalidErr = errs.New(errs.KindInvalid, "sample.invalid", "")
-var BudgetErr = errs.New(errs.KindInvalid, "sample.invalid", "")
-var ConflictErr = errs.New(errs.KindConflict, "sample.conflict", "")
+import "github.com/gatework/motor/common/errors"
+var InvalidErr = errors.New(errors.KindInvalid, "sample.invalid", "")
+var BudgetErr = errors.New(errors.KindInvalid, "sample.invalid", "")
+var ConflictErr = errors.New(errors.KindConflict, "sample.conflict", "")
 var AliasErr = ConflictErr
 `,
 		"b/errors.go": `package b
-import errs "github.com/gatework/motor/common/errors"
-var OtherErr = errs.New(errs.KindInvalid, "sample.invalid", "")
+import "github.com/gatework/motor/common/errors"
+var OtherErr = errors.New(errors.KindInvalid, "sample.invalid", "")
 `,
 		"a/errors_test.go": `package a
-import errs "github.com/gatework/motor/common/errors"
-var sampleErr = errs.New(errs.KindInvalid, "sample.conflict", "")
+import "github.com/gatework/motor/common/errors"
+var sampleErr = errors.New(errors.KindInvalid, "sample.conflict", "")
 `,
 	})
 	findings := only(t, check(t, root, options{}), checkErrorCodeReused)

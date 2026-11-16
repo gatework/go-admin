@@ -2,24 +2,24 @@ package errors_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"testing"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 )
 
+//revive:disable-next-line:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var tokenExpiredErr = errs.New(errs.KindUnauthenticated, "auth.token_expired", "token is expired")
+var tokenExpiredErr = errors.New(errors.KindUnauthenticated, "auth.token_expired", "token is expired")
 
 func TestError_reportsWhatItWasBuiltWith(t *testing.T) {
 	t.Parallel()
-	cause := errors.New("dial tcp 10.0.0.7:6379: connection refused")
-	err := errs.Wrap(cause, errs.KindUnavailable, "cache.unreachable", "please try again later")
+	cause := fmt.Errorf("dial tcp 10.0.0.7:6379: connection refused")
+	err := errors.Wrap(cause, errors.KindUnavailable, "cache.unreachable", "please try again later")
 
-	if err.Kind() != errs.KindUnavailable || err.Code() != "cache.unreachable" {
+	if err.Kind() != errors.KindUnavailable || err.Code() != "cache.unreachable" {
 		t.Errorf("kind %v code %q", err.Kind(), err.Code())
 	}
 	if got := err.Message(); got != "please try again later" {
@@ -47,28 +47,28 @@ func TestError_matchesItsSentinelAfterBeingCopied(t *testing.T) {
 	if tokenExpiredErr.Unwrap() != nil || tokenExpiredErr.Message() != "token is expired" {
 		t.Error("WithCause or WithMessage modified the sentinel")
 	}
-	other := errs.New(errs.KindUnauthenticated, "auth.token_missing", "token is expired")
+	other := errors.New(errors.KindUnauthenticated, "auth.token_missing", "token is expired")
 	if errors.Is(other, tokenExpiredErr) {
 		t.Error("errors with different codes matched")
 	}
-	if errors.Is(errs.New(errs.KindInternal, "", "a"), errs.New(errs.KindInternal, "", "a")) {
+	if errors.Is(errors.New(errors.KindInternal, "", "a"), errors.New(errors.KindInternal, "", "a")) {
 		t.Error("errors without a code matched each other")
 	}
 }
 
 func TestError_nilAndUnsetAreInternal(t *testing.T) {
 	t.Parallel()
-	var missing *errs.Error
-	if missing.Kind() != errs.KindInternal || missing.Message() != "internal error" || missing.Code() != "" {
+	var missing *errors.Error
+	if missing.Kind() != errors.KindInternal || missing.Message() != "internal error" || missing.Code() != "" {
 		t.Errorf("nil error: kind %v message %q code %q", missing.Kind(), missing.Message(), missing.Code())
 	}
 	if missing.Error() == "" || missing.Unwrap() != nil || missing.Is(tokenExpiredErr) {
 		t.Error("nil error methods must be inert")
 	}
-	if got := missing.WithCause(io.EOF); !errors.Is(got, io.EOF) || got.Kind() != errs.KindInternal {
+	if got := missing.WithCause(io.EOF); !errors.Is(got, io.EOF) || got.Kind() != errors.KindInternal {
 		t.Errorf("WithCause on nil = %v", got)
 	}
-	if got := errs.New(errs.KindUnset, "x", "").Kind(); got != errs.KindInternal {
+	if got := errors.New(errors.KindUnset, "x", "").Kind(); got != errors.KindInternal {
 		t.Errorf("an unset kind reports %v, want internal", got)
 	}
 }
@@ -78,20 +78,20 @@ func TestKindOf(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		want errs.Kind
+		want errors.Kind
 	}{
-		{"nil", nil, errs.KindUnset},
-		{"classified", tokenExpiredErr, errs.KindUnauthenticated},
-		{"classified and wrapped", fmt.Errorf("login: %w", tokenExpiredErr), errs.KindUnauthenticated},
-		{"canceled", fmt.Errorf("query: %w", context.Canceled), errs.KindCanceled},
-		{"deadline", context.DeadlineExceeded, errs.KindTimeout},
-		{"classification outranks the cause", errs.Wrap(context.Canceled, errs.KindUnavailable, "", ""), errs.KindUnavailable},
-		{"unclassified", io.ErrUnexpectedEOF, errs.KindInternal},
+		{"nil", nil, errors.KindUnset},
+		{"classified", tokenExpiredErr, errors.KindUnauthenticated},
+		{"classified and wrapped", fmt.Errorf("login: %w", tokenExpiredErr), errors.KindUnauthenticated},
+		{"canceled", fmt.Errorf("query: %w", context.Canceled), errors.KindCanceled},
+		{"deadline", context.DeadlineExceeded, errors.KindTimeout},
+		{"classification outranks the cause", errors.Wrap(context.Canceled, errors.KindUnavailable, "", ""), errors.KindUnavailable},
+		{"unclassified", io.ErrUnexpectedEOF, errors.KindInternal},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := errs.KindOf(tt.err); got != tt.want {
+			if got := errors.KindOf(tt.err); got != tt.want {
 				t.Errorf("KindOf = %v, want %v", got, tt.want)
 			}
 		})
@@ -100,36 +100,36 @@ func TestKindOf(t *testing.T) {
 
 func TestMessage_neverExposesAnUnclassifiedError(t *testing.T) {
 	t.Parallel()
-	secret := errors.New("pq: password authentication failed for user admin")
-	if got := errs.Message(secret); got != "internal error" {
+	secret := fmt.Errorf("pq: password authentication failed for user admin")
+	if got := errors.Message(secret); got != "internal error" {
 		t.Errorf("Message = %q", got)
 	}
-	if got := errs.Message(fmt.Errorf("save: %w", tokenExpiredErr)); got != "token is expired" {
+	if got := errors.Message(fmt.Errorf("save: %w", tokenExpiredErr)); got != "token is expired" {
 		t.Errorf("Message = %q", got)
 	}
-	if got := errs.Message(errs.New(errs.KindNotFound, "user.missing", "")); got != "not found" {
+	if got := errors.Message(errors.New(errors.KindNotFound, "user.missing", "")); got != "not found" {
 		t.Errorf("an empty message falls back to %q", got)
 	}
-	if errs.Message(nil) != "" || errs.CodeOf(nil) != "" {
+	if errors.Message(nil) != "" || errors.CodeOf(nil) != "" {
 		t.Error("nil must yield empty text")
 	}
-	if got := errs.CodeOf(fmt.Errorf("save: %w", tokenExpiredErr)); got != "auth.token_expired" {
+	if got := errors.CodeOf(fmt.Errorf("save: %w", tokenExpiredErr)); got != "auth.token_expired" {
 		t.Errorf("CodeOf = %q", got)
 	}
 }
 
 func TestKind_statusAndTextRoundTrip(t *testing.T) {
 	t.Parallel()
-	statuses := map[errs.Kind]int{
-		errs.KindInvalid:         http.StatusBadRequest,
-		errs.KindUnauthenticated: http.StatusUnauthorized,
-		errs.KindForbidden:       http.StatusForbidden,
-		errs.KindNotFound:        http.StatusNotFound,
-		errs.KindConflict:        http.StatusConflict,
-		errs.KindTimeout:         http.StatusGatewayTimeout,
-		errs.KindCanceled:        499,
-		errs.KindUnavailable:     http.StatusServiceUnavailable,
-		errs.KindInternal:        http.StatusInternalServerError,
+	statuses := map[errors.Kind]int{
+		errors.KindInvalid:         http.StatusBadRequest,
+		errors.KindUnauthenticated: http.StatusUnauthorized,
+		errors.KindForbidden:       http.StatusForbidden,
+		errors.KindNotFound:        http.StatusNotFound,
+		errors.KindConflict:        http.StatusConflict,
+		errors.KindTimeout:         http.StatusGatewayTimeout,
+		errors.KindCanceled:        499,
+		errors.KindUnavailable:     http.StatusServiceUnavailable,
+		errors.KindInternal:        http.StatusInternalServerError,
 	}
 	for kind, status := range statuses {
 		if !kind.Valid() {
@@ -142,12 +142,12 @@ func TestKind_statusAndTextRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var decoded errs.Kind
+		var decoded errors.Kind
 		if err := decoded.UnmarshalText(text); err != nil || decoded != kind {
 			t.Errorf("%q decoded to %v, %v", text, decoded, err)
 		}
 	}
-	for _, invalid := range []errs.Kind{errs.KindUnset, errs.Kind(200)} {
+	for _, invalid := range []errors.Kind{errors.KindUnset, errors.Kind(200)} {
 		if invalid.Valid() {
 			t.Errorf("%v reports valid", invalid)
 		}
@@ -158,8 +158,8 @@ func TestKind_statusAndTextRoundTrip(t *testing.T) {
 			t.Errorf("%v does not map to 500", invalid)
 		}
 	}
-	kind := errs.KindForbidden
-	if err := kind.UnmarshalText([]byte("unset")); err == nil || kind != errs.KindForbidden {
+	kind := errors.KindForbidden
+	if err := kind.UnmarshalText([]byte("unset")); err == nil || kind != errors.KindForbidden {
 		t.Errorf("decoding an invalid name gave %v, %v", kind, err)
 	}
 }
@@ -169,9 +169,9 @@ func FuzzKind_UnmarshalText(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
-		var kind errs.Kind
+		var kind errors.Kind
 		if err := kind.UnmarshalText([]byte(text)); err != nil {
-			if kind != errs.KindUnset {
+			if kind != errors.KindUnset {
 				t.Fatalf("a failed decode left %v behind", kind)
 			}
 			return
@@ -183,16 +183,16 @@ func FuzzKind_UnmarshalText(f *testing.F) {
 }
 
 func ExampleError() {
-	errNotFound := errs.New(errs.KindNotFound, "user.not_found", "user does not exist")
+	errNotFound := errors.New(errors.KindNotFound, "user.not_found", "user does not exist")
 
 	lookup := func(id int) error {
-		return fmt.Errorf("lookup %d: %w", id, errNotFound.WithCause(errors.New("sql: no rows in result set")))
+		return fmt.Errorf("lookup %d: %w", id, errNotFound.WithCause(fmt.Errorf("sql: no rows in result set")))
 	}
 
 	err := lookup(7)
 	fmt.Println(errors.Is(err, errNotFound))
-	fmt.Println(errs.KindOf(err), errs.KindOf(err).HTTPStatus())
-	fmt.Println(errs.Message(err))
+	fmt.Println(errors.KindOf(err), errors.KindOf(err).HTTPStatus())
+	fmt.Println(errors.Message(err))
 	// Output:
 	// true
 	// not_found 404

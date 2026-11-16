@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/motor/app/net/models/firewall/types"
@@ -35,7 +35,7 @@ const MaxRegions = 4096
 //
 //revive:disable:error-naming Project sentinel errors use Err suffix; see docs/standards.md.
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
-var BudgetErr = errs.New(errs.KindInvalid, "firewall.budget_exceeded", "")
+var BudgetErr = errors.New(errors.KindInvalid, "firewall.budget_exceeded", "")
 
 //revive:enable:error-naming
 

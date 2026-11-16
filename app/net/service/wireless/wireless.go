@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -22,7 +21,7 @@ import (
 	"github.com/gatework/motor/app/net/service/deviceaccess"
 	dto "github.com/gatework/motor/app/net/service/dto/wireless"
 	"github.com/gatework/motor/common/actions"
-	errs "github.com/gatework/motor/common/errors"
+	"github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/common/paging"
 )
 
@@ -30,12 +29,12 @@ import (
 //nolint:errname // Project sentinel errors use Err suffix; see docs/standards.md.
 var (
 	// InvalidErr is a request the service refuses as malformed.
-	InvalidErr = errs.New(errs.KindInvalid, "wireless.invalid_input", "")
+	InvalidErr = errors.New(errors.KindInvalid, "wireless.invalid_input", "")
 	// ConflictErr is a write against a version that has since changed.
-	ConflictErr = errs.New(errs.KindConflict, "wireless.version_conflict", "")
+	ConflictErr = errors.New(errors.KindConflict, "wireless.version_conflict", "")
 	// ScopeErr is a resource that does not exist or that the caller's data
 	// scope does not reach; the two are deliberately indistinguishable.
-	ScopeErr = errs.New(errs.KindNotFound, "wireless.not_found_or_forbidden", "")
+	ScopeErr = errors.New(errors.KindNotFound, "wireless.not_found_or_forbidden", "")
 )
 
 //revive:enable:error-naming
