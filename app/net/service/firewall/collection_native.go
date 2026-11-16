@@ -3,7 +3,6 @@ package firewall
 import (
 	"context"
 	"errors"
-	"slices"
 	"sync"
 	"time"
 
@@ -85,23 +84,12 @@ func (s *collectionSession) OpenReadOnly(ctx context.Context, id string) (native
 	}
 	return &collectionReader{Reader: reader, session: s}, err
 }
+
+// hasCleanupFailure reports whether a connector error is anywhere in err,
+// joined or wrapped.
 func hasCleanupFailure(err error) bool {
-	if err == nil {
-		return false
-	}
-	e := &connector.Error{}
-	if errors.As(err, &e) {
-		return true
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		if slices.ContainsFunc(joined.Unwrap(), hasCleanupFailure) {
-			return true
-		}
-	}
-	if cause, ok := err.(interface{ Unwrap() error }); ok {
-		return hasCleanupFailure(cause.Unwrap())
-	}
-	return false
+	_, ok := errors.AsType[*connector.Error](err)
+	return ok
 }
 
 type collectionReader struct {

@@ -155,21 +155,18 @@ func natKind(k fm.Kind) string {
 
 func (p *nativeProjection) topology(d fm.Data) error {
 	for i, r := range d.Interfaces {
-		_ = i
 		row := models.Interface{Native: p.native("interface", r.Object, i, r.Disabled), Record: r}
 		if err := p.add("interface", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.Routes {
-		_ = i
 		row := models.Route{Native: p.native("route", r.Object, i, false), Record: r}
 		if err := p.add("route", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.Zones {
-		_ = i
 		row := models.Zone{Native: p.native("zone", r.Object, i, false), Record: r}
 		if err := p.add("zone", &row.Native, &row); err != nil {
 			return err
@@ -180,28 +177,24 @@ func (p *nativeProjection) topology(d fm.Data) error {
 
 func (p *nativeProjection) addresses(d fm.Data) error {
 	for i, r := range d.Addresses {
-		_ = i
 		row := models.Address{Native: p.native("address", r.Object, i, false), Record: r}
 		if err := p.add("address", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.AddressGroups {
-		_ = i
 		row := models.AddressGroup{Native: p.native("address_group", r.Object, i, false), Record: r}
 		if err := p.add("address_group", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.Services {
-		_ = i
 		row := models.Service{Native: p.native("service", r.Object, i, false), Record: r}
 		if err := p.add("service", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.ServiceGroups {
-		_ = i
 		row := models.ServiceGroup{Native: p.native("service_group", r.Object, i, false), Record: r}
 		if err := p.add("service_group", &row.Native, &row); err != nil {
 			return err
@@ -212,21 +205,18 @@ func (p *nativeProjection) addresses(d fm.Data) error {
 
 func (p *nativeProjection) policy(d fm.Data) error {
 	for i, r := range d.Schedules {
-		_ = i
 		row := models.Schedule{Native: p.native("schedule", r.Object, i, false), Record: r}
 		if err := p.add("schedule", &row.Native, &row); err != nil {
 			return err
 		}
 	}
-	for i, r := range d.Rules {
-		_ = i
+	for _, r := range d.Rules {
 		row := models.Rule{Native: p.native("rule", r.Object, r.Position, r.Disabled), Record: r}
 		if err := p.add("rule", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.RuleBindings {
-		_ = i
 		row := models.RuleBinding{Native: p.native("rule_binding", r.Object, i, false), Record: r}
 		if err := p.add("rule_binding", &row.Native, &row); err != nil {
 			return err
@@ -236,22 +226,19 @@ func (p *nativeProjection) policy(d fm.Data) error {
 }
 
 func (p *nativeProjection) translation(d fm.Data) error {
-	for i, r := range d.StaticNATs {
-		_ = i
+	for _, r := range d.StaticNATs {
 		row := models.StaticNAT{Native: p.native("static_nat", r.Object, r.Order.Position, r.Disabled), Record: r}
 		if err := p.add("static_nat", &row.Native, &row); err != nil {
 			return err
 		}
 	}
-	for i, r := range d.DynamicNATs {
-		_ = i
+	for _, r := range d.DynamicNATs {
 		row := models.DynamicNAT{Native: p.native("dynamic_nat", r.Object, r.Order.Position, r.Disabled), Record: r}
 		if err := p.add("dynamic_nat", &row.Native, &row); err != nil {
 			return err
 		}
 	}
 	for i, r := range d.NATPools {
-		_ = i
 		row := models.NATPool{Native: p.native("nat_pool", r.Object, i, false), Record: r}
 		if err := p.add("nat_pool", &row.Native, &row); err != nil {
 			return err
