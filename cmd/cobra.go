@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"errors"
-	"fmt"
 	"os"
 
-	"github.com/gatework/motor-core/sdk/pkg"
 	"github.com/gatework/motor/cmd/app"
 	"github.com/gatework/motor/common/buildinfo"
 
@@ -21,25 +18,7 @@ var rootCmd = &cobra.Command{
 	Use:          "motor",
 	Short:        "motor",
 	SilenceUsage: true,
-	Long:         `motor`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 1 {
-			tip()
-			return errors.New(pkg.Red("requires at least one arg"))
-		}
-		return nil
-	},
-	PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
-	Run: func(cmd *cobra.Command, args []string) {
-		tip()
-	},
-}
-
-func tip() {
-	usageStr := `欢迎使用 ` + pkg.Green(`motor `+buildinfo.Version) + ` 可以使用 ` + pkg.Red(`-h`) + ` 查看命令`
-	usageStr1 := `配置与开发约定见仓库 README.md 和 docs/contract.md`
-	fmt.Printf("%s\n", usageStr)
-	fmt.Printf("%s\n", usageStr1)
+	Long:         "motor " + buildinfo.Version + " - network operations backend. See README.md and docs/contract.md.",
 }
 
 //nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.

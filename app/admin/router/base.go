@@ -14,9 +14,10 @@ import (
 
 	swaggerfiles "github.com/swaggo/files"
 
+	"github.com/gatework/motor/common/buildinfo"
 	"github.com/gatework/motor/common/middleware"
 	"github.com/gatework/motor/common/middleware/auth"
-	_ "github.com/gatework/motor/docs/admin" // Registers generated Swagger documentation. // Registers the documentation or route assets used by this package.
+	"github.com/gatework/motor/docs/admin"
 )
 
 // InitSysRouter performs the init sys router administration operation.
@@ -51,6 +52,8 @@ func sysStaticFileRouter(r *gin.RouterGroup) {
 }
 
 func sysSwaggerRouter(r *gin.RouterGroup) {
+	// The generated document carries the version swag saw; serve the build's.
+	admin.SwaggerInfoadmin.Version = buildinfo.Version
 	r.GET("/swagger/admin/*any", ginSwagger.WrapHandler(swaggerfiles.NewHandler(), ginSwagger.InstanceName("admin")))
 }
 

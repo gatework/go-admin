@@ -4316,12 +4316,12 @@ const docTemplateadmin = `{
 
 // SwaggerInfoadmin holds exported Swagger Info so clients can modify it
 var SwaggerInfoadmin = &swag.Spec{
-	Version:          "2.0.0",
+	Version:          "2.4.1",
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "motor API",
-	Description:      "基于Gin + Vue + Element UI的前后端分离权限管理系统的接口文档\n添加qq群: 521386980 进入技术交流群 请先star，谢谢！",
+	Description:      "motor 网络运维平台后端接口。运行时版本以 buildinfo.Version 为准。",
 	InfoInstanceName: "admin",
 	SwaggerTemplate:  docTemplateadmin,
 }
