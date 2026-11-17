@@ -286,12 +286,16 @@ func TestConcurrentDictionaryParentChangeRejectsLateChild(t *testing.T) {
 			parentResult := make(chan error, 1)
 			childResult := make(chan error, 1)
 			go func() {
+				// The services take their context as an argument and pass it to
+				// WithContext, so the marker the callbacks look for has to travel
+				// there; a context set on the handle alone is replaced.
+				parentCtx := context.WithValue(ctx, requestKey{}, "parent")
 				s := &Dictionary{}
-				s.DB = db.WithContext(context.WithValue(ctx, requestKey{}, "parent"))
+				s.DB = db
 				if action == "rename" {
-					parentResult <- s.Update(t.Context(), &dto.DictionaryUpdate{ID: 1, DictType: "new"})
+					parentResult <- s.Update(parentCtx, &dto.DictionaryUpdate{ID: 1, DictType: "new"})
 				} else {
-					parentResult <- s.Delete(t.Context(), &dto.DictionaryDelete{IDs: []int{1}})
+					parentResult <- s.Delete(parentCtx, &dto.DictionaryDelete{IDs: []int{1}})
 				}
 			}()
 			select {
@@ -301,8 +305,8 @@ func TestConcurrentDictionaryParentChangeRejectsLateChild(t *testing.T) {
 			}
 			go func() {
 				s := &DictionaryEntry{}
-				s.DB = db.WithContext(context.WithValue(ctx, requestKey{}, "child"))
-				childResult <- s.Create(t.Context(), &dto.DictionaryEntryCreate{DictType: "old"})
+				s.DB = db
+				childResult <- s.Create(context.WithValue(ctx, requestKey{}, "child"), &dto.DictionaryEntryCreate{DictType: "old"})
 			}()
 			select {
 			case <-childStarted:
