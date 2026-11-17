@@ -27,6 +27,7 @@ import (
 	fm "github.com/gatework/motor/app/net/models/fabric"
 	fwmodel "github.com/gatework/motor/app/net/models/firewall"
 	nm "github.com/gatework/motor/app/net/models/inventory"
+	"github.com/gatework/motor/app/net/models/txlock"
 	wm "github.com/gatework/motor/app/net/models/wireless"
 	ds "github.com/gatework/motor/app/net/service/delivery"
 	"github.com/gatework/motor/app/net/service/deviceaccess"
@@ -81,7 +82,8 @@ func database(t *testing.T) (*gorm.DB, *gorm.DB) {
 		p.Close()
 	})
 	tables := append(ds.Tables(), ws.Tables()...)
-	tables = append(tables, &nm.Device{}, &nm.DeviceGroup{}, &fm.Fabric{}, &fm.RuleSet{}, &fm.Membership{}, &fm.Observation{}, &fm.Collection{}, &fm.Change{})
+	// txlock.Row is sys_network_lock, which the firewall claim locks before it touches a device.
+	tables = append(tables, &txlock.Row{}, &nm.Device{}, &nm.DeviceGroup{}, &fm.Fabric{}, &fm.RuleSet{}, &fm.Membership{}, &fm.Observation{}, &fm.Collection{}, &fm.Change{})
 	if err := a.AutoMigrate(tables...); err != nil {
 		t.Fatal(err)
 	}
