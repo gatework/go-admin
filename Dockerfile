@@ -5,7 +5,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOEXPERIMENT=nojsonv2 GOBIN=/tools go install -tags=flavor_tiny \
     -ldflags="-s -w -X github.com/nxtrace/NTrace-core/config.Version=${NEXTTRACE_VERSION}" github.com/nxtrace/NTrace-core@${NEXTTRACE_VERSION}
 
-FROM alpine
+FROM alpine:3.22
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
 

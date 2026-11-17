@@ -1,16 +1,21 @@
 PROJECT:=motor
+# VERSION is stamped into common/buildinfo; a release passes its tag.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -w -s -X github.com/gatework/motor/common/buildinfo.Version=$(VERSION)
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -ldflags="-w -s" -o $(PROJECT) .
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o $(PROJECT) .
 
-# make build-linux
+# make build-linux: the container image, from a Linux binary built first,
+# since the Dockerfile copies ./motor rather than compiling.
 build-linux:
+	GOOS=linux $(MAKE) build
 	@docker build -t motor:latest .
 	@echo "build successful"
 
 build-sqlite:
-	go build -tags sqlite3 -ldflags="-w -s" -o $(PROJECT) .
+	go build -tags sqlite3 -trimpath -ldflags="$(LDFLAGS)" -o $(PROJECT) .
 
 # make run
 run:
