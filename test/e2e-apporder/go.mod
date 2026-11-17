@@ -42,7 +42,7 @@ require (
 	github.com/gatework/go-net-connector v0.4.0 // indirect
 	github.com/gatework/go-vxlan v0.1.0 // indirect
 	github.com/gatework/go-wireless v0.1.0 // indirect
-	github.com/gatework/go-zabbix v0.0.0-20261107160521-182600c51b9f // indirect
+	github.com/gatework/go-zabbix v0.3.0 // indirect
 	github.com/gatework/motor-core v0.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect

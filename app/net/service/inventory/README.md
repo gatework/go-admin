@@ -35,6 +35,20 @@
 
 同步总预算 25 秒，来源访问预算 20 秒。持久化租约有效 45 秒，获取与终结均使用条件更新；UUID token 防止过期执行覆盖新执行。来源校验完成后，批量 upsert 与成功状态在同一事务提交。失败保留旧快照与最近成功信息，取消后以独立的最多 3 秒清理预算更新失败状态。清理失败或进程崩溃时，后续状态读取/同步会回收过期租约。
 
+## Zabbix 与专线流量
+
+Zabbix 的设备/监控项查询、history/trend 读取与截断判断、速率单位换算、
+缺测与峰值处理统一调用 `github.com/gatework/go-zabbix` 的 `Monitoring`
+和 `ReadTraffic`。本模块保留环境配置、HTTPS 策略、请求预算、业务错误映射、
+DataScope、专线 A/Z 端绑定和原有 HTTP JSON 格式；SDK 使用秒，DTO 转为毫秒。
+
+接口绑定使用 host ID 与入/出方向 item ID；Zabbix 的 hostinterface ID 不是物理端口。
+告警原生 PNG 由 SDK 的 `Frontend` 使用独立前端 Cookie 会话获取；通知渠道、
+权限检查、事件去重与发送记录由业务层负责。详见 SDK 的 `docs/monitoring.md`。
+
+监控能力依赖 `github.com/gatework/go-zabbix v0.3.0`，通过 `go.mod` 固定发布版本。
+使用 `GOWORK=off` 验证正式依赖，不在仓库加入本地 `replace`。
+
 ## 验证
 
 在后端模块目录执行：

@@ -14,7 +14,7 @@ require (
 	github.com/gatework/go-net-connector v0.4.0
 	github.com/gatework/go-vxlan v0.1.0
 	github.com/gatework/go-wireless v0.1.0
-	github.com/gatework/go-zabbix v0.0.0-20261107160521-182600c51b9f
+	github.com/gatework/go-zabbix v0.3.0
 	github.com/gatework/motor-core v0.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0

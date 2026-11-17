@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	zbx "github.com/gatework/go-zabbix"
+
 	coredto "github.com/gatework/motor-core/sdk/contract/dto"
 	base "github.com/gatework/motor-core/sdk/service"
 	"github.com/gatework/motor/app/net/models/inventory"
@@ -21,12 +23,11 @@ import (
 // here, and deterministic tests need neither credentials nor a live Zabbix.
 type CircuitSource interface {
 	Configured() bool
-	Hosts(ctx context.Context, query string) (zabbix.HostList, error)
-	Items(ctx context.Context, hostID string, query string) (zabbix.ItemList, error)
-	Host(ctx context.Context, id string) (zabbix.Host, error)
-	Item(ctx context.Context, id string) (zabbix.Item, error)
-	History(ctx context.Context, id string, valueType string, from int64, to int64) ([]zabbix.Sample, bool, error)
-	Trends(ctx context.Context, id string, from int64, to int64) ([]zabbix.Trend, bool, error)
+	// Host, Item, History and Trends: what go-zabbix needs to resolve and read
+	// one rate series (ReadTraffic). Hosts and Items back the binding pickers.
+	zbx.TrafficSource
+	Hosts(ctx context.Context, query string) (zbx.MonitoredHostList, error)
+	Items(ctx context.Context, hostID string, query string) (zbx.MonitoredItemList, error)
 }
 
 // Circuit describes circuit for network operations.
@@ -241,7 +242,7 @@ func circuitPersistenceError(err error) error {
 }
 
 // Hosts provides the hosts operation within the caller's authorized network scope.
-func (s *Circuit) Hosts(ctx context.Context, keyword string) (zabbix.HostList, error) {
+func (s *Circuit) Hosts(ctx context.Context, keyword string) (zbx.MonitoredHostList, error) {
 	result, err := s.source().Hosts(ctx, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)
@@ -250,7 +251,7 @@ func (s *Circuit) Hosts(ctx context.Context, keyword string) (zabbix.HostList, e
 }
 
 // Items provides the items operation within the caller's authorized network scope.
-func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (zabbix.ItemList, error) {
+func (s *Circuit) Items(ctx context.Context, hostID, keyword string) (zbx.MonitoredItemList, error) {
 	result, err := s.source().Items(ctx, hostID, keyword)
 	if err != nil {
 		return result, safeCircuitSourceError(err)

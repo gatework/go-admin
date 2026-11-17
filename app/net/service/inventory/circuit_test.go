@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	zbx "github.com/gatework/go-zabbix"
 	"github.com/gatework/motor-core/sdk/config"
 	"github.com/gatework/motor-core/sdk/contract/actions"
 	"github.com/gatework/motor/app/net/models/inventory"
 	dto "github.com/gatework/motor/app/net/service/dto/inventory"
-	"github.com/gatework/motor/app/net/service/inventory/provider/zabbix"
 	"github.com/gatework/motor/common/errors"
 	"github.com/gatework/motor/internal/testconfig"
 )
@@ -17,23 +17,23 @@ import (
 type circuitSource struct {
 	configured bool
 	err        error
-	hosts      map[string]zabbix.Host
-	items      map[string]zabbix.Item
-	history    map[string][]zabbix.Sample
-	trends     map[string][]zabbix.Trend
+	hosts      map[string]zbx.MonitoredHost
+	items      map[string]zbx.MonitoredItem
+	history    map[string][]zbx.MetricSample
+	trends     map[string][]zbx.MetricTrend
 	partial    bool
 }
 
 func (s *circuitSource) Configured() bool { return s.configured }
-func (s *circuitSource) Hosts(context.Context, string) (zabbix.HostList, error) {
-	return zabbix.HostList{}, s.err
+func (s *circuitSource) Hosts(context.Context, string) (zbx.MonitoredHostList, error) {
+	return zbx.MonitoredHostList{}, s.err
 }
-func (s *circuitSource) Items(context.Context, string, string) (zabbix.ItemList, error) {
-	return zabbix.ItemList{}, s.err
+func (s *circuitSource) Items(context.Context, string, string) (zbx.MonitoredItemList, error) {
+	return zbx.MonitoredItemList{}, s.err
 }
-func (s *circuitSource) Host(_ context.Context, id string) (zabbix.Host, error) {
+func (s *circuitSource) Host(_ context.Context, id string) (zbx.MonitoredHost, error) {
 	if s.err != nil {
-		return zabbix.Host{}, s.err
+		return zbx.MonitoredHost{}, s.err
 	}
 	h, ok := s.hosts[id]
 	if !ok {
@@ -41,9 +41,9 @@ func (s *circuitSource) Host(_ context.Context, id string) (zabbix.Host, error) 
 	}
 	return h, nil
 }
-func (s *circuitSource) Item(_ context.Context, id string) (zabbix.Item, error) {
+func (s *circuitSource) Item(_ context.Context, id string) (zbx.MonitoredItem, error) {
 	if s.err != nil {
-		return zabbix.Item{}, s.err
+		return zbx.MonitoredItem{}, s.err
 	}
 	i, ok := s.items[id]
 	if !ok {
@@ -51,10 +51,10 @@ func (s *circuitSource) Item(_ context.Context, id string) (zabbix.Item, error) 
 	}
 	return i, nil
 }
-func (s *circuitSource) History(_ context.Context, id, stringType string, from, till int64) ([]zabbix.Sample, bool, error) {
+func (s *circuitSource) History(_ context.Context, id, stringType string, from, till int64) ([]zbx.MetricSample, bool, error) {
 	return s.history[id], s.partial, s.err
 }
-func (s *circuitSource) Trends(_ context.Context, id string, from, till int64) ([]zabbix.Trend, bool, error) {
+func (s *circuitSource) Trends(_ context.Context, id string, from, till int64) ([]zbx.MetricTrend, bool, error) {
 	return s.trends[id], s.partial, s.err
 }
 
@@ -70,11 +70,11 @@ func circuitDraft(no string) *dto.CircuitControlReq {
 	return &dto.CircuitControlReq{CircuitNo: no, Name: "Branch", Provider: "Carrier"}
 }
 func knownCircuitSource() *circuitSource {
-	return &circuitSource{configured: true, hosts: map[string]zabbix.Host{"1": {ID: "1", Name: "Router", Host: "router"}}, items: map[string]zabbix.Item{
+	return &circuitSource{configured: true, hosts: map[string]zbx.MonitoredHost{"1": {ID: "1", Name: "Router", Host: "router"}}, items: map[string]zbx.MonitoredItem{
 		"10": {ID: "10", HostID: "1", Name: "Receive", Units: "bps", ValueType: "0", Status: "0"},
 		"11": {ID: "11", HostID: "1", Name: "Transmit", Units: "Bps", ValueType: "3", Status: "0"},
 		"20": {ID: "20", HostID: "2", Name: "Other host", Units: "bps", ValueType: "3", Status: "0"},
-	}, history: map[string][]zabbix.Sample{}, trends: map[string][]zabbix.Trend{}}
+	}, history: map[string][]zbx.MetricSample{}, trends: map[string][]zbx.MetricTrend{}}
 }
 
 func TestCircuitCRUDCASLifecycleAndNumberNeverReused(t *testing.T) {
@@ -262,7 +262,7 @@ func TestCircuitChangedBindingValidatesAtomicallyAndUnchangedSurvivesOutage(t *t
 		t.Fatalf("partial write: %+v %v", unchanged, err)
 	}
 	for _, units := range []string{"", "bytes", "%"} {
-		source.items["11"] = zabbix.Item{ID: "11", HostID: "1", Name: "bad", Units: units, ValueType: "3", Status: "0"}
+		source.items["11"] = zbx.MonitoredItem{ID: "11", HostID: "1", Name: "bad", Units: units, ValueType: "3", Status: "0"}
 		draft.AEndpoint.Monitoring.OutItemID = "11"
 		if _, err = s.Update(ctx, row.ID, draft, 7, fullScope()); !errors.Is(err, inventory.CircuitBindingErr) {
 			t.Fatalf("bad units %q: %v", units, err)
