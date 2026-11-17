@@ -1,9 +1,11 @@
-version: '3.8'
 services:
   motor-api:
     container_name: motor
     image: motor:latest
-    privileged: true
+    # ping, mtr and traceroute open raw sockets. NET_RAW is in Docker's
+    # default set; it is named so that a hardened runtime keeps it.
+    cap_add:
+      - NET_RAW
     restart: always
     ports:
       - 8000:8000
@@ -14,10 +16,12 @@ services:
     # through. checksilent's docker-stop-cuts-shutdown-short check compares
     # this against config/settings.yml.
     stop_grace_period: 30s
+    # The image runs /motor from /, so its relative paths resolve under /.
     volumes:
-      - ./config/:/motor-api/config/
-      - ./static/:/motor-api/static/
-      - ./temp/:/motor-api/temp/
+      - ./config/:/config/
+      - ./static/:/static/
+      - ./temp/:/temp/
+      - ./data/:/data/  # firewall snapshots (FIREWALL_SNAPSHOT_DIR, default data/firewall)
     networks:
       - myweb
 networks:
