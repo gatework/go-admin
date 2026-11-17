@@ -35,6 +35,9 @@ description: Scaffold a new single-table CRUD business module end to end — mig
 - 文件名前 13 位是时间戳版本号
 - 已执行过的迁移文件不可修改；需要修正时新增一个迁移
 - 包名为 `version`
+- 表定义写在迁移文件里（如 `type articleRow struct{...}`），**不要 AutoMigrate 运行时模型**：
+  模型日后一改，这个迁移在全新安装时就会建出不同的表
+- 写完跑 `go test ./cmd/migrate/migration/version/ -run EveryMigration`，确认空库能跑完全部迁移
 
 ### 3. 生成 model / dto / router 三个文件（Actions 模式）
 
@@ -88,7 +91,8 @@ description: Scaffold a new single-table CRUD business module end to end — mig
 | 检查项 | 出错后果 |
 | --- | --- |
 | 路由是否用泛型 Action 而非旧的 `IndexAction` 等 | 旧写法要靠 `Generate()` 返回副本，漏了就并发串数据 |
-| 是否使用 `e.Orm` 而非全局 DB | 多租户下拿到错误的数据库连接 |
+| 处理器是否经 `request.New(c)` 取租户库，而非全局 DB | 多租户下拿到错误的数据库连接 |
+| 错误是否用 `common/errors` 声明（错误码唯一）并经 `request.Fail` 回写 | 返回内部错误文本，或两个错误被 `errors.Is` 当成同一个 |
 | `TableName()` 是否显式声明 | GORM 不会自动推导 |
 | 迁移文件是否放在 `version/` | 放进 `version-local/` 会被忽略，别人拉代码看不到 |
 | `sys_menu.menu_name` 是否与前端组件 `name` 一致 | keep-alive 缓存静默失效 |

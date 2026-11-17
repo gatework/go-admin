@@ -56,16 +56,41 @@ type Task interface {
 
 ## 多数据源
 
-`WithContextDb` 中间件按请求解析出对应的数据库连接放入上下文，Service 通过 `e.Orm`
-取用。**不要使用全局 DB 变量** —— 那会绕过多租户隔离。
+`WithContextDB` 中间件按请求的 Host 解析出租户数据库放入上下文；处理器以
+`request.New(c)` 取得带该连接的 `api.API`，再通过 `e.Service()` 交给服务。
+**不要使用全局 DB 变量** —— 那会绕过多租户隔离。后台工作进程按租户库各建一套，
+由 `service.Workers` 构造。
 
 多库配置见 `settings.yml` 的 `databases` 与 `registers` 节点，后者用于 dbresolver
 读写分离。
 
+## 错误模型
+
+服务与模型只返回分类错误，不带 HTTP 状态和界面文案：用 `common/errors`（motor-core
+`errs` 的镜像，直接以 `errors` 导入，并转发标准库的 `Is`/`As`）声明
+`errors.New(errors.KindConflict, "firewall.version_conflict", "")`。处理器经
+`request.Fail` 统一回写：状态由种类决定，响应 `msg` 为稳定错误码，前端据此翻译；
+未分类错误记录日志并回 `internal_error`，不外泄内部错误文本。
+
+哨兵按**错误码**匹配（`errors.Is`），同一错误码只能声明一次 —— 第二次声明就是同一个
+错误的别名，`checksilent` 的 `sentinel-code-reused` 会拒绝。多层共用的条件声明在它们都能
+导入的模型包里（如 `models/firewall/types`、`models/fabric`）。
+
+## 配置
+
+网络能力的服务端配置（设备凭据、下发开关、Netdisco、Zabbix）由 `app/net/service/netconfig`
+在启动时读取一次，经 `router.InitRouter` 与 `service.Workers` 注入处理器字段和服务构造；
+运行期修改环境变量不会生效，需重建后端容器。
+
 ## 数据库迁移
 
-迁移文件放 `cmd/migrate/migration/version-local/`，文件名前 13 位为 Unix 毫秒时间戳，
-框架按文件名升序执行，已执行版本记录在 `sys_migration` 表。
+框架与业务迁移放 `cmd/migrate/migration/version/`（本地扩展放 `version-local/`），
+文件名前 13 位为 Unix 毫秒时间戳，框架按文件名升序执行，已执行版本记录在 `sys_migration` 表。
+
+迁移自带它所知道的表定义（如 `leaseHolderRow`），**不引用运行时模型**：运行时模型一改，
+引用它的旧迁移在全新安装时就会建出与已升级库不同的表。新增列的迁移按需执行
+（列已存在则跳过），同时适用于老库与新库。`TestEveryMigrationRunsOnAnEmptyDatabase`
+在空库上按顺序执行全部迁移，任何依赖后续迁移才创建的表的迁移都会在此失败。
 
 ```bash
 go run main.go migrate -c config/settings.yml -g   # 生成骨架
@@ -77,7 +102,8 @@ go run main.go migrate -c config/settings.yml -g   # 生成骨架
 
 - 默认构建禁用 CGO；使用 SQLite 需 `make build-sqlite`（带 `-tags sqlite3`）
 - `mode: prod` 时不注册 Swagger 路由
-- dev 模式下 JWT 超时被设为极大值，生产部署前务必确认 `mode` 与 `jwt.secret`
+- JWT 在所有模式下都按 `jwt.timeout` 过期（未设置时 1 小时）；生产部署前务必确认 `mode` 与 `jwt.secret`
+- `make build` 以 `VERSION`（默认 `git describe`）写入 `common/buildinfo.Version`；镜像由根 `Dockerfile` 复制预先构建的 `./motor`
 
 ## 参考
 
