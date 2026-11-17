@@ -14,25 +14,22 @@ import (
 	"github.com/gatework/motor/cmd/version"
 )
 
-var rootCmd = &cobra.Command{
-	Use:          "motor",
-	Short:        "motor",
-	SilenceUsage: true,
-	Long:         "motor " + buildinfo.Version + " - network operations backend. See README.md and docs/contract.md.",
+// NewRootCommand builds the motor command line with every subcommand.
+func NewRootCommand() *cobra.Command {
+	root := &cobra.Command{
+		Use:          "motor",
+		Short:        "motor",
+		SilenceUsage: true,
+		Long:         "motor " + buildinfo.Version + " - network operations backend. See README.md and docs/contract.md.",
+	}
+	root.AddCommand(api.NewCommand(), migrate.NewCommand(), version.NewCommand(), config.NewCommand(), app.NewCommand())
+	return root
 }
 
-//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
-func init() {
-	rootCmd.AddCommand(api.StartCmd)
-	rootCmd.AddCommand(migrate.StartCmd)
-	rootCmd.AddCommand(version.StartCmd)
-	rootCmd.AddCommand(config.StartCmd)
-	rootCmd.AddCommand(app.StartCmd)
-}
-
-// Execute : apply commands
+// Execute runs the command line and exits non-zero when a command fails;
+// cobra has already printed the error.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := NewRootCommand().Execute(); err != nil {
 		os.Exit(1)
 	}
 }

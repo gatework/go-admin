@@ -37,49 +37,12 @@ var (
 	host      string
 	appCode   string
 	dryRun    bool
-	// StartCmd exposes this command to the host CLI.
-	StartCmd  *cobra.Command
-	statusCmd = &cobra.Command{
-		Use:     "status",
-		Short:   "List applied and pending migrations, grouped by app",
-		Example: "motor migrate status -c config/settings.yml",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus(cmd.Context())
-		},
-	}
-	// Under migrate rather than under the existing `app` command, which
-	// already means "generate the skeleton of a new app" - a directory that
-	// does not exist yet, not an application already compiled into this
-	// binary. Installing an application is running its migrations, which is
-	// what this command is; --app, --domain and resolveDB are all already
-	// here, including the guard that refuses a mistyped code instead of
-	// reporting a successful no-op.
-	installCmd = &cobra.Command{
-		Use:     "install <code>",
-		Short:   "Install one application: run its migrations and record it in sys_app",
-		Example: "motor migrate install order -c config/settings.yml",
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInstall(cmd.Context(), args[0])
-		},
-	}
-	uninstallCmd = &cobra.Command{
-		Use:     "uninstall <code>",
-		Short:   "Remove one application's menus, apis and permission grants; its own tables are left alone",
-		Example: "motor migrate uninstall order -c config/settings.yml",
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUninstall(cmd.Context(), args[0])
-		},
-	}
 )
 
-// fixme 在您看不见代码的时候运行迁移，我觉得是不安全的，所以编译后最好不要去执行迁移
-//
-//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
-func init() {
-	// StartCmd exposes this command to the host CLI.
-	StartCmd = &cobra.Command{
+// NewCommand builds the `migrate` command and its status, install and
+// uninstall subcommands.
+func NewCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:     "migrate",
 		Short:   "Initialize the database",
 		Example: "motor migrate -c config/settings.yml",
@@ -88,21 +51,64 @@ func init() {
 		},
 	}
 
-	StartCmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
-	StartCmd.PersistentFlags().BoolVarP(&generate, "generate", "g", false, "generate migration file")
-	StartCmd.PersistentFlags().BoolVarP(&framework, "framework", "a", false, "with -g, write the generated file to version/ instead of version-local/ (does not affect which migrations run)")
-	StartCmd.PersistentFlags().StringVarP(&host, "domain", "d", "*", "select tenant host")
+	cmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
+	cmd.PersistentFlags().BoolVarP(&generate, "generate", "g", false, "generate migration file")
+	cmd.PersistentFlags().BoolVarP(&framework, "framework", "a", false, "with -g, write the generated file to version/ instead of version-local/ (does not affect which migrations run)")
+	cmd.PersistentFlags().StringVarP(&host, "domain", "d", "*", "select tenant host")
 
 	// --app is deliberately long-only. -a already means "generate into
 	// version/ rather than version-local/", which is about writing a template
 	// file, not about which migrations run; giving the two the same letter
 	// would be a trap.
-	StartCmd.PersistentFlags().StringVar(&appCode, "app", "", "limit to the migrations of one app (\""+migration.FrameworkAppCode+"\" for the framework's own)")
-	StartCmd.Flags().BoolVar(&dryRun, "dry-run", false, "list what would be applied, in order, and write nothing")
+	cmd.PersistentFlags().StringVar(&appCode, "app", "", "limit to the migrations of one app (\""+migration.FrameworkAppCode+"\" for the framework's own)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list what would be applied, in order, and write nothing")
 
-	StartCmd.AddCommand(statusCmd)
-	StartCmd.AddCommand(installCmd)
-	StartCmd.AddCommand(uninstallCmd)
+	cmd.AddCommand(newStatusCommand(), newInstallCommand(), newUninstallCommand())
+	return cmd
+}
+
+// newStatusCommand, newInstallCommand and newUninstallCommand build the
+// migrate subcommands; NewCommand calls them, so each parent gets its own.
+func newStatusCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     "status",
+		Short:   "List applied and pending migrations, grouped by app",
+		Example: "motor migrate status -c config/settings.yml",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatus(cmd.Context())
+		},
+	}
+}
+
+func newInstallCommand() *cobra.Command {
+	// Under migrate rather than under the existing `app` command, which
+	// already means "generate the skeleton of a new app" - a directory that
+	// does not exist yet, not an application already compiled into this
+	// binary. Installing an application is running its migrations, which is
+	// what this command is; --app, --domain and resolveDB are all already
+	// here, including the guard that refuses a mistyped code instead of
+	// reporting a successful no-op.
+	return &cobra.Command{
+		Use:     "install <code>",
+		Short:   "Install one application: run its migrations and record it in sys_app",
+		Example: "motor migrate install order -c config/settings.yml",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInstall(cmd.Context(), args[0])
+		},
+	}
+}
+
+func newUninstallCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     "uninstall <code>",
+		Short:   "Remove one application's menus, apis and permission grants; its own tables are left alone",
+		Example: "motor migrate uninstall order -c config/settings.yml",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUninstall(cmd.Context(), args[0])
+		},
+	}
 }
 
 // run migrates, or with -g writes a new migration file. Its error is the

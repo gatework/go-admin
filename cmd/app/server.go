@@ -13,10 +13,11 @@ import (
 	"github.com/gatework/motor-core/sdk/pkg/utils"
 )
 
-var (
-	appName string
-	// StartCmd exposes this command to the host CLI.
-	StartCmd = &cobra.Command{
+var appName string
+
+// NewCommand builds the `app` command, which scaffolds a new application.
+func NewCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:     "app",
 		Short:   "Create a new app",
 		Long:    "Use when you need to create a new app",
@@ -25,11 +26,8 @@ var (
 			run()
 		},
 	}
-)
-
-//nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
-func init() {
-	StartCmd.PersistentFlags().StringVarP(&appName, "name", "n", "", "Start server with provided configuration file")
+	cmd.PersistentFlags().StringVarP(&appName, "name", "n", "", "Name of the app to create")
+	return cmd
 }
 
 func run() {

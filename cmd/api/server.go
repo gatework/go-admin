@@ -31,8 +31,6 @@ import (
 var (
 	configYml string
 	apiCheck  bool
-	// StartCmd exposes this command to the host CLI.
-	StartCmd *cobra.Command
 )
 
 // AppRouters holds the configured approuters value.
@@ -40,27 +38,29 @@ var AppRouters = make([]func(), 0)
 
 //nolint:gochecknoinits // Registers host commands and routes before the runtime startup registry is sealed.
 func init() {
-	// StartCmd exposes this command to the host CLI.
-	StartCmd = &cobra.Command{
+	// Each application adds its routes in an init() of its own file here.
+	AppRouters = append(AppRouters, router.InitRouter)
+}
+
+// NewCommand builds the `server` command, which runs the API server.
+func NewCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:          "server",
 		Short:        "Start API server",
 		Example:      "motor server -c config/settings.yml",
 		SilenceUsage: true,
-		PreRunE:      func(cmd *cobra.Command, args []string) error { return setup() },
+		PreRunE:      func(cmd *cobra.Command, args []string) error { return setup(cmd.Context()) },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run()
 		},
 	}
-
-	StartCmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
-	StartCmd.PersistentFlags().BoolVarP(&apiCheck, "api", "a", false, "Start server with check api data")
-
-	//注册路由 fixme 其他应用的路由，在本目录新建文件放在init方法
-	AppRouters = append(AppRouters, router.InitRouter)
+	cmd.PersistentFlags().StringVarP(&configYml, "config", "c", "config/settings.yml", "Start server with provided configuration file")
+	cmd.PersistentFlags().BoolVarP(&apiCheck, "api", "a", false, "Start server with check api data")
+	return cmd
 }
 
-func setup() error {
-	resetApplicationLifetime()
+func setup(ctx context.Context) error {
+	resetApplicationLifetime(ctx)
 	// 注入配置扩展项
 
 	// Registered before the configuration is read. SetupConfig announces
@@ -227,6 +227,6 @@ func applicationLifetime(parent context.Context) (context.Context, context.Cance
 }
 
 //nolint:fatcontext // The host explicitly replaces the process lifecycle at command startup.
-func resetApplicationLifetime() {
-	applicationContext, stopApplication = applicationLifetime(StartCmd.Context())
+func resetApplicationLifetime(ctx context.Context) {
+	applicationContext, stopApplication = applicationLifetime(ctx)
 }
