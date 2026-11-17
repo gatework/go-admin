@@ -85,7 +85,6 @@ declared:
   - ./config
   - ./docs/admin
   - ./internal/testconfig
-  - ./test
   - ./test/firewall/cmd
   - ./test/loadtest
   - ./tools/checksilent
