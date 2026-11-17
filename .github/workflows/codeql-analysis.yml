@@ -2,10 +2,10 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ master ]
+    # The branches go.yml tests, so a finding shows up where the code is written.
+    branches: [ master, dev, gatework, "fix/**", "feat/**", "refactor/**" ]
   pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ master ]
+    branches: [ master, gatework ]
 
 jobs:
   analyze:
