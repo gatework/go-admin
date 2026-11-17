@@ -55,6 +55,8 @@ func runChecks(s *snapshot, opt options) ([]Finding, error) {
 	out = append(out, checkDiscardedGORMResults(s)...)
 	out = append(out, checkErrorNames(s)...)
 	out = append(out, checkErrorCodesReused(s)...)
+	out = append(out, checkGORMSaves(s)...)
+	out = append(out, checkSharedHandlerStates(s)...)
 
 	for _, run := range []func(*snapshot) ([]Finding, error){
 		checkShutdownBudgetFitsGrace,

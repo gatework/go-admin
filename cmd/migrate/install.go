@@ -361,8 +361,14 @@ func beginInstall(db *gorm.DB, row *adminmodels.SysApp, m app.Manifest, code str
 		}
 		return nil
 	}
-	if err := db.Save(row).Error; err != nil {
+	// Every column, but only of the row just read: Save would insert it again
+	// had it been deleted in between.
+	updated := db.Model(row).Select("*").Updates(row)
+	if err := updated.Error; err != nil {
 		return fmt.Errorf("recording the install attempt for %q: %w", code, err)
+	}
+	if updated.RowsAffected == 0 {
+		return fmt.Errorf("recording the install attempt for %q: its sys_app row was removed meanwhile", code)
 	}
 	return nil
 }
